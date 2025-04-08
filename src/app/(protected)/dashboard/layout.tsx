@@ -1,27 +1,26 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Telas y Tejidos Luciana",
+  title: "Panel de Control | Telas y Tejidos Luciana",
   description:
-    "Importación y proveeduría de telas para la confección de diversos tipos de prendas",
+    "Sistema de gestión de inventario para administrar telas, órdenes, costos y más.",
 };
 
-export default function RootLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body className={inter.className}>
-        <Toaster />
+    <>
+      <main className={`${inter.className} min-h-screen flex-grow`}>
         {children}
-      </body>
-    </html>
+        <Toaster />
+      </main>
+    </>
   );
 }

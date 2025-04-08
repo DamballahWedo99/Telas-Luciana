@@ -9,7 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ImageModal } from "@/components/ImageModal";
+import { ImageModal } from "@/components/static/ImageModal";
 
 type FabricProps = {
   id: number;

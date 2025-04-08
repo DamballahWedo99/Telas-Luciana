@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { fabricData } from "@/lib/fabric";
-import FabricCard from "@/components/FabricCard";
+import FabricCard from "@/components/static/FabricCard";
 
 type Fabric = {
   id: number;

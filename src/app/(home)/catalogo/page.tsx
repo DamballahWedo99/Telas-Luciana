@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import CatalogoContent from "@/components/CatalogoContent";
+import CatalogoContent from "@/components/static/CatalogoContent";
 
 export default function Catalogo() {
   return (

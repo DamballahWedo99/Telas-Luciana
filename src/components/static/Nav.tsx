@@ -1,8 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { SearchComponent } from "@/components/SearchComponent";
-import { MobileMenu } from "@/components/MobileMenu";
+import { SearchComponent } from "@/components/static/SearchComponent";
+import { MobileMenu } from "@/components/static/MobileMenu";
 
 export function Nav() {
   return (

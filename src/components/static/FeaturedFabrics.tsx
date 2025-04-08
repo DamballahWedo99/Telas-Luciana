@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Link from "next/link";
-import FabricCard from "@/components/FabricCard";
+import FabricCard from "@/components/static/FabricCard";
 
 const fabricCategories = [
   { id: "Chamarra", name: "Chamarras" },
