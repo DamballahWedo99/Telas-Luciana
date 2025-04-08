@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={`${inter.className} bg-white`}>
+      <body className={inter.className}>
         <div className="min-h-screen flex flex-col">
           <div className="w-full max-w-[90vw] mx-auto">
             <Nav />

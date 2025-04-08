@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
+import { toast } from "sonner";
 import Papa from "papaparse";
 
 import {
@@ -55,6 +58,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LogOutIcon } from "lucide-react";
 
 export type UnitType = "MTS" | "KGS";
 
@@ -119,7 +123,7 @@ const formatNumber = (num: number) => {
   });
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+const Dashboard: React.FC<DashboardProps> = () => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [unitFilter, setUnitFilter] = useState<UnitType | "all">("all");
@@ -131,6 +135,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedQuantity, setEditedQuantity] = useState<number>(0);
   const [openNewOrder, setOpenNewOrder] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const router = useRouter();
   const [newOrder, setNewOrder] = useState<NewOrderForm>({
     OC: "",
     Tela: "",
@@ -141,6 +147,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     Importacion: "DA",
     FacturaDragonAzteca: "",
   });
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await signOut({ callbackUrl: "/login" });
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+      toast.error("Error al cerrar sesión");
+      setIsLoggingOut(false);
+    }
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -485,11 +502,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       <div className="my-4">
         <div className="flex justify-between items-center mb-3">
           <h1 className="text-2xl font-bold">Panel de Control de Inventario</h1>
-          {onLogout && (
-            <Button variant="ghost" onClick={onLogout}>
-              Cerrar sesión
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="flex items-center gap-2"
+            disabled={isLoggingOut}
+          >
+            <LogOutIcon className="h-4 w-4" />
+            {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
+          </Button>
         </div>
 
         {error && (
@@ -868,7 +889,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                           </Pie>
                           <Tooltip
                             formatter={(value: number) => [
-                              `$${formatNumber(value)}`,
+                              `${formatNumber(value)}`,
                               "Valor",
                             ]}
                           />
@@ -950,7 +971,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                           />
                           <Tooltip
                             formatter={(value: number) => [
-                              `$${formatNumber(value)}`,
+                              `${formatNumber(value)}`,
                               "Valor",
                             ]}
                           />
@@ -985,7 +1006,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             type="number"
                             dataKey="x"
                             name="Costo Unitario"
-                            tickFormatter={(value) => `$${formatNumber(value)}`}
+                            tickFormatter={(value) => `${formatNumber(value)}`}
                             domain={["auto", "auto"]}
                           />
                           <YAxis
@@ -1000,7 +1021,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             formatter={(value: number, name: string) => {
                               if (name === "x")
                                 return [
-                                  `$${formatNumber(value)}`,
+                                  `${formatNumber(value)}`,
                                   "Costo Unitario",
                                 ];
                               return [formatNumber(value), "Cantidad"];
@@ -1052,7 +1073,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                           />
                           <Tooltip
                             formatter={(value: number) => [
-                              `$${formatNumber(value)}`,
+                              `${formatNumber(value)}`,
                               "Valor",
                             ]}
                           />
