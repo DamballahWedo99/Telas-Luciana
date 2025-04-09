@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { createUserAction } from "@/actions/auth";
 import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,13 +76,10 @@ type User = {
   lastLogin?: string;
 };
 
-export default function UserManagement({
-  initialUsers,
-}: {
-  initialUsers: User[];
-}) {
-  const [users, setUsers] = useState<User[]>(initialUsers);
+export default function UserManagement() {
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -104,6 +102,30 @@ export default function UserManagement({
       role: "seller",
     },
   });
+
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        setIsLoadingUsers(true);
+        const response = await fetch("/api/users");
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Error al cargar usuarios");
+        }
+
+        const data = await response.json();
+        setUsers(data.users);
+      } catch (error) {
+        console.error("Error cargando usuarios:", error);
+        toast.error("No se pudieron cargar los usuarios");
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    }
+
+    loadUsers();
+  }, []);
 
   const onSubmit = async (values: CreateUserFormValues) => {
     try {
@@ -135,6 +157,7 @@ export default function UserManagement({
 
         setUsers([newUser, ...users]);
         setSuccess("Usuario creado correctamente");
+        toast.success("Usuario creado exitosamente");
         reset();
         setIsDialogOpen(false);
       }
@@ -171,6 +194,40 @@ export default function UserManagement({
 
     setValue("password", password);
     setShowPassword(true);
+  };
+
+  const toggleUserStatus = async (
+    userId: string,
+    isCurrentlyActive: boolean
+  ) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isActive: !isCurrentlyActive }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al actualizar el estado del usuario");
+      }
+
+      setUsers(
+        users.map((user) =>
+          user.id === userId ? { ...user, isActive: !isCurrentlyActive } : user
+        )
+      );
+
+      toast.success(
+        `Usuario ${
+          isCurrentlyActive ? "desactivado" : "activado"
+        } correctamente`
+      );
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error("Error al cambiar el estado del usuario");
+    }
   };
 
   return (
@@ -338,98 +395,103 @@ export default function UserManagement({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Correo Electrónico</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Último Acceso</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.length === 0 ? (
+          {isLoadingUsers ? (
+            <div className="flex justify-center py-8">
+              <Loader2Icon className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center py-8 text-gray-500"
-                  >
-                    No hay usuarios registrados
-                  </TableCell>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Correo Electrónico</TableHead>
+                  <TableHead>Rol</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Último Acceso</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
-              ) : (
-                users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={user.role === "admin" ? "default" : "outline"}
-                      >
-                        {user.role === "admin" ? "Administrador" : "Vendedor"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {user.isActive ? (
-                        <Badge
-                          variant="outline"
-                          className="bg-green-100 text-green-800 hover:bg-green-200"
-                        >
-                          <CheckIcon className="mr-1 h-3 w-3" />
-                          Activo
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="destructive"
-                          className="bg-red-100 text-red-800 hover:bg-red-200"
-                        >
-                          <XIcon className="mr-1 h-3 w-3" />
-                          Inactivo
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {user.lastLogin
-                        ? new Date(user.lastLogin).toLocaleString("es-ES", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "Nunca"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          Editar
-                        </Button>
-                        {user.isActive ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            Desactivar
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 hover:text-green-800"
-                          >
-                            Activar
-                          </Button>
-                        )}
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {users.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center py-8 text-gray-500"
+                    >
+                      No hay usuarios registrados
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            user.role === "admin" ? "default" : "outline"
+                          }
+                        >
+                          {user.role === "admin" ? "Administrador" : "Vendedor"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.isActive ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-green-100 text-green-800 hover:bg-green-200"
+                          >
+                            <CheckIcon className="mr-1 h-3 w-3" />
+                            Activo
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="destructive"
+                            className="bg-red-100 text-red-800 hover:bg-red-200"
+                          >
+                            <XIcon className="mr-1 h-3 w-3" />
+                            Inactivo
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.lastLogin
+                          ? new Date(user.lastLogin).toLocaleString("es-ES", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "Nunca"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm">
+                            Editar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={
+                              user.isActive
+                                ? "text-red-600 hover:text-red-800"
+                                : "text-green-600 hover:text-green-800"
+                            }
+                            onClick={() =>
+                              toggleUserStatus(user.id, user.isActive)
+                            }
+                          >
+                            {user.isActive ? "Desactivar" : "Activar"}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

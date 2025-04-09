@@ -87,42 +87,90 @@ export const forgotPasswordAction = async (
 
 export const createUserAction = async (
   values: z.infer<typeof createUserSchema>,
-  adminId: string
+  createdById: string
 ) => {
   try {
-    const { name, email, password, role } = values;
+    const validatedFields = createUserSchema.safeParse(values);
+
+    if (!validatedFields.success) {
+      return {
+        error: "Datos inválidos",
+      };
+    }
+
+    const { name, email, password, role } = validatedFields.data;
 
     const existingUser = await db.user.findUnique({
       where: { email },
     });
 
     if (existingUser) {
-      return { error: "El usuario ya existe" };
+      return {
+        error: "El correo electrónico ya está registrado",
+      };
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await db.user.create({
+    const user = await db.user.create({
       data: {
         name,
         email,
-        password: passwordHash,
+        password: hashedPassword,
         role,
-        createdBy: adminId,
+        createdBy: createdById,
       },
     });
 
     return {
       success: true,
       user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
       },
     };
   } catch (error) {
     console.error("Error al crear usuario:", error);
-    return { error: "Error al crear el usuario" };
+    return {
+      error: "Error al crear el usuario",
+    };
+  }
+};
+
+export const toggleUserStatusAction = async (
+  userId: string,
+  isActive: boolean,
+  currentUserId: string
+) => {
+  try {
+    if (userId === currentUserId && !isActive) {
+      return {
+        error: "No puedes desactivar tu propia cuenta",
+      };
+    }
+
+    const updatedUser = await db.user.update({
+      where: { id: userId },
+      data: { isActive },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    return {
+      success: true,
+      user: updatedUser,
+    };
+  } catch (error) {
+    console.error("Error al actualizar estado de usuario:", error);
+    return {
+      error: "Error al actualizar el estado del usuario",
+    };
   }
 };

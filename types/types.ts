@@ -1,10 +1,5 @@
-// Definiendo los tipos de unidades permitidas
 export type UnitType = "MTS" | "KGS";
 
-// Definiendo los roles de usuario permitidos
-export type UserRole = "admin" | "sales";
-
-// Definiendo la estructura de un ítem de inventario
 export interface InventoryItem {
   OC: string;
   Tela: string;
@@ -17,24 +12,75 @@ export interface InventoryItem {
   FacturaDragonAzteca: string;
 }
 
-// Definiendo la estructura de un usuario
-export interface User {
+export interface NewOrderForm {
+  OC: string;
+  Tela: string;
+  Color: string;
+  Costo: number;
+  Cantidad: number;
+  Unidades: UnitType;
+  Importacion: "DA" | "HOY";
+  FacturaDragonAzteca: string;
+}
+
+export interface FabricCostDataPoint {
+  x: number;
+  y: number;
+  z: string;
+  size: number;
+}
+
+export interface FabricCostData {
+  MTS: FabricCostDataPoint[];
+  KGS: FabricCostDataPoint[];
+}
+
+export interface ParsedCSVData {
+  OC?: string;
+  Tela?: string;
+  Color?: string;
+  Costo?: string;
+  Cantidad?: string;
+  Unidades?: string;
+  Importacion?: string;
+  Importación?: string;
+  "Factura Dragón Azteca"?: string;
+  "Factura Dragon Azteca"?: string;
+  FacturaDragonAzteca?: string;
+  [key: string]: string | undefined;
+}
+
+export type User = {
   id: string;
-  username: string;
   name: string;
-  email?: string;
-  role: UserRole;
+  email: string;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+  lastLogin?: string;
+};
+
+export interface KeyMetricsType {
+  mts: {
+    totalQuantity: number;
+    totalCost: number;
+    itemCount: number;
+  };
+  kgs: {
+    totalQuantity: number;
+    totalCost: number;
+    itemCount: number;
+  };
+  overall: {
+    totalCost: number;
+    itemCount: number;
+  };
 }
 
-// Definiendo la estructura para sesión de usuario
-export interface UserSession {
-  user: User;
-  token: string;
-  expiresAt: number;
-}
-
-// Definición para las credenciales de usuario
-export interface UserCredentials {
-  username: string;
-  password: string;
+export interface FilterOptions {
+  searchTerm: string;
+  unitFilter: UnitType | "all";
+  ocFilter: string;
+  telaFilter: string;
+  colorFilter: string;
 }
