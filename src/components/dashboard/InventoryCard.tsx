@@ -60,6 +60,7 @@ interface InventoryCardProps {
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openNewOrder: boolean;
   setOpenNewOrder: React.Dispatch<React.SetStateAction<boolean>>;
+  isAdmin: boolean;
 }
 
 export const InventoryCard: React.FC<InventoryCardProps> = ({
@@ -76,12 +77,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   colorFilter,
   setColorFilter,
   setOpenNewOrder,
+  isAdmin,
 }) => {
   const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedQuantity, setEditedQuantity] = useState<number>(0);
-
-  const isAdmin = true;
 
   const isFilterActive = useMemo(() => {
     return (
@@ -168,14 +168,20 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const filteredInventory = useMemo(
     () =>
       inventory.filter((item) => {
-        const matchesSearch =
-          item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = isAdmin
+          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
+          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesUnit =
           unitFilter === "all" || item.Unidades === unitFilter;
-        const matchesOC = ocFilter === "all" || item.OC === ocFilter;
+
+        const matchesOC = isAdmin
+          ? ocFilter === "all" || item.OC === ocFilter
+          : true;
+
         const matchesTela = telaFilter === "all" || item.Tela === telaFilter;
         const matchesColor =
           colorFilter === "all" || item.Color === colorFilter;
@@ -188,7 +194,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           matchesColor
         );
       }),
-    [inventory, searchTerm, unitFilter, ocFilter, telaFilter, colorFilter]
+    [
+      inventory,
+      searchTerm,
+      unitFilter,
+      ocFilter,
+      telaFilter,
+      colorFilter,
+      isAdmin,
+    ]
   );
 
   return (
@@ -220,21 +234,24 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </TooltipContent>
             </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="bg-black hover:bg-gray-800 rounded-full"
-                  onClick={() => setOpenNewOrder(true)}
-                >
-                  <PlusIcon className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Añadir Nueva Orden</p>
-              </TooltipContent>
-            </Tooltip>
+            {/* Solo mostrar el botón de añadir nueva orden si es admin */}
+            {isAdmin && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="bg-black hover:bg-gray-800 rounded-full"
+                    onClick={() => setOpenNewOrder(true)}
+                  >
+                    <PlusIcon className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Añadir Nueva Orden</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             <Tooltip>
               <TooltipTrigger asChild>
@@ -267,7 +284,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 <Input
                   id="search"
                   type="text"
-                  placeholder="Buscar por OC, Tela, o Color"
+                  placeholder={
+                    isAdmin
+                      ? "Buscar por OC, Tela, o Color"
+                      : "Buscar por Tela o Color"
+                  }
                   value={searchTerm}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setSearchTerm(e.target.value)
@@ -295,22 +316,25 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </Select>
               </div>
 
-              <div className="min-w-[150px]">
-                <Label htmlFor="ocFilter">OC</Label>
-                <Select value={ocFilter} onValueChange={setOcFilter}>
-                  <SelectTrigger id="ocFilter" className="mt-1">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {uniqueOCs.map((oc) => (
-                      <SelectItem key={oc} value={oc}>
-                        {oc}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Solo mostrar el filtro OC para administradores */}
+              {isAdmin && (
+                <div className="min-w-[150px]">
+                  <Label htmlFor="ocFilter">OC</Label>
+                  <Select value={ocFilter} onValueChange={setOcFilter}>
+                    <SelectTrigger id="ocFilter" className="mt-1">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {uniqueOCs.map((oc) => (
+                        <SelectItem key={oc} value={oc}>
+                          {oc}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="min-w-[150px]">
                 <Label htmlFor="telaFilter">Tela</Label>
@@ -353,22 +377,22 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>OC</TableHead>
+                    {isAdmin && <TableHead>OC</TableHead>}
                     <TableHead>Tela</TableHead>
                     <TableHead>Color</TableHead>
                     {isAdmin && <TableHead>Costo</TableHead>}
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Unidades</TableHead>
                     {isAdmin && <TableHead>Total</TableHead>}
-                    <TableHead>Importación</TableHead>
-                    <TableHead>Acciones</TableHead>
+                    {isAdmin && <TableHead>Importación</TableHead>}
+                    {isAdmin && <TableHead>Acciones</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredInventory.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={isAdmin ? 8 : 6}
+                        colSpan={isAdmin ? 9 : 4}
                         className="h-24 text-center"
                       >
                         No hay datos disponibles
@@ -377,14 +401,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                   ) : (
                     filteredInventory.map((item, index) => (
                       <TableRow key={index}>
-                        <TableCell>{item.OC}</TableCell>
+                        {isAdmin && <TableCell>{item.OC}</TableCell>}
                         <TableCell>{item.Tela}</TableCell>
                         <TableCell>{item.Color}</TableCell>
                         {isAdmin && (
                           <TableCell>${formatNumber(item.Costo)}</TableCell>
                         )}
                         <TableCell>
-                          {editingIndex === index ? (
+                          {isAdmin && editingIndex === index ? (
                             <Input
                               type="number"
                               value={editedQuantity}
@@ -403,37 +427,39 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         {isAdmin && (
                           <TableCell>${formatNumber(item.Total)}</TableCell>
                         )}
-                        <TableCell>{item.Importacion}</TableCell>
-                        <TableCell>
-                          {editingIndex === index ? (
-                            <div className="flex space-x-2">
+                        {isAdmin && <TableCell>{item.Importacion}</TableCell>}
+                        {isAdmin && (
+                          <TableCell>
+                            {editingIndex === index ? (
+                              <div className="flex space-x-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleSaveEdit}
+                                >
+                                  Guardar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleCancelEdit}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            ) : (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={handleSaveEdit}
+                                onClick={() =>
+                                  handleStartEdit(index, item.Cantidad)
+                                }
                               >
-                                Guardar
+                                Editar
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleCancelEdit}
-                              >
-                                Cancelar
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                handleStartEdit(index, item.Cantidad)
-                              }
-                            >
-                              Editar
-                            </Button>
-                          )}
-                        </TableCell>
+                            )}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}

@@ -1,15 +1,36 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import Dashboard from "@/components/dashboard/Dashboard";
+import { LoadingScreen } from "@/components/LoadingScreen";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
-  const handleLogout = () => {
-    console.log("Logout clicked - implementar AuthJS aquí más adelante");
-  };
+  const { data: session, status } = useSession();
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [status, router]);
+
+  if (status === "loading" || isLoading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Dashboard onLogout={handleLogout} />
+      <Dashboard />
     </div>
   );
 }

@@ -52,6 +52,8 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
   const { data: session } = useSession();
 
+  const isAdmin = session?.user?.role === "admin";
+
   const handleViewHistory = () => {
     setShowHistory(!showHistory);
     if (!showHistory) {
@@ -64,6 +66,11 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
   useEffect(() => {
     async function loadUsers() {
+      if (!isAdmin) {
+        setIsLoadingUsers(false);
+        return;
+      }
+
       try {
         setIsLoadingUsers(true);
         const response = await fetch("/api/users");
@@ -84,7 +91,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
     }
 
     loadUsers();
-  }, []);
+  }, [isAdmin]);
 
   const handleLogout = async () => {
     try {
@@ -159,23 +166,26 @@ const Dashboard: React.FC<DashboardProps> = () => {
         <div className="flex justify-between items-center mb-3">
           <h1 className="text-2xl font-bold">Panel de Control de Inventario</h1>
           <div className="flex items-center gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleViewHistory}
-                    className="mr-2"
-                  >
-                    <HistoryIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Ver datos históricos</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Solo mostrar el botón de historial si el usuario es administrador */}
+            {isAdmin && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleViewHistory}
+                      className="mr-2"
+                    >
+                      <HistoryIcon className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Ver datos históricos</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
             <Button
               variant="outline"
@@ -196,10 +206,10 @@ const Dashboard: React.FC<DashboardProps> = () => {
           </Alert>
         )}
 
-        {/* Key Metrics Section */}
-        <KeyMetricsSection inventory={inventory} />
+        {/* Key Metrics Section - solo visible para administradores */}
+        {isAdmin && <KeyMetricsSection inventory={inventory} />}
 
-        {/* Inventory Card */}
+        {/* Inventory Card - visible para todos pero con restricciones */}
         <InventoryCard
           inventory={inventory}
           setInventory={setInventory}
@@ -217,27 +227,32 @@ const Dashboard: React.FC<DashboardProps> = () => {
           handleFileUpload={handleFileUpload}
           openNewOrder={openNewOrder}
           setOpenNewOrder={setOpenNewOrder}
+          isAdmin={isAdmin}
         />
 
-        {/* Visualizations Card */}
-        <VisualizationsCard
-          inventory={inventory}
-          filters={{
-            searchTerm,
-            unitFilter,
-            ocFilter,
-            telaFilter,
-            colorFilter,
-          }}
-        />
+        {/* Visualizations Card - solo visible para administradores */}
+        {isAdmin && (
+          <VisualizationsCard
+            inventory={inventory}
+            filters={{
+              searchTerm,
+              unitFilter,
+              ocFilter,
+              telaFilter,
+              colorFilter,
+            }}
+          />
+        )}
 
-        {/* User Management Card */}
-        <UserManagementCard
-          users={users}
-          setUsers={setUsers}
-          isLoadingUsers={isLoadingUsers}
-          setOpenNewUser={setOpenNewUser}
-        />
+        {/* User Management Card - solo visible para administradores */}
+        {isAdmin && (
+          <UserManagementCard
+            users={users}
+            setUsers={setUsers}
+            isLoadingUsers={isLoadingUsers}
+            setOpenNewUser={setOpenNewUser}
+          />
+        )}
 
         {/* Dialogs */}
         <NewOrderDialog
@@ -248,13 +263,15 @@ const Dashboard: React.FC<DashboardProps> = () => {
           setSuccess={setSuccess}
         />
 
-        <NewUserDialog
-          open={openNewUser}
-          setOpen={setOpenNewUser}
-          users={users}
-          setUsers={setUsers}
-          session={session}
-        />
+        {isAdmin && (
+          <NewUserDialog
+            open={openNewUser}
+            setOpen={setOpenNewUser}
+            users={users}
+            setUsers={setUsers}
+            session={session}
+          />
+        )}
       </div>
     </div>
   );
