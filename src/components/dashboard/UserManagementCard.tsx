@@ -188,7 +188,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                   <TableHead>Nombre</TableHead>
                   <TableHead>Correo Electrónico</TableHead>
                   <TableHead>Rol</TableHead>
-                  <TableHead>Estado</TableHead>
                   <TableHead>Último Acceso</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
@@ -197,7 +196,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                 {users.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={5}
                       className="text-center py-8 text-gray-500"
                     >
                       No hay usuarios registrados
@@ -216,25 +215,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                         >
                           {user.role === "admin" ? "Administrador" : "Vendedor"}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {user.isActive ? (
-                          <Badge
-                            variant="outline"
-                            className="bg-green-100 text-green-800 hover:bg-green-200"
-                          >
-                            <CheckIcon className="mr-1 h-3 w-3" />
-                            Activo
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="destructive"
-                            className="bg-red-100 text-red-800 hover:bg-red-200"
-                          >
-                            <XIcon className="mr-1 h-3 w-3" />
-                            Inactivo
-                          </Badge>
-                        )}
                       </TableCell>
                       <TableCell>
                         {user.lastLogin

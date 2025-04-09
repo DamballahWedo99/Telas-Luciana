@@ -50,15 +50,14 @@ export interface ParsedCSVData {
   [key: string]: string | undefined;
 }
 
-export type User = {
+export interface User {
   id: string;
   name: string;
   email: string;
-  role: string;
-  isActive: boolean;
+  role: "admin" | "seller";
   createdAt: string;
   lastLogin?: string;
-};
+}
 
 export interface KeyMetricsType {
   mts: {

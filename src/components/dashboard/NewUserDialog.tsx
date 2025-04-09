@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Session } from "next-auth";
+import { toast } from "sonner";
 
 import { EyeIcon, EyeOffIcon, UserPlusIcon, Loader2Icon } from "lucide-react";
 
@@ -102,14 +103,15 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
           id: result.user.id,
           name: result.user.name,
           email: result.user.email,
-          role: result.user.role,
-          isActive: true,
+          role: result.user.role as "admin" | "seller",
           createdAt: new Date().toISOString(),
         };
 
         setUsers([newUser, ...users]);
         reset();
         setOpen(false);
+
+        toast.success(`Usuario creado exitosamente`);
       }
     } catch (error) {
       setUserError("Ocurrió un error al crear el usuario");
