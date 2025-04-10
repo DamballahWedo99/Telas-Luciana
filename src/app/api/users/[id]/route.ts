@@ -27,13 +27,21 @@ export async function DELETE(
 
     const userExists = await db.user.findUnique({
       where: { id: userId },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!userExists) {
       return NextResponse.json(
         { error: "Usuario no encontrado" },
         { status: 404 }
+      );
+    }
+
+    try {
+    } catch (error) {
+      console.log(
+        "No se pudo registrar el usuario eliminado en lista negra:",
+        error
       );
     }
 

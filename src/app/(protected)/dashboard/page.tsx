@@ -5,24 +5,28 @@ import { useEffect, useState } from "react";
 import Dashboard from "@/components/dashboard/Dashboard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useRouter } from "next/navigation";
+import { useUserVerification } from "@/hooks/useUserVerification";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-      return;
-    }
+  useUserVerification();
 
+  useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [status, router]);
+  }, []);
+
+  useEffect(() => {
+    if (status === "unauthenticated" && !isLoading) {
+      router.push("/login");
+    }
+  }, [status, isLoading, router]);
 
   if (status === "loading" || isLoading) {
     return <LoadingScreen />;
