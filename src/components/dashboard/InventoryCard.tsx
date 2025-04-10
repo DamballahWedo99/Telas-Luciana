@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import Papa from "papaparse";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 
 import {
@@ -235,7 +237,154 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   };
 
   const handleExportPDF = () => {
-    toast.info("Funcionalidad de exportar a PDF en desarrollo");
+    try {
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const title = isAdmin ? "Inventario Completo" : "Inventario Resumido";
+      doc.setFontSize(18);
+      doc.text(title, 14, 22);
+
+      const now = new Date();
+      const dateStr = `${now.getDate().toString().padStart(2, "0")}/${(
+        now.getMonth() + 1
+      )
+        .toString()
+        .padStart(2, "0")}/${now.getFullYear()}`;
+      doc.setFontSize(11);
+      doc.text(`Fecha: ${dateStr}`, 14, 30);
+
+      let columns = [];
+      let rows = [];
+
+      if (isAdmin) {
+        columns = [
+          { header: "OC", dataKey: "OC" },
+          { header: "Tela", dataKey: "Tela" },
+          { header: "Color", dataKey: "Color" },
+          { header: "Costo", dataKey: "Costo" },
+          { header: "Cantidad", dataKey: "Cantidad" },
+          { header: "Unidades", dataKey: "Unidades" },
+          { header: "Total", dataKey: "Total" },
+          { header: "Ubicación", dataKey: "Ubicacion" },
+          { header: "Importación", dataKey: "Importacion" },
+        ];
+
+        rows = filteredInventory.map((item) => [
+          item.OC,
+          item.Tela,
+          item.Color,
+          `$${formatNumber(item.Costo)}`,
+          formatNumber(item.Cantidad),
+          item.Unidades,
+          `$${formatNumber(item.Total)}`,
+          item.Ubicacion || "-",
+          item.Importacion,
+        ]);
+
+        rows.push([
+          "TOTAL",
+          "",
+          "",
+          "",
+          formatNumber(totalCantidad),
+          "",
+          `$${formatNumber(totalCosto)}`,
+          "",
+          "",
+        ]);
+      } else {
+        columns = [
+          { header: "Tela", dataKey: "Tela" },
+          { header: "Color", dataKey: "Color" },
+          { header: "Cantidad", dataKey: "Cantidad" },
+          { header: "Unidades", dataKey: "Unidades" },
+          { header: "Ubicación", dataKey: "Ubicacion" },
+        ];
+
+        rows = filteredInventory.map((item) => [
+          item.Tela,
+          item.Color,
+          formatNumber(item.Cantidad),
+          item.Unidades,
+          item.Ubicacion || "-",
+        ]);
+
+        rows.push(["TOTAL", "", formatNumber(totalCantidad), "", ""]);
+      }
+
+      autoTable(doc, {
+        startY: 40,
+        head: [columns.map((col) => col.header)],
+        body: rows,
+        theme: "striped",
+        headStyles: {
+          fillColor: [0, 0, 0],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
+        footStyles: {
+          fillColor: [240, 240, 240],
+          textColor: [0, 0, 0],
+          fontStyle: "bold",
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        didDrawCell: (data) => {
+          if (data.section === "body" && data.row.index === rows.length - 1) {
+            doc.setFillColor(240, 240, 240);
+            doc.setFont("helvetica", "bold");
+          }
+        },
+      });
+
+      if (isFilterActive) {
+        let yPos = 180;
+        doc.setFontSize(10);
+        doc.text("Filtros aplicados:", 14, yPos);
+        yPos += 5;
+
+        if (searchTerm !== "") {
+          doc.text(`Búsqueda: "${searchTerm}"`, 20, yPos);
+          yPos += 5;
+        }
+        if (unitFilter !== "all") {
+          doc.text(`Unidades: ${unitFilter}`, 20, yPos);
+          yPos += 5;
+        }
+        if (isAdmin && ocFilter !== "all") {
+          doc.text(`OC: ${ocFilter}`, 20, yPos);
+          yPos += 5;
+        }
+        if (telaFilter !== "all") {
+          doc.text(`Tela: ${telaFilter}`, 20, yPos);
+          yPos += 5;
+        }
+        if (colorFilter !== "all") {
+          doc.text(`Color: ${colorFilter}`, 20, yPos);
+          yPos += 5;
+        }
+        if (ubicacionFilter !== "all") {
+          doc.text(`Ubicación: ${ubicacionFilter}`, 20, yPos);
+        }
+      }
+
+      const filename = isAdmin ? "inventario_completo" : "inventario_resumido";
+      const dateForFilename = `${now.getFullYear()}${(now.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}`;
+
+      doc.save(`${filename}_${dateForFilename}.pdf`);
+
+      toast.success("PDF exportado exitosamente");
+    } catch (error) {
+      console.error("Error al exportar a PDF:", error);
+      toast.error("Ocurrió un error al exportar a PDF");
+    }
   };
 
   function getMonthName(monthNumber: string): string {

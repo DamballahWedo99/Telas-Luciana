@@ -31,6 +31,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "emailjs": "^4.0.3",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.472.0",
     "next": "^15.2.4",
     "next-auth": "^5.0.0-beta.25",
