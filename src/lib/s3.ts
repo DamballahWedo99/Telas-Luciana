@@ -31,9 +31,28 @@ export async function getFileFromS3(
   }
 }
 
-export async function getInventarioCsv(): Promise<string> {
+export async function getInventarioCsv(
+  year?: string,
+  month?: string
+): Promise<string> {
   try {
-    const response = await fetch("/api/s3/inventario");
+    let url = "/api/s3/inventario";
+    const params = new URLSearchParams();
+
+    if (year) {
+      params.append("year", year);
+    }
+
+    if (month) {
+      params.append("month", month);
+    }
+
+    const queryString = params.toString();
+    if (queryString) {
+      url += `?${queryString}`;
+    }
+
+    const response = await fetch(url);
 
     if (!response.ok) {
       const errorData = await response.json();

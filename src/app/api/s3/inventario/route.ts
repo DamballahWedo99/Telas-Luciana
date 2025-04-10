@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 
@@ -10,7 +10,7 @@ const s3Client = new S3Client({
   },
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
 
@@ -18,9 +18,48 @@ export async function GET() {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const year =
+      searchParams.get("year") || new Date().getFullYear().toString();
+    const month = searchParams.get("month");
+
+    let filePath = "Inventario";
+
+    if (year) {
+      filePath += `/${year}`;
+
+      if (month) {
+        const monthNames = [
+          "Enero",
+          "Febrero",
+          "Marzo",
+          "Abril",
+          "Mayo",
+          "Junio",
+          "Julio",
+          "Agosto",
+          "Septiembre",
+          "Octubre",
+          "Noviembre",
+          "Diciembre",
+        ];
+
+        const monthIndex = parseInt(month) - 1;
+        const monthName = monthNames[monthIndex];
+
+        filePath += `/${monthName}/${monthName}-inventario.csv`;
+      } else {
+        filePath += "/Marzo/Marzo-inventario.csv";
+      }
+    } else {
+      filePath += "/2025/Marzo/Marzo-inventario.csv";
+    }
+
+    console.log(`Intentando cargar archivo desde: ${filePath}`);
+
     const command = new GetObjectCommand({
       Bucket: "telas-luciana",
-      Key: "Inventario/Marzo/Marzo-inventario.csv",
+      Key: filePath,
     });
 
     const response = await s3Client.send(command);

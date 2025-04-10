@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   PlusIcon,
+  FolderOpenIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { InventoryItem, UnitType } from "../../../types/types";
+import { InventoryHistoryDialog } from "@/components/dashboard/InventoryHistoryDialog";
+import { getInventarioCsv } from "@/lib/s3";
+import {
+  parseNumericValue,
+  mapCsvFields,
+  normalizeCsvData,
+  formatNumber,
+} from "@/lib/utils";
+import { InventoryItem, UnitType, ParsedCSVData } from "../../../types/types";
 
 interface InventoryCardProps {
   inventory: InventoryItem[];
@@ -82,6 +91,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedQuantity, setEditedQuantity] = useState<number>(0);
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
 
   const isFilterActive = useMemo(() => {
     return (
@@ -131,11 +141,33 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   };
 
   const handleExportCSV = () => {
-    const csv = Papa.unparse(inventory);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    let csvData;
+    let filename = "inventario";
+
+    if (isAdmin) {
+      csvData = Papa.unparse(inventory);
+      filename = "inventario_completo";
+    } else {
+      const filteredData = inventory.map((item) => ({
+        Tela: item.Tela,
+        Color: item.Color,
+        Cantidad: item.Cantidad,
+        Unidades: item.Unidades,
+      }));
+
+      csvData = Papa.unparse(filteredData);
+      filename = "inventario_resumido";
+    }
+
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${(now.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}`;
+
+    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "inventario.csv";
+    link.download = `${filename}_${dateStr}.csv`;
     link.click();
   };
 
@@ -143,11 +175,120 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     toast.info("Funcionalidad de exportar a PDF en desarrollo");
   };
 
-  const formatNumber = (num: number) => {
-    return num.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+  function getMonthName(monthNumber: string): string {
+    const months = [
+      { value: "01", label: "Enero" },
+      { value: "02", label: "Febrero" },
+      { value: "03", label: "Marzo" },
+      { value: "04", label: "Abril" },
+      { value: "05", label: "Mayo" },
+      { value: "06", label: "Junio" },
+      { value: "07", label: "Julio" },
+      { value: "08", label: "Agosto" },
+      { value: "09", label: "Septiembre" },
+      { value: "10", label: "Octubre" },
+      { value: "11", label: "Noviembre" },
+      { value: "12", label: "Diciembre" },
+    ];
+    const month = months.find((m) => m.value === monthNumber);
+    return month ? month.label : "";
+  }
+
+  const handleLoadHistoricalInventory = async (year: string, month: string) => {
+    try {
+      toast.info(`Cargando inventario de ${getMonthName(month)}/${year}...`);
+
+      const csvData = await getInventarioCsv(year, month);
+
+      Papa.parse<ParsedCSVData>(csvData, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        delimiter: ",",
+        delimitersToGuess: [",", ";", "\t", "|"],
+
+        transform: (value, field) => {
+          if (field === "Costo" || field === "Cantidad") {
+            return value
+              .replace(/\s/g, "")
+              .replace(/\$/g, "")
+              .replace(/,/g, ".");
+          }
+          return value;
+        },
+
+        complete: (results: Papa.ParseResult<ParsedCSVData>) => {
+          try {
+            console.log(
+              `Columnas en CSV de ${month}/${year}:`,
+              results.meta.fields
+            );
+            console.log("Ejemplo de datos:", results.data.slice(0, 3));
+
+            const fieldMap = mapCsvFields(results.meta.fields || []);
+            console.log("Mapeo de campos:", fieldMap);
+
+            let dataToProcess = results.data;
+            if (
+              Object.keys(fieldMap).length > 0 &&
+              Object.keys(fieldMap).length !== results.meta.fields?.length
+            ) {
+              dataToProcess = normalizeCsvData(results.data, fieldMap);
+            }
+
+            const parsedData = dataToProcess.map((item: any) => {
+              const costo = parseNumericValue(item.Costo);
+              const cantidad = parseNumericValue(item.Cantidad);
+              const total = costo * cantidad;
+
+              if (isNaN(costo)) {
+                console.warn("Valor de costo inválido:", item.Costo);
+              }
+              if (isNaN(cantidad)) {
+                console.warn("Valor de cantidad inválido:", item.Cantidad);
+              }
+
+              return {
+                OC: item.OC || "",
+                Tela: item.Tela || "",
+                Color: item.Color || "",
+                Costo: costo,
+                Cantidad: cantidad,
+                Unidades: (item.Unidades || "") as UnitType,
+                Total: total,
+                Importacion: (item.Importacion || item.Importación || "") as
+                  | "DA"
+                  | "HOY",
+                FacturaDragonAzteca:
+                  item["Factura Dragón Azteca"] ||
+                  item["Factura Dragon Azteca"] ||
+                  item.FacturaDragonAzteca ||
+                  "",
+              } as InventoryItem;
+            });
+
+            setInventory(parsedData);
+            toast.success(
+              `Inventario de ${getMonthName(
+                month
+              )}/${year} cargado exitosamente`
+            );
+          } catch (err) {
+            console.error("Error parsing CSV from S3:", err);
+            toast.error(
+              "Error al procesar el archivo CSV de S3. Verifique el formato."
+            );
+          }
+        },
+        error: (error: Error) => {
+          console.error("CSV parsing error:", error);
+          toast.error("Error al leer el archivo CSV de S3");
+        },
+      });
+    } catch (error) {
+      console.error("Error loading historical inventory:", error);
+      toast.error("Error al cargar el inventario histórico");
+    }
   };
 
   const uniqueOCs = useMemo(
@@ -231,6 +372,22 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </TooltipTrigger>
               <TooltipContent>
                 <p>Exportar datos</p>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Nuevo botón para cargar inventario histórico */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setOpenHistoryDialog(true)}
+                >
+                  <FolderOpenIcon className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cargar inventario histórico</p>
               </TooltipContent>
             </Tooltip>
 
@@ -469,6 +626,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           </CardContent>
         </>
       )}
+
+      {/* Diálogo para seleccionar inventario histórico */}
+      <InventoryHistoryDialog
+        open={openHistoryDialog}
+        setOpen={setOpenHistoryDialog}
+        onLoadInventory={handleLoadHistoricalInventory}
+      />
     </Card>
   );
 };

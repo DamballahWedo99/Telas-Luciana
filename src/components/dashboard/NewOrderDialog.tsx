@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Papa from "papaparse";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,30 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   setInventory,
   setSuccess,
 }) => {
+  const [availableColors, setAvailableColors] = useState<string[]>([
+    "Amarillo Neon",
+    "Bandera",
+    "Beige",
+    "Blanco",
+    "Gris",
+    "Guinda",
+    "Marino",
+    "Marino Medio",
+    "Militar",
+    "Morado",
+    "Negro",
+    "Naranja",
+    "Oro",
+    "Oxford",
+    "Petróleo",
+    "Plúmbago",
+    "Rojo",
+    "Rey",
+    "Rosa Pastel",
+    "Turquesa",
+    "Verde Agua",
+  ]);
+
   const [newOrder, setNewOrder] = useState<NewOrderForm>({
     OC: "",
     Tela: "",
@@ -126,12 +151,22 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="color">Color</Label>
-              <Input
-                id="color"
+              {/* Reemplazamos el Input por un Select */}
+              <Select
                 value={newOrder.Color}
-                onChange={(e) => handleNewOrderChange("Color", e.target.value)}
-                placeholder="Color"
-              />
+                onValueChange={(value) => handleNewOrderChange("Color", value)}
+              >
+                <SelectTrigger id="color">
+                  <SelectValue placeholder="Seleccionar color" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableColors.map((color) => (
+                    <SelectItem key={color} value={color}>
+                      {color}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

@@ -8,7 +8,6 @@ import Papa from "papaparse";
 import { LogOutIcon, HistoryIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +22,7 @@ import { KeyMetricsSection } from "@/components/dashboard/KeyMetricsSection";
 import { NewOrderDialog } from "@/components/dashboard/NewOrderDialog";
 import { NewUserDialog } from "@/components/dashboard/NewUserDialog";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { InventoryHistoryDialog } from "@/components/dashboard/InventoryHistoryDialog";
 import {
   InventoryItem,
   UnitType,
@@ -30,6 +30,7 @@ import {
   ParsedCSVData,
 } from "../../../types/types";
 import { getInventarioCsv } from "@/lib/s3";
+import { parseNumericValue, mapCsvFields, normalizeCsvData } from "@/lib/utils";
 
 interface DashboardProps {
   onLogout?: () => void;
@@ -42,12 +43,12 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [ocFilter, setOcFilter] = useState<string>("all");
   const [telaFilter, setTelaFilter] = useState<string>("all");
   const [colorFilter, setColorFilter] = useState<string>("all");
-  const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [openNewOrder, setOpenNewOrder] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -57,6 +58,25 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
   const isAdmin = session?.user?.role === "admin";
 
+  function getMonthName(monthNumber: string): string {
+    const months = [
+      { value: "01", label: "Enero" },
+      { value: "02", label: "Febrero" },
+      { value: "03", label: "Marzo" },
+      { value: "04", label: "Abril" },
+      { value: "05", label: "Mayo" },
+      { value: "06", label: "Junio" },
+      { value: "07", label: "Julio" },
+      { value: "08", label: "Agosto" },
+      { value: "09", label: "Septiembre" },
+      { value: "10", label: "Octubre" },
+      { value: "11", label: "Noviembre" },
+      { value: "12", label: "Diciembre" },
+    ];
+    const month = months.find((m) => m.value === monthNumber);
+    return month ? month.label : "";
+  }
+
   useEffect(() => {
     async function loadInventoryFromS3() {
       if (!session?.user) return;
@@ -65,17 +85,56 @@ const Dashboard: React.FC<DashboardProps> = () => {
         setIsLoadingInventory(true);
         toast.info("Cargando inventario desde S3...");
 
-        const csvData = await getInventarioCsv();
+        const now = new Date();
+        const currentYear = now.getFullYear().toString();
+        const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
+
+        const csvData = await getInventarioCsv(currentYear, currentMonth);
 
         Papa.parse<ParsedCSVData>(csvData, {
           header: true,
           skipEmptyLines: true,
+          dynamicTyping: false,
+          delimiter: ",",
+          delimitersToGuess: [",", ";", "\t", "|"],
+
+          transform: (value, field) => {
+            if (field === "Costo" || field === "Cantidad") {
+              return value
+                .replace(/\s/g, "")
+                .replace(/\$/g, "")
+                .replace(/,/g, ".");
+            }
+            return value;
+          },
+
           complete: (results: Papa.ParseResult<ParsedCSVData>) => {
             try {
-              const parsedData = results.data.map((item: ParsedCSVData) => {
-                const costo = parseFloat(item.Costo || "0");
-                const cantidad = parseFloat(item.Cantidad || "0");
+              console.log("Columnas detectadas:", results.meta.fields);
+              console.log("Datos de muestra:", results.data.slice(0, 3));
+
+              const fieldMap = mapCsvFields(results.meta.fields || []);
+              console.log("Mapeo de campos:", fieldMap);
+
+              let dataToProcess = results.data;
+              if (
+                Object.keys(fieldMap).length > 0 &&
+                Object.keys(fieldMap).length !== results.meta.fields?.length
+              ) {
+                dataToProcess = normalizeCsvData(results.data, fieldMap);
+              }
+
+              const parsedData = dataToProcess.map((item: any) => {
+                const costo = parseNumericValue(item.Costo);
+                const cantidad = parseNumericValue(item.Cantidad);
                 const total = costo * cantidad;
+
+                if (isNaN(costo)) {
+                  console.warn("Valor de costo inválido:", item.Costo);
+                }
+                if (isNaN(cantidad)) {
+                  console.warn("Valor de cantidad inválido:", item.Cantidad);
+                }
 
                 return {
                   OC: item.OC || "",
@@ -103,19 +162,16 @@ const Dashboard: React.FC<DashboardProps> = () => {
               toast.error(
                 "Error al procesar el archivo CSV de S3. Verifique el formato."
               );
-              setError("Error al procesar el archivo CSV de S3.");
             }
           },
           error: (error: Error) => {
             console.error("CSV parsing error:", error);
             toast.error("Error al leer el archivo CSV de S3");
-            setError("Error al leer el archivo CSV de S3.");
           },
         });
       } catch (error) {
         console.error("Error loading inventory from S3:", error);
-        toast.error("Error al cargar el inventario desde S3");
-        setError(
+        toast.error(
           "Error al cargar el inventario desde S3. Verifica la conexión."
         );
       } finally {
@@ -126,14 +182,113 @@ const Dashboard: React.FC<DashboardProps> = () => {
     loadInventoryFromS3();
   }, [session?.user]);
 
-  const handleViewHistory = () => {
-    setShowHistory(!showHistory);
-    if (!showHistory) {
-      toast.info("Cargando datos históricos...");
-      setTimeout(() => {
-        toast.success("Datos históricos cargados");
-      }, 1000);
+  const handleLoadHistoricalInventory = async (year: string, month: string) => {
+    try {
+      setIsLoadingInventory(true);
+      toast.info(`Cargando inventario de ${getMonthName(month)} ${year}...`);
+
+      const csvData = await getInventarioCsv(year, month);
+
+      Papa.parse<ParsedCSVData>(csvData, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        delimiter: ",",
+        delimitersToGuess: [",", ";", "\t", "|"],
+
+        transform: (value, field) => {
+          if (field === "Costo" || field === "Cantidad") {
+            return value
+              .replace(/\s/g, "")
+              .replace(/\$/g, "")
+              .replace(/,/g, ".");
+          }
+          return value;
+        },
+
+        complete: (results: Papa.ParseResult<ParsedCSVData>) => {
+          try {
+            console.log(
+              `Columnas en CSV de ${month}/${year}:`,
+              results.meta.fields
+            );
+            console.log("Datos de muestra:", results.data.slice(0, 3));
+
+            const fieldMap = mapCsvFields(results.meta.fields || []);
+            console.log("Mapeo de campos:", fieldMap);
+
+            let dataToProcess = results.data;
+            if (
+              Object.keys(fieldMap).length > 0 &&
+              Object.keys(fieldMap).length !== results.meta.fields?.length
+            ) {
+              dataToProcess = normalizeCsvData(results.data, fieldMap);
+            }
+
+            const parsedData = dataToProcess.map((item: any) => {
+              const costo = parseNumericValue(item.Costo);
+              const cantidad = parseNumericValue(item.Cantidad);
+              const total = costo * cantidad;
+
+              if (isNaN(costo)) {
+                console.warn("Valor de costo inválido:", item.Costo);
+              }
+              if (isNaN(cantidad)) {
+                console.warn("Valor de cantidad inválido:", item.Cantidad);
+              }
+
+              return {
+                OC: item.OC || "",
+                Tela: item.Tela || "",
+                Color: item.Color || "",
+                Costo: costo,
+                Cantidad: cantidad,
+                Unidades: (item.Unidades || "") as UnitType,
+                Total: total,
+                Importacion: (item.Importacion || item.Importación || "") as
+                  | "DA"
+                  | "HOY",
+                FacturaDragonAzteca:
+                  item["Factura Dragón Azteca"] ||
+                  item["Factura Dragon Azteca"] ||
+                  item.FacturaDragonAzteca ||
+                  "",
+              } as InventoryItem;
+            });
+
+            setInventory(parsedData);
+            toast.success(
+              `Inventario de ${getMonthName(
+                month
+              )} ${year} cargado exitosamente`
+            );
+            setShowHistory(true);
+          } catch (err) {
+            console.error("Error parsing historical CSV:", err);
+            toast.error(
+              "Error al procesar el archivo CSV histórico. Verifique el formato."
+            );
+          }
+        },
+        error: (error: Error) => {
+          console.error("Historical CSV parsing error:", error);
+          toast.error("Error al leer el archivo CSV histórico");
+        },
+      });
+    } catch (error) {
+      console.error("Error loading historical inventory:", error);
+      toast.error(
+        `Error al cargar el inventario de ${getMonthName(
+          month
+        )} ${year}. Es posible que no exista.`
+      );
+    } finally {
+      setIsLoadingInventory(false);
     }
+  };
+
+  const handleViewHistory = () => {
+    setOpenHistoryDialog(true);
   };
 
   useEffect(() => {
@@ -183,19 +338,44 @@ const Dashboard: React.FC<DashboardProps> = () => {
     Papa.parse<ParsedCSVData>(file, {
       header: true,
       skipEmptyLines: true,
+      dynamicTyping: false,
+      delimiter: ",",
+      delimitersToGuess: [",", ";", "\t", "|"],
+
+      transform: (value, field) => {
+        if (field === "Costo" || field === "Cantidad") {
+          return value.replace(/\s/g, "").replace(/\$/g, "").replace(/,/g, ".");
+        }
+        return value;
+      },
+
       complete: (results: Papa.ParseResult<ParsedCSVData>) => {
         try {
-          console.log("Raw CSV data:", results.data);
-          const parsedData = results.data.map((item: ParsedCSVData) => {
-            const costo = parseFloat(item.Costo || "0");
-            const cantidad = parseFloat(item.Cantidad || "0");
+          console.log("Columnas detectadas:", results.meta.fields);
+          console.log("Datos de muestra:", results.data.slice(0, 3));
+
+          const fieldMap = mapCsvFields(results.meta.fields || []);
+          console.log("Mapeo de campos:", fieldMap);
+
+          let dataToProcess = results.data;
+          if (
+            Object.keys(fieldMap).length > 0 &&
+            Object.keys(fieldMap).length !== results.meta.fields?.length
+          ) {
+            dataToProcess = normalizeCsvData(results.data, fieldMap);
+          }
+
+          const parsedData = dataToProcess.map((item: any) => {
+            const costo = parseNumericValue(item.Costo);
+            const cantidad = parseNumericValue(item.Cantidad);
             const total = costo * cantidad;
 
-            console.log("Invoice field:", {
-              raw: item["Factura Dragón Azteca"],
-              alt1: item["Factura Dragon Azteca"],
-              alt2: item.FacturaDragonAzteca,
-            });
+            if (isNaN(costo)) {
+              console.warn("Valor de costo inválido:", item.Costo);
+            }
+            if (isNaN(cantidad)) {
+              console.warn("Valor de cantidad inválido:", item.Cantidad);
+            }
 
             return {
               OC: item.OC || "",
@@ -271,13 +451,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
           </div>
         </div>
 
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
         {/* Mensaje de carga del inventario */}
         {isLoadingInventory && (
           <div className="mb-4">
@@ -349,6 +522,15 @@ const Dashboard: React.FC<DashboardProps> = () => {
             users={users}
             setUsers={setUsers}
             session={session}
+          />
+        )}
+
+        {/* Diálogo de historial */}
+        {isAdmin && (
+          <InventoryHistoryDialog
+            open={openHistoryDialog}
+            setOpen={setOpenHistoryDialog}
+            onLoadInventory={handleLoadHistoricalInventory}
           />
         )}
       </div>
