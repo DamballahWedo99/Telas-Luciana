@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
@@ -8,6 +8,7 @@ import Papa from "papaparse";
 import { LogOutIcon, HistoryIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Tooltip,
   TooltipContent,
@@ -21,16 +22,21 @@ import { UserManagementCard } from "@/components/dashboard/UserManagementCard";
 import { KeyMetricsSection } from "@/components/dashboard/KeyMetricsSection";
 import { NewOrderDialog } from "@/components/dashboard/NewOrderDialog";
 import { NewUserDialog } from "@/components/dashboard/NewUserDialog";
-import { LoadingScreen } from "@/components/LoadingScreen";
 import { InventoryHistoryDialog } from "@/components/dashboard/InventoryHistoryDialog";
 import {
   InventoryItem,
   UnitType,
   User,
   ParsedCSVData,
+  FilterOptions,
 } from "../../../types/types";
 import { getInventarioCsv } from "@/lib/s3";
 import { parseNumericValue, mapCsvFields, normalizeCsvData } from "@/lib/utils";
+
+const toastsShown = {
+  loading: false,
+  success: false,
+};
 
 interface DashboardProps {
   onLogout?: () => void;
@@ -43,6 +49,8 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [ocFilter, setOcFilter] = useState<string>("all");
   const [telaFilter, setTelaFilter] = useState<string>("all");
   const [colorFilter, setColorFilter] = useState<string>("all");
+  const [ubicacionFilter, setUbicacionFilter] = useState<string>("all");
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [openNewOrder, setOpenNewOrder] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -54,9 +62,20 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [openNewUser, setOpenNewUser] = useState(false);
 
+  const inventoryLoadedRef = useRef(false);
+
   const { data: session } = useSession();
 
   const isAdmin = session?.user?.role === "admin";
+
+  const filters: FilterOptions = {
+    searchTerm,
+    unitFilter,
+    ocFilter,
+    telaFilter,
+    colorFilter,
+    ubicacionFilter,
+  };
 
   function getMonthName(monthNumber: string): string {
     const months = [
@@ -77,13 +96,28 @@ const Dashboard: React.FC<DashboardProps> = () => {
     return month ? month.label : "";
   }
 
+  const showToastOnce = (type: "loading" | "success", message: string) => {
+    if (!toastsShown[type]) {
+      if (type === "loading") {
+        toast.info(message);
+      } else {
+        toast.success(message);
+      }
+      toastsShown[type] = true;
+
+      setTimeout(() => {
+        toastsShown[type] = false;
+      }, 10000);
+    }
+  };
+
   useEffect(() => {
     async function loadInventoryFromS3() {
-      if (!session?.user) return;
+      if (!session?.user || inventoryLoadedRef.current) return;
 
       try {
         setIsLoadingInventory(true);
-        toast.info("Cargando inventario desde S3...");
+        showToastOnce("loading", "Cargando inventario desde S3...");
 
         const now = new Date();
         const currentYear = now.getFullYear().toString();
@@ -144,6 +178,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
                   Cantidad: cantidad,
                   Unidades: (item.Unidades || "") as UnitType,
                   Total: total,
+                  Ubicacion: item.Ubicacion || "",
                   Importacion: (item.Importacion || item.Importación || "") as
                     | "DA"
                     | "HOY",
@@ -156,22 +191,31 @@ const Dashboard: React.FC<DashboardProps> = () => {
               });
 
               setInventory(parsedData);
-              toast.success("Inventario cargado desde S3 exitosamente");
+              showToastOnce(
+                "success",
+                "Inventario cargado desde S3 exitosamente"
+              );
+              inventoryLoadedRef.current = true;
             } catch (err) {
               console.error("Error parsing CSV from S3:", err);
               toast.error(
                 "Error al procesar el archivo CSV de S3. Verifique el formato."
               );
+              setError("Error al procesar el archivo CSV de S3.");
             }
           },
           error: (error: Error) => {
             console.error("CSV parsing error:", error);
             toast.error("Error al leer el archivo CSV de S3");
+            setError("Error al leer el archivo CSV de S3.");
           },
         });
       } catch (error) {
         console.error("Error loading inventory from S3:", error);
         toast.error(
+          "Error al cargar el inventario desde S3. Verifica la conexión."
+        );
+        setError(
           "Error al cargar el inventario desde S3. Verifica la conexión."
         );
       } finally {
@@ -180,6 +224,8 @@ const Dashboard: React.FC<DashboardProps> = () => {
     }
 
     loadInventoryFromS3();
+
+    return () => {};
   }, [session?.user]);
 
   const handleLoadHistoricalInventory = async (year: string, month: string) => {
@@ -245,6 +291,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
                 Cantidad: cantidad,
                 Unidades: (item.Unidades || "") as UnitType,
                 Total: total,
+                Ubicacion: item.Ubicacion || "",
                 Importacion: (item.Importacion || item.Importación || "") as
                   | "DA"
                   | "HOY",
@@ -385,6 +432,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
               Cantidad: cantidad,
               Unidades: (item.Unidades || "") as UnitType,
               Total: total,
+              Ubicacion: item.Ubicacion || "",
               Importacion: (item.Importacion || item.Importación || "") as
                 | "DA"
                 | "HOY",
@@ -418,7 +466,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
         <div className="flex justify-between items-center mb-3">
           <h1 className="text-2xl font-bold">Panel de Control de Inventario</h1>
           <div className="flex items-center gap-2">
-            {/* Solo mostrar el botón de historial si el usuario es administrador */}
             {isAdmin && (
               <TooltipProvider>
                 <Tooltip>
@@ -451,17 +498,17 @@ const Dashboard: React.FC<DashboardProps> = () => {
           </div>
         </div>
 
-        {/* Mensaje de carga del inventario */}
-        {isLoadingInventory && (
-          <div className="mb-4">
-            <LoadingScreen />
-          </div>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        {/* Key Metrics Section - solo visible para administradores */}
-        {isAdmin && <KeyMetricsSection inventory={inventory} />}
+        {isAdmin && (
+          <KeyMetricsSection inventory={inventory} filters={filters} />
+        )}
 
-        {/* Inventory Card - visible para todos pero con restricciones */}
         <InventoryCard
           inventory={inventory}
           setInventory={setInventory}
@@ -475,28 +522,20 @@ const Dashboard: React.FC<DashboardProps> = () => {
           setTelaFilter={setTelaFilter}
           colorFilter={colorFilter}
           setColorFilter={setColorFilter}
+          ubicacionFilter={ubicacionFilter}
+          setUbicacionFilter={setUbicacionFilter}
           setSuccess={setSuccess}
           handleFileUpload={handleFileUpload}
           openNewOrder={openNewOrder}
           setOpenNewOrder={setOpenNewOrder}
           isAdmin={isAdmin}
+          isLoading={isLoadingInventory}
         />
 
-        {/* Visualizations Card - solo visible para administradores */}
         {isAdmin && (
-          <VisualizationsCard
-            inventory={inventory}
-            filters={{
-              searchTerm,
-              unitFilter,
-              ocFilter,
-              telaFilter,
-              colorFilter,
-            }}
-          />
+          <VisualizationsCard inventory={inventory} filters={filters} />
         )}
 
-        {/* User Management Card - solo visible para administradores */}
         {isAdmin && (
           <UserManagementCard
             users={users}
@@ -506,7 +545,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
           />
         )}
 
-        {/* Dialogs */}
         <NewOrderDialog
           open={openNewOrder}
           setOpen={setOpenNewOrder}
@@ -525,7 +563,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
           />
         )}
 
-        {/* Diálogo de historial */}
         {isAdmin && (
           <InventoryHistoryDialog
             open={openHistoryDialog}

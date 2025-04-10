@@ -7,7 +7,9 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   PlusIcon,
+  MinusIcon,
   FolderOpenIcon,
+  Loader2Icon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -41,6 +44,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import { InventoryHistoryDialog } from "@/components/dashboard/InventoryHistoryDialog";
 import { getInventarioCsv } from "@/lib/s3";
@@ -65,11 +76,14 @@ interface InventoryCardProps {
   setTelaFilter: React.Dispatch<React.SetStateAction<string>>;
   colorFilter: string;
   setColorFilter: React.Dispatch<React.SetStateAction<string>>;
+  ubicacionFilter: string;
+  setUbicacionFilter: React.Dispatch<React.SetStateAction<string>>;
   setSuccess: React.Dispatch<React.SetStateAction<string>>;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openNewOrder: boolean;
   setOpenNewOrder: React.Dispatch<React.SetStateAction<boolean>>;
   isAdmin: boolean;
+  isLoading: boolean;
 }
 
 export const InventoryCard: React.FC<InventoryCardProps> = ({
@@ -85,12 +99,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   setTelaFilter,
   colorFilter,
   setColorFilter,
+  ubicacionFilter,
+  setUbicacionFilter,
   setOpenNewOrder,
   isAdmin,
+  isLoading,
 }) => {
   const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editedQuantity, setEditedQuantity] = useState<number>(0);
+  const [openSellDialog, setOpenSellDialog] = useState(false);
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(
+    null
+  );
+  const [quantityToUpdate, setQuantityToUpdate] = useState<number>(0);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
 
   const isFilterActive = useMemo(() => {
@@ -99,9 +120,17 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       unitFilter !== "all" ||
       ocFilter !== "all" ||
       telaFilter !== "all" ||
-      colorFilter !== "all"
+      colorFilter !== "all" ||
+      ubicacionFilter !== "all"
     );
-  }, [searchTerm, unitFilter, ocFilter, telaFilter, colorFilter]);
+  }, [
+    searchTerm,
+    unitFilter,
+    ocFilter,
+    telaFilter,
+    colorFilter,
+    ubicacionFilter,
+  ]);
 
   const toggleInventoryCollapsed = () => {
     const newState = !inventoryCollapsed;
@@ -113,31 +142,65 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       setOcFilter("all");
       setTelaFilter("all");
       setColorFilter("all");
+      setUbicacionFilter("all");
     }
   };
 
-  const handleStartEdit = (index: number, currentQuantity: number) => {
-    setEditingIndex(index);
-    setEditedQuantity(currentQuantity);
+  const handleOpenSellDialog = (index: number) => {
+    setSelectedItemIndex(index);
+    setQuantityToUpdate(0);
+    setOpenSellDialog(true);
   };
 
-  const handleSaveEdit = () => {
-    if (editingIndex !== null) {
+  const handleOpenAddDialog = (index: number) => {
+    setSelectedItemIndex(index);
+    setQuantityToUpdate(0);
+    setOpenAddDialog(true);
+  };
+
+  const handleSellItem = () => {
+    if (selectedItemIndex !== null && quantityToUpdate > 0) {
       const updatedInventory = [...inventory];
-      const item = updatedInventory[editingIndex];
-      updatedInventory[editingIndex] = {
+      const item = updatedInventory[selectedItemIndex];
+
+      if (quantityToUpdate > item.Cantidad) {
+        toast.error(
+          "La cantidad a vender no puede ser mayor que el inventario disponible"
+        );
+        return;
+      }
+
+      updatedInventory[selectedItemIndex] = {
         ...item,
-        Cantidad: editedQuantity,
-        Total: item.Costo * editedQuantity,
+        Cantidad: item.Cantidad - quantityToUpdate,
+        Total: item.Costo * (item.Cantidad - quantityToUpdate),
       };
+
       setInventory(updatedInventory);
-      setEditingIndex(null);
-      toast.success("Cantidad actualizada exitosamente");
+      setOpenSellDialog(false);
+      toast.success(
+        `Se vendieron ${quantityToUpdate} ${item.Unidades} de ${item.Tela} ${item.Color}`
+      );
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingIndex(null);
+  const handleAddItem = () => {
+    if (selectedItemIndex !== null && quantityToUpdate > 0) {
+      const updatedInventory = [...inventory];
+      const item = updatedInventory[selectedItemIndex];
+
+      updatedInventory[selectedItemIndex] = {
+        ...item,
+        Cantidad: item.Cantidad + quantityToUpdate,
+        Total: item.Costo * (item.Cantidad + quantityToUpdate),
+      };
+
+      setInventory(updatedInventory);
+      setOpenAddDialog(false);
+      toast.success(
+        `Se agregaron ${quantityToUpdate} ${item.Unidades} de ${item.Tela} ${item.Color}`
+      );
+    }
   };
 
   const handleExportCSV = () => {
@@ -256,6 +319,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 Cantidad: cantidad,
                 Unidades: (item.Unidades || "") as UnitType,
                 Total: total,
+                Ubicacion: item.Ubicacion || "",
                 Importacion: (item.Importacion || item.Importación || "") as
                   | "DA"
                   | "HOY",
@@ -306,6 +370,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     [inventory]
   );
 
+  const uniqueUbicaciones = useMemo(
+    () =>
+      Array.from(new Set(inventory.map((item) => item.Ubicacion)))
+        .filter(Boolean)
+        .sort(),
+    [inventory]
+  );
+
   const filteredInventory = useMemo(
     () =>
       inventory.filter((item) => {
@@ -324,15 +396,20 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           : true;
 
         const matchesTela = telaFilter === "all" || item.Tela === telaFilter;
+
         const matchesColor =
           colorFilter === "all" || item.Color === colorFilter;
+
+        const matchesUbicacion =
+          ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
 
         return (
           matchesSearch &&
           matchesUnit &&
           matchesOC &&
           matchesTela &&
-          matchesColor
+          matchesColor &&
+          matchesUbicacion
         );
       }),
     [
@@ -342,9 +419,18 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       ocFilter,
       telaFilter,
       colorFilter,
+      ubicacionFilter,
       isAdmin,
     ]
   );
+
+  const totalCantidad = useMemo(() => {
+    return filteredInventory.reduce((total, item) => total + item.Cantidad, 0);
+  }, [filteredInventory]);
+
+  const totalCosto = useMemo(() => {
+    return filteredInventory.reduce((total, item) => total + item.Total, 0);
+  }, [filteredInventory]);
 
   return (
     <Card className="mb-6">
@@ -375,7 +461,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </TooltipContent>
             </Tooltip>
 
-            {/* Nuevo botón para cargar inventario histórico */}
+            {/* Botón para cargar inventario histórico */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -391,7 +477,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </TooltipContent>
             </Tooltip>
 
-            {/* Solo mostrar el botón de añadir nueva orden si es admin */}
             {isAdmin && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -473,7 +558,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </Select>
               </div>
 
-              {/* Solo mostrar el filtro OC para administradores */}
               {isAdmin && (
                 <div className="min-w-[150px]">
                   <Label htmlFor="ocFilter">OC</Label>
@@ -526,6 +610,32 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="min-w-[150px]">
+                <Label htmlFor="ubicacionFilter">Ubicación</Label>
+                <Select
+                  value={ubicacionFilter}
+                  onValueChange={setUbicacionFilter}
+                >
+                  <SelectTrigger id="ubicacionFilter" className="mt-1">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="Mérida">Mérida</SelectItem>
+                    <SelectItem value="Edo Mex">Edo Mex</SelectItem>
+                    {uniqueUbicaciones.map(
+                      (ubicacion) =>
+                        ubicacion !== "Mérida" &&
+                        ubicacion !== "Edo Mex" && (
+                          <SelectItem key={ubicacion} value={ubicacion}>
+                            {ubicacion}
+                          </SelectItem>
+                        )
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
 
@@ -541,15 +651,28 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Unidades</TableHead>
                     {isAdmin && <TableHead>Total</TableHead>}
+                    <TableHead>Ubicación</TableHead>
                     {isAdmin && <TableHead>Importación</TableHead>}
                     {isAdmin && <TableHead>Acciones</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInventory.length === 0 ? (
+                  {isLoading ? (
                     <TableRow>
                       <TableCell
-                        colSpan={isAdmin ? 9 : 4}
+                        colSpan={isAdmin ? 10 : 5}
+                        className="h-24 text-center"
+                      >
+                        <div className="flex justify-center items-center">
+                          <Loader2Icon className="h-8 w-8 animate-spin text-gray-500" />
+                          <span className="ml-2">Cargando inventario...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredInventory.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={isAdmin ? 10 : 5}
                         className="h-24 text-center"
                       >
                         No hay datos disponibles
@@ -564,68 +687,176 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         {isAdmin && (
                           <TableCell>${formatNumber(item.Costo)}</TableCell>
                         )}
-                        <TableCell>
-                          {isAdmin && editingIndex === index ? (
-                            <Input
-                              type="number"
-                              value={editedQuantity}
-                              onChange={(
-                                e: React.ChangeEvent<HTMLInputElement>
-                              ) =>
-                                setEditedQuantity(parseFloat(e.target.value))
-                              }
-                              className="w-24"
-                            />
-                          ) : (
-                            formatNumber(item.Cantidad)
-                          )}
-                        </TableCell>
+                        <TableCell>{formatNumber(item.Cantidad)}</TableCell>
                         <TableCell>{item.Unidades}</TableCell>
                         {isAdmin && (
                           <TableCell>${formatNumber(item.Total)}</TableCell>
                         )}
+                        <TableCell>{item.Ubicacion || "-"}</TableCell>
                         {isAdmin && <TableCell>{item.Importacion}</TableCell>}
                         {isAdmin && (
                           <TableCell>
-                            {editingIndex === index ? (
-                              <div className="flex space-x-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={handleSaveEdit}
-                                >
-                                  Guardar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={handleCancelEdit}
-                                >
-                                  Cancelar
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleStartEdit(index, item.Cantidad)
-                                }
-                              >
-                                Editar
-                              </Button>
-                            )}
+                            <div className="flex space-x-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleOpenSellDialog(index)
+                                      }
+                                    >
+                                      <MinusIcon className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Vender</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleOpenAddDialog(index)}
+                                    >
+                                      <PlusIcon className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Agregar</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
                     ))
                   )}
                 </TableBody>
+                {!isLoading && filteredInventory.length > 0 && (
+                  <TableFooter>
+                    <TableRow>
+                      {isAdmin && (
+                        <TableCell colSpan={3} className="font-bold">
+                          Total
+                        </TableCell>
+                      )}
+                      {!isAdmin && (
+                        <TableCell colSpan={2} className="font-bold">
+                          Total
+                        </TableCell>
+                      )}
+                      {isAdmin && <TableCell></TableCell>}
+                      <TableCell className="font-bold">
+                        {formatNumber(totalCantidad)}
+                      </TableCell>
+                      <TableCell></TableCell>
+                      {isAdmin && (
+                        <TableCell className="font-bold">
+                          ${formatNumber(totalCosto)}
+                        </TableCell>
+                      )}
+                      <TableCell></TableCell>
+                      {isAdmin && <TableCell></TableCell>}
+                      {isAdmin && <TableCell></TableCell>}
+                    </TableRow>
+                  </TableFooter>
+                )}
               </Table>
             </div>
           </CardContent>
         </>
       )}
+
+      <Dialog open={openSellDialog} onOpenChange={setOpenSellDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Vender Producto</DialogTitle>
+            <DialogDescription>
+              {selectedItemIndex !== null &&
+                `Ingrese la cantidad de ${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} que desea vender.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="quantity" className="text-right">
+                Cantidad
+              </Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="0"
+                value={quantityToUpdate}
+                onChange={(e) => setQuantityToUpdate(Number(e.target.value))}
+                className="col-span-3"
+              />
+            </div>
+            {selectedItemIndex !== null && (
+              <div className="text-sm text-gray-500">
+                Inventario disponible:{" "}
+                {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
+                {inventory[selectedItemIndex]?.Unidades}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenSellDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSellItem}>Confirmar Venta</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agregar Inventario</DialogTitle>
+            <DialogDescription>
+              {selectedItemIndex !== null &&
+                `Ingrese la cantidad de ${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} que desea agregar al inventario.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-quantity" className="text-right">
+                Cantidad
+              </Label>
+              <Input
+                id="add-quantity"
+                type="number"
+                min="0"
+                value={quantityToUpdate}
+                onChange={(e) => setQuantityToUpdate(Number(e.target.value))}
+                className="col-span-3"
+              />
+            </div>
+            {selectedItemIndex !== null && (
+              <div className="text-sm text-gray-500">
+                Inventario actual:{" "}
+                {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
+                {inventory[selectedItemIndex]?.Unidades}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenAddDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAddItem}>Confirmar Adición</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo para seleccionar inventario histórico */}
       <InventoryHistoryDialog

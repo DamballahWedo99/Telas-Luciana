@@ -8,6 +8,7 @@ export interface InventoryItem {
   Cantidad: number;
   Unidades: UnitType;
   Total: number;
+  Ubicacion: string;
   Importacion: "DA" | "HOY";
   FacturaDragonAzteca: string;
 }
@@ -19,6 +20,7 @@ export interface NewOrderForm {
   Costo: number;
   Cantidad: number;
   Unidades: UnitType;
+  Ubicacion: string;
   Importacion: "DA" | "HOY";
   FacturaDragonAzteca: string;
 }
@@ -42,6 +44,7 @@ export interface ParsedCSVData {
   Costo?: string;
   Cantidad?: string;
   Unidades?: string;
+  Ubicacion?: string;
   Importacion?: string;
   Importación?: string;
   "Factura Dragón Azteca"?: string;
@@ -82,4 +85,5 @@ export interface FilterOptions {
   ocFilter: string;
   telaFilter: string;
   colorFilter: string;
+  ubicacionFilter: string;
 }
