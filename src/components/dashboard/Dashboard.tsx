@@ -22,12 +22,14 @@ import { UserManagementCard } from "@/components/dashboard/UserManagementCard";
 import { KeyMetricsSection } from "@/components/dashboard/KeyMetricsSection";
 import { NewOrderDialog } from "@/components/dashboard/NewOrderDialog";
 import { NewUserDialog } from "@/components/dashboard/NewUserDialog";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import {
   InventoryItem,
   UnitType,
   User,
   ParsedCSVData,
 } from "../../../types/types";
+import { getInventarioCsv } from "@/lib/s3";
 
 interface DashboardProps {
   onLogout?: () => void;
@@ -45,6 +47,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [openNewOrder, setOpenNewOrder] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -53,6 +56,75 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const { data: session } = useSession();
 
   const isAdmin = session?.user?.role === "admin";
+
+  useEffect(() => {
+    async function loadInventoryFromS3() {
+      if (!session?.user) return;
+
+      try {
+        setIsLoadingInventory(true);
+        toast.info("Cargando inventario desde S3...");
+
+        const csvData = await getInventarioCsv();
+
+        Papa.parse<ParsedCSVData>(csvData, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results: Papa.ParseResult<ParsedCSVData>) => {
+            try {
+              const parsedData = results.data.map((item: ParsedCSVData) => {
+                const costo = parseFloat(item.Costo || "0");
+                const cantidad = parseFloat(item.Cantidad || "0");
+                const total = costo * cantidad;
+
+                return {
+                  OC: item.OC || "",
+                  Tela: item.Tela || "",
+                  Color: item.Color || "",
+                  Costo: costo,
+                  Cantidad: cantidad,
+                  Unidades: (item.Unidades || "") as UnitType,
+                  Total: total,
+                  Importacion: (item.Importacion || item.Importación || "") as
+                    | "DA"
+                    | "HOY",
+                  FacturaDragonAzteca:
+                    item["Factura Dragón Azteca"] ||
+                    item["Factura Dragon Azteca"] ||
+                    item.FacturaDragonAzteca ||
+                    "",
+                } as InventoryItem;
+              });
+
+              setInventory(parsedData);
+              toast.success("Inventario cargado desde S3 exitosamente");
+            } catch (err) {
+              console.error("Error parsing CSV from S3:", err);
+              toast.error(
+                "Error al procesar el archivo CSV de S3. Verifique el formato."
+              );
+              setError("Error al procesar el archivo CSV de S3.");
+            }
+          },
+          error: (error: Error) => {
+            console.error("CSV parsing error:", error);
+            toast.error("Error al leer el archivo CSV de S3");
+            setError("Error al leer el archivo CSV de S3.");
+          },
+        });
+      } catch (error) {
+        console.error("Error loading inventory from S3:", error);
+        toast.error("Error al cargar el inventario desde S3");
+        setError(
+          "Error al cargar el inventario desde S3. Verifica la conexión."
+        );
+      } finally {
+        setIsLoadingInventory(false);
+      }
+    }
+
+    loadInventoryFromS3();
+  }, [session?.user]);
 
   const handleViewHistory = () => {
     setShowHistory(!showHistory);
@@ -204,6 +276,13 @@ const Dashboard: React.FC<DashboardProps> = () => {
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
+        )}
+
+        {/* Mensaje de carga del inventario */}
+        {isLoadingInventory && (
+          <div className="mb-4">
+            <LoadingScreen />
+          </div>
         )}
 
         {/* Key Metrics Section - solo visible para administradores */}
