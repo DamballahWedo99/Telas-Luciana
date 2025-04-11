@@ -9,7 +9,11 @@ export async function DELETE(
   try {
     const session = await auth();
 
-    if (!session || !session.user || session.user.role !== "admin") {
+    if (
+      !session ||
+      !session.user ||
+      (session.user.role !== "admin" && session.user.role !== "major_admin")
+    ) {
       return NextResponse.json(
         { error: "No tienes permisos para realizar esta acción" },
         { status: 403 }
@@ -25,19 +29,34 @@ export async function DELETE(
       );
     }
 
-    const userExists = await db.user.findUnique({
+    const userToDelete = await db.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true },
+      select: { id: true, email: true, role: true },
     });
 
-    if (!userExists) {
+    if (!userToDelete) {
       return NextResponse.json(
         { error: "Usuario no encontrado" },
         { status: 404 }
       );
     }
 
+    // Verificar si es el último administrador principal
+    if (userToDelete.role === "major_admin") {
+      const majorAdminCount = await db.user.count({
+        where: { role: "major_admin" },
+      });
+
+      if (majorAdminCount <= 1) {
+        return NextResponse.json(
+          { error: "No se puede eliminar el último administrador principal" },
+          { status: 400 }
+        );
+      }
+    }
+
     try {
+      // Código para registrar usuario en lista negra si es necesario
     } catch (error) {
       console.log(
         "No se pudo registrar el usuario eliminado en lista negra:",

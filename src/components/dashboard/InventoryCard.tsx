@@ -610,21 +610,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </TooltipContent>
             </Tooltip>
 
-            {/* Botón para cargar inventario histórico */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setOpenHistoryDialog(true)}
-                >
-                  <FolderOpenIcon className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Cargar inventario histórico</p>
-              </TooltipContent>
-            </Tooltip>
+            {/* Botón para cargar inventario histórico - Solo para admin y major_admin */}
+            {isAdmin && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setOpenHistoryDialog(true)}
+                  >
+                    <FolderOpenIcon className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cargar inventario histórico</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             {isAdmin && (
               <Tooltip>
@@ -1007,12 +1009,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para seleccionar inventario histórico */}
-      <InventoryHistoryDialog
-        open={openHistoryDialog}
-        setOpen={setOpenHistoryDialog}
-        onLoadInventory={handleLoadHistoricalInventory}
-      />
+      {/* Diálogo para seleccionar inventario histórico - Solo para admin y major_admin */}
+      {isAdmin && (
+        <InventoryHistoryDialog
+          open={openHistoryDialog}
+          setOpen={setOpenHistoryDialog}
+          onLoadInventory={handleLoadHistoricalInventory}
+        />
+      )}
     </Card>
   );
 };

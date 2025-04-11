@@ -6,7 +6,11 @@ export async function GET() {
   try {
     const session = await auth();
 
-    if (!session || !session.user || session.user.role !== "admin") {
+    if (
+      !session ||
+      !session.user ||
+      (session.user.role !== "admin" && session.user.role !== "major_admin")
+    ) {
       return NextResponse.json(
         { error: "No tienes permisos para ver esta información" },
         { status: 403 }

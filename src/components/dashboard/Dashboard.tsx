@@ -66,7 +66,9 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
   const { data: session } = useSession();
 
-  const isAdmin = session?.user?.role === "admin";
+  const isAdmin =
+    session?.user?.role === "admin" || session?.user?.role === "major_admin";
+  const isMajorAdmin = session?.user?.role === "major_admin";
 
   const filters: FilterOptions = {
     searchTerm,
@@ -466,7 +468,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
         <div className="flex justify-between items-center mb-3">
           <h1 className="text-2xl font-bold">Panel de Control de Inventario</h1>
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {isMajorAdmin && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -563,7 +565,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
           />
         )}
 
-        {isAdmin && (
+        {isMajorAdmin && (
           <InventoryHistoryDialog
             open={openHistoryDialog}
             setOpen={setOpenHistoryDialog}

@@ -63,7 +63,7 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
       name: "",
       email: "",
       password: "",
-      role: "seller",
+      role: session?.user?.role === "admin" ? "seller" : "seller",
     },
   });
 
@@ -77,6 +77,11 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
 
       if (!session?.user?.id) {
         setUserError("No hay sesión activa");
+        return;
+      }
+
+      if (session.user.role === "admin" && values.role !== "seller") {
+        setUserError("Como administrador, solo puedes crear vendedores");
         return;
       }
 
@@ -120,8 +125,14 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
   }, [open]);
 
   const handleRoleChange = (value: string) => {
-    if (value === "major_admin" || value === "admin" || value === "seller") {
-      setValue("role", value);
+    if (session?.user?.role === "major_admin") {
+      if (value === "major_admin" || value === "admin" || value === "seller") {
+        setValue("role", value);
+      }
+    } else if (session?.user?.role === "admin") {
+      if (value === "seller") {
+        setValue("role", value);
+      }
     }
   };
 
@@ -248,15 +259,24 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="role">Rol</Label>
-            <Select onValueChange={handleRoleChange} defaultValue="seller">
+            <Select
+              onValueChange={handleRoleChange}
+              defaultValue={
+                session?.user?.role === "admin" ? "seller" : "seller"
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar rol" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="major_admin">
-                  Administrador Principal
-                </SelectItem>
-                <SelectItem value="admin">Administrador</SelectItem>
+                {session?.user?.role === "major_admin" && (
+                  <>
+                    <SelectItem value="major_admin">
+                      Administrador Principal
+                    </SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                  </>
+                )}
                 <SelectItem value="seller">Vendedor</SelectItem>
               </SelectContent>
             </Select>

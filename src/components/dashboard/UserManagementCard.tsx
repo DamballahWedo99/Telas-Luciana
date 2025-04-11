@@ -92,9 +92,26 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
         },
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Error al eliminar el usuario");
+        if (response.status === 400) {
+          if (data.error === "No puedes eliminar tu propia cuenta") {
+            toast.error("No puedes eliminar tu propia cuenta");
+          } else if (
+            data.error ===
+            "No se puede eliminar el último administrador principal"
+          ) {
+            toast.error(
+              "Debe permanecer al menos 1 administrador principal en el sistema"
+            );
+          } else {
+            toast.error(data.error || "Error al eliminar el usuario");
+          }
+        } else {
+          toast.error(data.error || "Error al eliminar el usuario");
+        }
+        throw new Error(data.error || "Error al eliminar el usuario");
       }
 
       toast.success(`Usuario eliminado correctamente`);
@@ -102,7 +119,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
       deleteSuccessful = true;
     } catch (error) {
       console.error("Error:", error);
-      toast.error("Error al eliminar el usuario");
     } finally {
       if (userToDelete) {
         setTimeout(() => {
