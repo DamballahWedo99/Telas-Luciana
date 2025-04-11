@@ -80,6 +80,9 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
     if (pendingActions.current[userToDelete.id]) return;
 
     pendingActions.current[userToDelete.id] = true;
+    setUsers([...users]);
+
+    let deleteSuccessful = false;
 
     try {
       const response = await fetch(`/api/users/${userToDelete.id}`, {
@@ -95,11 +98,8 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
       }
 
       toast.success(`Usuario eliminado correctamente`);
-
       setUsers(users.filter((user) => user.id !== userToDelete.id));
-
-      setConfirmDeleteOpen(false);
-      setUserToDelete(null);
+      deleteSuccessful = true;
     } catch (error) {
       console.error("Error:", error);
       toast.error("Error al eliminar el usuario");
@@ -107,7 +107,12 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
       if (userToDelete) {
         setTimeout(() => {
           pendingActions.current[userToDelete.id] = false;
-        }, 300);
+
+          if (deleteSuccessful) {
+            setConfirmDeleteOpen(false);
+            setUserToDelete(null);
+          }
+        }, 500);
       }
     }
   };
@@ -210,10 +215,14 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                       <TableCell>
                         <Badge
                           variant={
-                            user.role === "admin" ? "default" : "outline"
+                            user.role === "seller" ? "outline" : "default"
                           }
                         >
-                          {user.role === "admin" ? "Administrador" : "Vendedor"}
+                          {user.role === "major_admin"
+                            ? "Administrador Principal"
+                            : user.role === "admin"
+                            ? "Administrador"
+                            : "Vendedor"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -238,8 +247,17 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                                 onClick={() => handleDeleteUser(user)}
                                 disabled={pendingActions.current[user.id]}
                               >
-                                <TrashIcon className="mr-1 h-3 w-3" />
-                                Eliminar
+                                {pendingActions.current[user.id] ? (
+                                  <>
+                                    <Loader2Icon className="mr-1 h-3 w-3 animate-spin" />
+                                    Eliminando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <TrashIcon className="mr-1 h-3 w-3" />
+                                    Eliminar
+                                  </>
+                                )}
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -258,7 +276,11 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
           {/* Diálogo de confirmación para eliminar usuario */}
           <AlertDialog
             open={confirmDeleteOpen}
-            onOpenChange={setConfirmDeleteOpen}
+            onOpenChange={(open) => {
+              if (!open && !pendingActions.current[userToDelete?.id || ""]) {
+                setConfirmDeleteOpen(false);
+              }
+            }}
           >
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -274,8 +296,16 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                 <AlertDialogAction
                   onClick={confirmDelete}
                   className="bg-red-600 hover:bg-red-700"
+                  disabled={!!pendingActions.current[userToDelete?.id || ""]}
                 >
-                  Eliminar
+                  {userToDelete && pendingActions.current[userToDelete.id] ? (
+                    <>
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                      Eliminando...
+                    </>
+                  ) : (
+                    "Eliminar"
+                  )}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

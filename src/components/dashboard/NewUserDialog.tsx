@@ -1,7 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Session } from "next-auth";
 import { toast } from "sonner";
 
@@ -29,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { createUserAction } from "@/actions/auth";
 import { User } from "../../../types/types";
+import { createUserSchema, CreateUserFormValues } from "@/lib/zod";
 
 interface NewUserDialogProps {
   open: boolean;
@@ -37,17 +37,6 @@ interface NewUserDialogProps {
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   session: Session | null;
 }
-
-const createUserSchema = z.object({
-  name: z.string().min(2, { message: "El nombre es obligatorio" }),
-  email: z.string().email({ message: "Ingrese un correo electrónico válido" }),
-  password: z
-    .string()
-    .min(8, { message: "La contraseña debe tener al menos 8 caracteres" }),
-  role: z.enum(["admin", "seller"], { message: "Rol no válido" }),
-});
-
-type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 export const NewUserDialog: React.FC<NewUserDialogProps> = ({
   open,
@@ -103,7 +92,7 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
           id: result.user.id,
           name: result.user.name,
           email: result.user.email,
-          role: result.user.role as "admin" | "seller",
+          role: result.user.role as "major_admin" | "admin" | "seller",
           createdAt: new Date().toISOString(),
         };
 
@@ -131,21 +120,31 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
   }, [open]);
 
   const handleRoleChange = (value: string) => {
-    if (value === "admin" || value === "seller") {
+    if (value === "major_admin" || value === "admin" || value === "seller") {
       setValue("role", value);
     }
   };
 
   const generatePassword = () => {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const specialChars = "!@#$%^&*()_+-=.";
+
     let password = "";
 
-    password += "Aa1";
+    password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
 
-    for (let i = 0; i < 9; i++) {
-      const randomIndex = Math.floor(Math.random() * chars.length);
-      password += chars[randomIndex];
+    password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+
+    password += numbers.charAt(Math.floor(Math.random() * numbers.length));
+
+    const safeChars = uppercase + lowercase + numbers + specialChars;
+
+    const remainingLength = 5;
+    for (let i = 0; i < remainingLength; i++) {
+      const randomIndex = Math.floor(Math.random() * safeChars.length);
+      password += safeChars[randomIndex];
     }
 
     password = password
@@ -153,7 +152,12 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
       .sort(() => 0.5 - Math.random())
       .join("");
 
-    setValue("password", password);
+    setValue("password", password, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+
     setShowPassword(true);
   };
 
@@ -249,6 +253,9 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
                 <SelectValue placeholder="Seleccionar rol" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="major_admin">
+                  Administrador Principal
+                </SelectItem>
                 <SelectItem value="admin">Administrador</SelectItem>
                 <SelectItem value="seller">Vendedor</SelectItem>
               </SelectContent>

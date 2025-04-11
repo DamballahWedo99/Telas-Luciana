@@ -7,26 +7,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { sendPasswordResetEmail } from "@/lib/mail";
-
-const loginSchema = z.object({
-  email: z.string().email({ message: "Ingrese un correo electrónico válido" }),
-  password: z
-    .string()
-    .min(8, { message: "La contraseña debe tener al menos 8 caracteres" }),
-});
-
-const forgotPasswordSchema = z.object({
-  email: z.string().email({ message: "Ingrese un correo electrónico válido" }),
-});
-
-const createUserSchema = z.object({
-  name: z.string().min(2, { message: "El nombre es obligatorio" }),
-  email: z.string().email({ message: "Ingrese un correo electrónico válido" }),
-  password: z
-    .string()
-    .min(8, { message: "La contraseña debe tener al menos 8 caracteres" }),
-  role: z.enum(["admin", "seller"], { message: "Rol no válido" }),
-});
+import { loginSchema, forgotPasswordSchema, createUserSchema } from "@/lib/zod";
 
 export const loginAction = async (values: z.infer<typeof loginSchema>) => {
   try {
