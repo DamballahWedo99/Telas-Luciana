@@ -31,29 +31,14 @@ export function ContactSection() {
     e.preventDefault();
     setIsLoading(true);
 
-    const emailData = {
-      service_id: "service_8eixwyl",
-      template_id: "template_54hur1o",
-      user_id: "mf2Axd-oowtCmXbfk",
-      template_params: {
-        from_name: formData.name,
-        reply_to: formData.email,
-        subject: formData.subject,
-        message: formData.message,
-      },
-    };
-
     try {
-      const response = await fetch(
-        "https://api.emailjs.com/api/v1.0/email/send",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(emailData),
-        }
-      );
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
       if (response.ok) {
         toast.success("Mensaje enviado exitosamente");

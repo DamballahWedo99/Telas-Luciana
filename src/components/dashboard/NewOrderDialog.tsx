@@ -70,6 +70,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
     Unidades: "MTS",
     Importacion: "DA",
     FacturaDragonAzteca: "",
+    Ubicacion: "",
   });
 
   const formatNumber = (num: number) => {
@@ -90,6 +91,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
       Unidades: "MTS",
       Importacion: "DA",
       FacturaDragonAzteca: "",
+      Ubicacion: "",
     });
   };
 
@@ -228,7 +230,7 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="importacion">Importación</Label>
               <Select
@@ -245,6 +247,18 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
                   <SelectItem value="HOY">HOY</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ubicacion">Ubicación</Label>
+              <Input
+                id="ubicacion"
+                value={newOrder.Ubicacion}
+                onChange={(e) =>
+                  handleNewOrderChange("Ubicacion", e.target.value)
+                }
+                placeholder="Ubicación"
+              />
             </div>
           </div>
 
@@ -267,7 +281,8 @@ export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
               !newOrder.Color ||
               !newOrder.Costo ||
               !newOrder.Cantidad ||
-              !newOrder.Unidades
+              !newOrder.Unidades ||
+              !newOrder.Ubicacion
             }
           >
             Guardar

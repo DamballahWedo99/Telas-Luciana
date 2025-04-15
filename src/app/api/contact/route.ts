@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import { sendContactEmail } from "@/lib/mail";
 
 interface ContactRequest {
   name: string;
@@ -19,28 +19,21 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: "smtp.hostinger.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    const result = await sendContactEmail(name, email, subject, message);
 
-    await transporter.sendMail({
-      from: `"Pinnacle Contact" <${process.env.SMTP_USER}>`,
-      to: "administracion@telasytejidosluciana.com",
-      replyTo: email,
-      subject: subject,
-      text: `Mensaje de: ${name} (${email})\n\n${message}`,
-    });
-
-    return new Response(
-      JSON.stringify({ message: "Correo enviado exitosamente" }),
-      { status: 200 }
-    );
+    if (result.success) {
+      return new Response(
+        JSON.stringify({ message: "Correo enviado exitosamente" }),
+        { status: 200 }
+      );
+    } else {
+      return new Response(
+        JSON.stringify({
+          message: result.error || "Error al enviar el correo",
+        }),
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Error al enviar el correo:", error);
     return new Response(

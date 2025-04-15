@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
+export const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_SERVER_HOST,
   port: Number(process.env.EMAIL_SERVER_PORT) || 587,
   auth: {
@@ -104,5 +104,58 @@ export async function sendNewAccountEmail(
   } catch (error) {
     console.error(`❌ Error al enviar correo a ${to}:`, error);
     throw error;
+  }
+}
+
+export async function sendContactEmail(
+  name: string,
+  email: string,
+  subject: string,
+  message: string
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: "administracion@telasytejidosluciana.com",
+      replyTo: email,
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Nuevo mensaje de contacto</h2>
+          <p><strong>Nombre:</strong> ${name}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Asunto:</strong> ${subject}</p>
+          <div style="margin-top: 20px;">
+            <p><strong>Mensaje:</strong></p>
+            <p style="white-space: pre-wrap;">${message}</p>
+          </div>
+        </div>
+      `,
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: email,
+      subject: `Confirmación: ${subject}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Gracias por contactarnos</h2>
+          <p>Hemos recibido su mensaje y nos pondremos en contacto con usted lo antes posible.</p>
+          <div style="margin-top: 20px; background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+            <p><strong>Detalles de su mensaje:</strong></p>
+            <p><strong>Nombre:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Asunto:</strong> ${subject}</p>
+            <p><strong>Mensaje:</strong></p>
+            <p style="white-space: pre-wrap;">${message}</p>
+          </div>
+        </div>
+      `,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error(`❌ Error al enviar correos de contacto:`, error);
+    return { error: `Error al enviar correo: ${(error as Error).message}` };
   }
 }
