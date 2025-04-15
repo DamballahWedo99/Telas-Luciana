@@ -2217,16 +2217,6 @@ export const fabricData = {
       },
     },
   ],
-  ProductoTerminado: [
-    {
-      id: 1,
-      name: "Sudadera",
-      image: "/images/producto-terminado/sudadera.png",
-      specs: {
-        composition: "50% ALGODÓN/ 50% POLIESTER",
-      },
-    },
-  ],
   Rompevientos: [
     {
       id: 1,

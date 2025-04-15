@@ -9,6 +9,7 @@ import { MapPin, Phone, Mail, Loader2 } from "lucide-react";
 
 export function ContactSection() {
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState("naucalpan");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -138,31 +139,95 @@ export function ContactSection() {
           <div className="space-y-[4vh]">
             <Card>
               <CardContent className="p-[4vw] sm:p-[2vw] md:p-[4vw] lg:p-[2vw] space-y-[4vh] sm:space-y-[2vh] md:space-y-[4vh] lg:space-y-[2vh]">
-                <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw]">
-                  <MapPin className="w-[12vw] h-[12vw] md:w-[4vw] md:h-[4vw] lg:w-[2vw] lg:h-[2vw] text-[#F1965B]" />
-                  <p>
-                    Av. 16 de Septiembre 5, Alce Blanco, C.P. 53370, Naucalpan
-                    de Juárez, México.
-                  </p>
+                <div className="flex justify-start mb-[2vh] gap-2">
+                  <Button
+                    onClick={() => setSelectedLocation("naucalpan")}
+                    variant={
+                      selectedLocation === "naucalpan" ? "default" : "outline"
+                    }
+                    className={`rounded-full text-[3vw] sm:text-[1vw] md:text-[1.8vw] lg:text-[1vw] px-[3vw] sm:px-[1.5vw] py-[1vh] ${
+                      selectedLocation === "naucalpan"
+                        ? "bg-[#174CA7] hover:bg-[#174CA7]/90 text-white"
+                        : "hover:bg-gray-100 hover:text-[#174CA7]"
+                    }`}
+                  >
+                    CDMX/Naucalpan
+                  </Button>
+                  <Button
+                    onClick={() => setSelectedLocation("merida")}
+                    variant={
+                      selectedLocation === "merida" ? "default" : "outline"
+                    }
+                    className={`rounded-full text-[3vw] sm:text-[1vw] md:text-[1.8vw] lg:text-[1vw] px-[3vw] sm:px-[1.5vw] py-[1vh] ${
+                      selectedLocation === "merida"
+                        ? "bg-[#F1965B] hover:bg-[#F1965B]/90 text-white"
+                        : "hover:bg-gray-100 hover:text-[#F1965B]"
+                    }`}
+                  >
+                    Mérida
+                  </Button>
                 </div>
-                <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw]">
-                  <Phone className="w-[6vw] h-[6vw] md:w-[4vw] md:h-[4vw] lg:w-[2vw] lg:h-[2vw] text-[#F1965B]" />
-                  <p>
-                    999-926-2149 (Oficina)
-                    <br />
-                    999-491-5657 (WhatsApp)
-                  </p>
-                </div>
-                <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw]">
-                  <Mail className="w-[6vw] h-[6vw] md:w-[4vw] md:h-[4vw] lg:w-[2vw] lg:h-[2vw] text-[#F1965B]" />
+
+                {selectedLocation === "naucalpan" && (
+                  <div className="space-y-[4vh] sm:space-y-[2vh]">
+                    <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw]">
+                      <MapPin className="w-[12vw] h-[12vw] md:w-[4vw] md:h-[4vw] lg:w-[2.5vw] lg:h-[2.5vw] text-[#F1965B] mt-1" />
+                      <div>
+                        <p>
+                          Av. 16 de Septiembre 5, Alce Blanco, C.P. 53370,
+                          Naucalpan de Juárez, México.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw]">
+                      <Phone className="w-[6vw] h-[6vw] md:w-[4vw] md:h-[4vw] lg:w-[2vw] lg:h-[2vw] text-[#F1965B] mt-1" />
+                      <p>
+                        999-926-2149 (Oficina)
+                        <br />
+                        999-491-5657 (WhatsApp)
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedLocation === "merida" && (
+                  <div className="space-y-[4vh] sm:space-y-[2vh]">
+                    <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw]">
+                      <MapPin className="w-[12vw] h-[12vw] md:w-[4vw] md:h-[4vw] lg:w-[2.5vw] lg:h-[2.5vw] text-[#F1965B] mt-1" />
+                      <div>
+                        <p>
+                          Calle 40 número 501 local O entre 61 y 63 colonia
+                          centro, Mérida, Mexico, 97000
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw]">
+                      <Phone className="w-[6vw] h-[6vw] md:w-[4vw] md:h-[4vw] lg:w-[2vw] lg:h-[2vw] text-[#F1965B] mt-1" />
+                      <p>
+                        999-926-2149 (Oficina)
+                        <br />
+                        999-491-5657 (WhatsApp)
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-[4vw] sm:gap-[1vw] md:gap-[2vw] lg:gap-[1vw] text-[3.5vw] md:text-[2.4vw] lg:text-[1.2vw] pt-[1vh]">
+                  <Mail className="w-[6vw] h-[6vw] md:w-[4vw] md:h-[4vw] lg:w-[2vw] lg:h-[2vw] text-[#F1965B] mt-1" />
                   <p>administracion@telasytejidosluciana.com</p>
                 </div>
               </CardContent>
             </Card>
             <div className="aspect-video relative rounded-lg overflow-hidden hidden lg:block shadow-[0_2px_10px_rgba(0,0,0,0.2)]">
               <Image
-                src="/images/map.png"
-                alt="Mapa de ubicación"
+                src={
+                  selectedLocation === "naucalpan"
+                    ? "/images/map.png"
+                    : "/images/map-merida.png"
+                }
+                alt={`Mapa de ubicación en ${
+                  selectedLocation === "naucalpan" ? "Naucalpan" : "Mérida"
+                }`}
                 fill
                 className="object-cover"
               />

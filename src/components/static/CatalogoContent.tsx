@@ -47,7 +47,6 @@ export default function CatalogoContent() {
     if (fabric) {
       setHighlightedFabric(fabric);
 
-      // Scroll to the highlighted fabric with a small delay to allow rendering
       setTimeout(() => {
         const element = document.getElementById(
           `fabric-${fabric.replace(/\s+/g, "-")}`
@@ -88,7 +87,6 @@ export default function CatalogoContent() {
                   { id: "Pants", name: "Pants" },
                   { id: "TelasDeLinea", name: "Telas de Línea" },
                   { id: "Sudadera", name: "Sudadera" },
-                  { id: "ProductoTerminado", name: "Producto terminado" },
                 ].map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     <span className="text-[4vw] md:text-[2vw] lg:text-[1vw]">
