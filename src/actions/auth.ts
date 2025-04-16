@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { sendPasswordResetEmail } from "@/lib/mail";
+import { sendPasswordResetEmail, sendNewAccountEmail } from "@/lib/mail";
 import { loginSchema, forgotPasswordSchema, createUserSchema } from "@/lib/zod";
 
 export const loginAction = async (values: z.infer<typeof loginSchema>) => {
@@ -102,6 +102,15 @@ export const createUserAction = async (
         createdBy: createdById,
       },
     });
+
+    const emailResult = await sendNewAccountEmail(email, name, password);
+
+    if (emailResult.error) {
+      console.error(
+        "Error al enviar correo al nuevo usuario:",
+        emailResult.error
+      );
+    }
 
     return {
       success: true,

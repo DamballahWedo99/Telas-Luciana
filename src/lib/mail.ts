@@ -68,7 +68,7 @@ export async function sendNewAccountEmail(
   to: string,
   name: string,
   password: string
-): Promise<void> {
+): Promise<{ success?: boolean; error?: string }> {
   const loginUrl = `${process.env.NEXTAUTH_URL}/login`;
 
   try {
@@ -101,9 +101,10 @@ export async function sendNewAccountEmail(
       `,
     });
     console.log(`✅ Correo de nueva cuenta enviado a: ${to}`);
+    return { success: true };
   } catch (error) {
     console.error(`❌ Error al enviar correo a ${to}:`, error);
-    throw error;
+    return { error: `Error al enviar correo: ${(error as Error).message}` };
   }
 }
 

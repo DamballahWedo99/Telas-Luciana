@@ -7,6 +7,16 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const p = await Promise.resolve(params);
+    const userId = p.id;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "ID de usuario no proporcionado" },
+        { status: 400 }
+      );
+    }
+
     const session = await auth();
 
     if (
@@ -19,8 +29,6 @@ export async function DELETE(
         { status: 403 }
       );
     }
-
-    const userId = params.id;
 
     if (userId === session.user.id) {
       return NextResponse.json(
@@ -41,7 +49,6 @@ export async function DELETE(
       );
     }
 
-    // Verificar si es el último administrador principal
     if (userToDelete.role === "major_admin") {
       const majorAdminCount = await db.user.count({
         where: { role: "major_admin" },
@@ -56,7 +63,6 @@ export async function DELETE(
     }
 
     try {
-      // Código para registrar usuario en lista negra si es necesario
     } catch (error) {
       console.log(
         "No se pudo registrar el usuario eliminado en lista negra:",
