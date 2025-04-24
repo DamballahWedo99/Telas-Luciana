@@ -55,7 +55,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import { InventoryHistoryDialog } from "@/components/dashboard/InventoryHistoryDialog";
+import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
 import { getInventarioCsv } from "@/lib/s3";
 import {
   parseNumericValue,

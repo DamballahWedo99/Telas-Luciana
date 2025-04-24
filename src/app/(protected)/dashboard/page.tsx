@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import Dashboard from "@/components/dashboard/Dashboard";
+import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useRouter } from "next/navigation";
 import { useUserVerification } from "@/hooks/useUserVerification";

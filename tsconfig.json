@@ -27,7 +27,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "src/components/dashboard/Dashboard.tsx"
+    "src/components/inventory-dashboard/InventoryDashboard.tsx"
   ],
   "exclude": ["node_modules"]
 }

@@ -7,7 +7,6 @@ import {
   PlusIcon,
   UsersIcon,
   CheckIcon,
-  XIcon,
   Loader2Icon,
   TrashIcon,
 } from "lucide-react";

@@ -5,7 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import { LogOutIcon, HistoryIcon } from "lucide-react";
+import { LogOutIcon, HistoryIcon, BarChart } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -16,13 +16,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { InventoryCard } from "@/components/dashboard/InventoryCard";
-import { VisualizationsCard } from "@/components/dashboard/VisualizationsCard";
-import { UserManagementCard } from "@/components/dashboard/UserManagementCard";
-import { KeyMetricsSection } from "@/components/dashboard/KeyMetricsSection";
-import { NewOrderDialog } from "@/components/dashboard/NewOrderDialog";
-import { NewUserDialog } from "@/components/dashboard/NewUserDialog";
-import { InventoryHistoryDialog } from "@/components/dashboard/InventoryHistoryDialog";
+import { InventoryCard } from "@/components/inventory-dashboard/InventoryCard";
+import { VisualizationsCard } from "@/components/inventory-dashboard/VisualizationsCard";
+import { UserManagementCard } from "@/components/inventory-dashboard/UserManagementCard";
+import { KeyMetricsSection } from "@/components/inventory-dashboard/KeyMetricsSection";
+import { NewOrderDialog } from "@/components/inventory-dashboard/NewOrderDialog";
+import { NewUserDialog } from "@/components/inventory-dashboard/NewUserDialog";
+import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
+import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import {
   InventoryItem,
   UnitType,
@@ -57,6 +58,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [showPedidosDashboard, setShowPedidosDashboard] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -340,6 +342,14 @@ const Dashboard: React.FC<DashboardProps> = () => {
     setOpenHistoryDialog(true);
   };
 
+  const handleViewPedidosDashboard = () => {
+    setShowPedidosDashboard(true);
+  };
+
+  const handleBackFromPedidosDashboard = () => {
+    setShowPedidosDashboard(false);
+  };
+
   useEffect(() => {
     async function loadUsers() {
       if (!isAdmin) {
@@ -462,13 +472,18 @@ const Dashboard: React.FC<DashboardProps> = () => {
     });
   };
 
+  // Si estamos mostrando el dashboard de pedidos, renderizamos solo ese componente
+  if (showPedidosDashboard) {
+    return <PedidosDashboard onBack={handleBackFromPedidosDashboard} />;
+  }
+
   return (
     <div className="container mx-auto p-4">
       <div className="my-4">
         <div className="flex justify-between items-center mb-3">
           <h1 className="text-2xl font-bold">Panel de Control de Inventario</h1>
           <div className="flex items-center gap-2">
-            {isMajorAdmin && (
+            {isAdmin && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -482,7 +497,27 @@ const Dashboard: React.FC<DashboardProps> = () => {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Ver datos históricos</p>
+                    <p>Cargar datos históricos</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {isMajorAdmin && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleViewPedidosDashboard}
+                      className="mr-2"
+                    >
+                      <BarChart className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Ver pedidos históricos</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
