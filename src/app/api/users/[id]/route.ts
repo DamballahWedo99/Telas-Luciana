@@ -49,6 +49,14 @@ export async function DELETE(
       );
     }
 
+    // Nueva validación de permisos basada en roles
+    if (session.user.role === "admin" && userToDelete.role !== "seller") {
+      return NextResponse.json(
+        { error: "Los administradores solo pueden eliminar vendedores" },
+        { status: 403 }
+      );
+    }
+
     if (userToDelete.role === "major_admin") {
       const majorAdminCount = await db.user.count({
         where: { role: "major_admin" },

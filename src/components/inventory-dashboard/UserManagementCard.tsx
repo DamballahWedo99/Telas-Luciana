@@ -136,6 +136,11 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
           } else {
             toast.error(data.error || "Error al eliminar el usuario");
           }
+        } else if (
+          response.status === 403 &&
+          data.error === "Los administradores solo pueden eliminar vendedores"
+        ) {
+          toast.error("No tienes permisos para eliminar este tipo de usuario");
         } else {
           toast.error(data.error || "Error al eliminar el usuario");
         }
@@ -152,10 +157,9 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
         setTimeout(() => {
           pendingActions.current[userToDelete.id] = false;
 
-          if (deleteSuccessful) {
-            setConfirmDeleteOpen(false);
-            setUserToDelete(null);
-          }
+          // Cerrar el modal en cualquier caso (éxito o error)
+          setConfirmDeleteOpen(false);
+          setUserToDelete(null);
         }, 500);
       }
     }
