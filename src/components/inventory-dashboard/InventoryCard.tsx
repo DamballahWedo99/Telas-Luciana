@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Papa from "papaparse";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -12,6 +12,11 @@ import {
   MinusIcon,
   FolderOpenIcon,
   Loader2Icon,
+  BoxIcon,
+  AlertCircle,
+  Filter,
+  XCircleIcon,
+  Search,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,15 +30,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableFooter,
-} from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,6 +109,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   isAdmin,
   isLoading,
 }) => {
+  // Función para limpiar todos los filtros
+  const resetAllFilters = () => {
+    setSearchTerm("");
+    setUnitFilter("all");
+    setOcFilter("all");
+    setTelaFilter("all");
+    setColorFilter("all");
+    setUbicacionFilter("all");
+  };
   const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
   const [openSellDialog, setOpenSellDialog] = useState(false);
   const [openAddDialog, setOpenAddDialog] = useState(false);
@@ -114,7 +125,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     null
   );
   const [quantityToUpdate, setQuantityToUpdate] = useState<number>(0);
-  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
 
   const isFilterActive = useMemo(() => {
     return (
@@ -504,28 +514,232 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
+  // Primero, calculamos el inventario filtrado basado en todos los filtros excepto
+  // el propio filtro para el que estamos calculando las opciones
+  const filteredInventoryForOC = useMemo(
+    () =>
+      inventory.filter((item) => {
+        const matchesSearch = isAdmin
+          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
+          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesUnit =
+          unitFilter === "all" || item.Unidades === unitFilter;
+
+        const matchesTela = telaFilter === "all" || item.Tela === telaFilter;
+
+        const matchesColor =
+          colorFilter === "all" || item.Color === colorFilter;
+
+        const matchesUbicacion =
+          ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
+
+        return (
+          matchesSearch &&
+          matchesUnit &&
+          matchesTela &&
+          matchesColor &&
+          matchesUbicacion
+        );
+      }),
+    [
+      inventory,
+      searchTerm,
+      unitFilter,
+      telaFilter,
+      colorFilter,
+      ubicacionFilter,
+      isAdmin,
+    ]
+  );
+
+  const filteredInventoryForTela = useMemo(
+    () =>
+      inventory.filter((item) => {
+        const matchesSearch = isAdmin
+          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
+          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesUnit =
+          unitFilter === "all" || item.Unidades === unitFilter;
+
+        const matchesOC = isAdmin
+          ? ocFilter === "all" || item.OC === ocFilter
+          : true;
+
+        const matchesColor =
+          colorFilter === "all" || item.Color === colorFilter;
+
+        const matchesUbicacion =
+          ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
+
+        return (
+          matchesSearch &&
+          matchesUnit &&
+          matchesOC &&
+          matchesColor &&
+          matchesUbicacion
+        );
+      }),
+    [
+      inventory,
+      searchTerm,
+      unitFilter,
+      ocFilter,
+      colorFilter,
+      ubicacionFilter,
+      isAdmin,
+    ]
+  );
+
+  const filteredInventoryForColor = useMemo(
+    () =>
+      inventory.filter((item) => {
+        const matchesSearch = isAdmin
+          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
+          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesUnit =
+          unitFilter === "all" || item.Unidades === unitFilter;
+
+        const matchesOC = isAdmin
+          ? ocFilter === "all" || item.OC === ocFilter
+          : true;
+
+        const matchesTela = telaFilter === "all" || item.Tela === telaFilter;
+
+        const matchesUbicacion =
+          ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
+
+        return (
+          matchesSearch &&
+          matchesUnit &&
+          matchesOC &&
+          matchesTela &&
+          matchesUbicacion
+        );
+      }),
+    [
+      inventory,
+      searchTerm,
+      unitFilter,
+      ocFilter,
+      telaFilter,
+      ubicacionFilter,
+      isAdmin,
+    ]
+  );
+
+  const filteredInventoryForUbicacion = useMemo(
+    () =>
+      inventory.filter((item) => {
+        const matchesSearch = isAdmin
+          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
+          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesUnit =
+          unitFilter === "all" || item.Unidades === unitFilter;
+
+        const matchesOC = isAdmin
+          ? ocFilter === "all" || item.OC === ocFilter
+          : true;
+
+        const matchesTela = telaFilter === "all" || item.Tela === telaFilter;
+
+        const matchesColor =
+          colorFilter === "all" || item.Color === colorFilter;
+
+        return (
+          matchesSearch &&
+          matchesUnit &&
+          matchesOC &&
+          matchesTela &&
+          matchesColor
+        );
+      }),
+    [
+      inventory,
+      searchTerm,
+      unitFilter,
+      ocFilter,
+      telaFilter,
+      colorFilter,
+      isAdmin,
+    ]
+  );
+
+  // Ahora calculamos las opciones únicas para cada filtro basado en su inventario filtrado específico
   const uniqueOCs = useMemo(
-    () => Array.from(new Set(inventory.map((item) => item.OC))).sort(),
-    [inventory]
+    () =>
+      Array.from(new Set(filteredInventoryForOC.map((item) => item.OC))).sort(),
+    [filteredInventoryForOC]
   );
 
   const uniqueTelas = useMemo(
-    () => Array.from(new Set(inventory.map((item) => item.Tela))).sort(),
-    [inventory]
+    () =>
+      Array.from(
+        new Set(filteredInventoryForTela.map((item) => item.Tela))
+      ).sort(),
+    [filteredInventoryForTela]
   );
 
   const uniqueColors = useMemo(
-    () => Array.from(new Set(inventory.map((item) => item.Color))).sort(),
-    [inventory]
+    () =>
+      Array.from(
+        new Set(filteredInventoryForColor.map((item) => item.Color))
+      ).sort(),
+    [filteredInventoryForColor]
   );
 
   const uniqueUbicaciones = useMemo(
     () =>
-      Array.from(new Set(inventory.map((item) => item.Ubicacion)))
+      Array.from(
+        new Set(filteredInventoryForUbicacion.map((item) => item.Ubicacion))
+      )
         .filter(Boolean)
         .sort(),
-    [inventory]
+    [filteredInventoryForUbicacion]
   );
+
+  // Lógica para restablecer filtros cuando las opciones seleccionadas ya no están disponibles
+  useEffect(() => {
+    if (ocFilter !== "all" && !uniqueOCs.includes(ocFilter)) {
+      setOcFilter("all");
+    }
+  }, [uniqueOCs, ocFilter, setOcFilter]);
+
+  useEffect(() => {
+    if (telaFilter !== "all" && !uniqueTelas.includes(telaFilter)) {
+      setTelaFilter("all");
+    }
+  }, [uniqueTelas, telaFilter, setTelaFilter]);
+
+  useEffect(() => {
+    if (colorFilter !== "all" && !uniqueColors.includes(colorFilter)) {
+      setColorFilter("all");
+    }
+  }, [uniqueColors, colorFilter, setColorFilter]);
+
+  useEffect(() => {
+    if (
+      ubicacionFilter !== "all" &&
+      !uniqueUbicaciones.includes(ubicacionFilter)
+    ) {
+      setUbicacionFilter("all");
+    }
+  }, [uniqueUbicaciones, ubicacionFilter, setUbicacionFilter]);
 
   const filteredInventory = useMemo(
     () =>
@@ -581,12 +795,39 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     return filteredInventory.reduce((total, item) => total + item.Total, 0);
   }, [filteredInventory]);
 
+  // Verificar si hay opciones disponibles
+  const hasOCOptions = uniqueOCs.length > 0;
+  const hasTelaOptions = uniqueTelas.length > 0;
+  const hasColorOptions = uniqueColors.length > 0;
+  const hasUbicacionOptions = uniqueUbicaciones.length > 0;
+
   return (
     <Card className="mb-6">
-      <CardHeader className="pb-4 flex flex-row items-center justify-between">
-        <CardTitle>Inventario</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="flex items-center mb-1">
+            <BoxIcon className="mr-2 h-5 w-5" />
+            Inventario
+          </CardTitle>
+          <CardDescription>
+            {inventory.length} productos en el sistema
+          </CardDescription>
+        </div>
         <div className="flex items-center space-x-2">
           <TooltipProvider>
+            {isFilterActive && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={resetAllFilters}>
+                    <XCircleIcon className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Limpiar filtros</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenu>
@@ -611,22 +852,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             </Tooltip>
 
             {/* Botón para cargar inventario histórico - Solo para admin y major_admin */}
-            {isAdmin && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setOpenHistoryDialog(true)}
-                  >
-                    <FolderOpenIcon className="h-5 w-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Cargar inventario histórico</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
 
             {isAdmin && (
               <Tooltip>
@@ -672,254 +897,472 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         <>
           <CardContent className="pt-0 pb-4">
             <div className="flex flex-wrap gap-4 mb-4">
+              {/* Search bar - más grande */}
               <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="search">Buscar</Label>
-                <Input
-                  id="search"
-                  type="text"
-                  placeholder={
-                    isAdmin
-                      ? "Buscar por OC, Tela, o Color"
-                      : "Buscar por Tela o Color"
-                  }
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSearchTerm(e.target.value)
-                  }
-                  className="mt-1"
-                />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="search">Buscar</Label>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search size={16} className="text-gray-400" />
+                    </div>
+                    <Input
+                      id="search"
+                      type="text"
+                      placeholder={
+                        isAdmin
+                          ? "Buscar por OC, Tela, o Color"
+                          : "Buscar por Tela o Color"
+                      }
+                      value={searchTerm}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setSearchTerm(e.target.value)
+                      }
+                      className="pl-10 w-full h-9"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="min-w-[150px]">
-                <Label htmlFor="unitFilter">Unidades</Label>
-                <Select
-                  value={unitFilter}
-                  onValueChange={(value) =>
-                    setUnitFilter(value as UnitType | "all")
-                  }
-                >
-                  <SelectTrigger id="unitFilter" className="mt-1">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="MTS">MTS</SelectItem>
-                    <SelectItem value="KGS">KGS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {isAdmin && (
-                <div className="min-w-[150px]">
-                  <Label htmlFor="ocFilter">OC</Label>
-                  <Select value={ocFilter} onValueChange={setOcFilter}>
-                    <SelectTrigger id="ocFilter" className="mt-1">
+              {/* Unidades filter - más pequeño */}
+              <div className="min-w-[150px] max-w-[150px]">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="unitFilter">Unidades</Label>
+                  </div>
+                  <Select
+                    value={unitFilter}
+                    onValueChange={(value) =>
+                      setUnitFilter(value as UnitType | "all")
+                    }
+                  >
+                    <SelectTrigger id="unitFilter" className="w-full truncate">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas</SelectItem>
-                      {uniqueOCs.map((oc) => (
-                        <SelectItem key={oc} value={oc}>
-                          {oc}
+                      <SelectItem value="MTS">MTS</SelectItem>
+                      <SelectItem value="KGS">KGS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* OC filter - Solo para admin - más pequeño */}
+              {isAdmin && (
+                <div className="min-w-[150px] max-w-[150px]">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="ocFilter">OC</Label>
+                      {!hasOCOptions && ocFilter !== "all" && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <AlertCircle
+                                  size={14}
+                                  className="text-amber-500"
+                                />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                No hay OCs disponibles con los filtros actuales
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                    <Select value={ocFilter} onValueChange={setOcFilter}>
+                      <SelectTrigger id="ocFilter" className="w-full truncate">
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {uniqueOCs.map((oc) => (
+                          <SelectItem key={oc} value={oc}>
+                            {oc}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {/* Tela filter - más pequeño */}
+              <div className="min-w-[150px] max-w-[150px]">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="telaFilter">Tela</Label>
+                    {!hasTelaOptions && telaFilter !== "all" && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <AlertCircle
+                                size={14}
+                                className="text-amber-500"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              No hay telas disponibles con los filtros actuales
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                  <Select value={telaFilter} onValueChange={setTelaFilter}>
+                    <SelectTrigger id="telaFilter" className="w-full truncate">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {uniqueTelas.map((tela) => (
+                        <SelectItem key={tela} value={tela}>
+                          {tela}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-
-              <div className="min-w-[150px]">
-                <Label htmlFor="telaFilter">Tela</Label>
-                <Select value={telaFilter} onValueChange={setTelaFilter}>
-                  <SelectTrigger id="telaFilter" className="mt-1">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {uniqueTelas.map((tela) => (
-                      <SelectItem key={tela} value={tela}>
-                        {tela}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
-              <div className="min-w-[150px]">
-                <Label htmlFor="colorFilter">Color</Label>
-                <Select value={colorFilter} onValueChange={setColorFilter}>
-                  <SelectTrigger id="colorFilter" className="mt-1">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {uniqueColors.map((color) => (
-                      <SelectItem key={color} value={color}>
-                        {color}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="min-w-[150px]">
-                <Label htmlFor="ubicacionFilter">Ubicación</Label>
-                <Select
-                  value={ubicacionFilter}
-                  onValueChange={setUbicacionFilter}
-                >
-                  <SelectTrigger id="ubicacionFilter" className="mt-1">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="Mérida">Mérida</SelectItem>
-                    <SelectItem value="Edo Mex">Edo Mex</SelectItem>
-                    {uniqueUbicaciones.map(
-                      (ubicacion) =>
-                        ubicacion !== "Mérida" &&
-                        ubicacion !== "Edo Mex" && (
-                          <SelectItem key={ubicacion} value={ubicacion}>
-                            {ubicacion}
-                          </SelectItem>
-                        )
+              {/* Color filter - más pequeño */}
+              <div className="min-w-[150px] max-w-[150px]">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="colorFilter">Color</Label>
+                    {!hasColorOptions && colorFilter !== "all" && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <AlertCircle
+                                size={14}
+                                className="text-amber-500"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              No hay colores disponibles con los filtros
+                              actuales
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
-                  </SelectContent>
-                </Select>
+                  </div>
+                  <Select value={colorFilter} onValueChange={setColorFilter}>
+                    <SelectTrigger id="colorFilter" className="w-full truncate">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {uniqueColors.map((color) => (
+                        <SelectItem key={color} value={color}>
+                          {color}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Ubicación filter - más pequeño */}
+              <div className="min-w-[150px] max-w-[150px]">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="ubicacionFilter">Ubicación</Label>
+                    {!hasUbicacionOptions && ubicacionFilter !== "all" && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <AlertCircle
+                                size={14}
+                                className="text-amber-500"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              No hay ubicaciones disponibles con los filtros
+                              actuales
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                  <Select
+                    value={ubicacionFilter}
+                    onValueChange={setUbicacionFilter}
+                  >
+                    <SelectTrigger
+                      id="ubicacionFilter"
+                      className="w-full truncate"
+                    >
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="Mérida">Mérida</SelectItem>
+                      <SelectItem value="Edo Mex">Edo Mex</SelectItem>
+                      {uniqueUbicaciones.map(
+                        (ubicacion) =>
+                          ubicacion !== "Mérida" &&
+                          ubicacion !== "Edo Mex" && (
+                            <SelectItem key={ubicacion} value={ubicacion}>
+                              {ubicacion}
+                            </SelectItem>
+                          )
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter summary */}
+            <div className="flex items-center gap-2 text-sm">
+              <Filter size={16} className="text-gray-500" />
+              <span className="text-gray-500">Filtros activos:</span>
+              <div className="flex flex-wrap gap-2">
+                {ocFilter && ocFilter !== "all" && (
+                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                    OC: {ocFilter}
+                  </span>
+                )}
+                {telaFilter && telaFilter !== "all" && (
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                    Tela: {telaFilter}
+                  </span>
+                )}
+                {colorFilter && colorFilter !== "all" && (
+                  <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                    Color: {colorFilter}
+                  </span>
+                )}
+                {ubicacionFilter && ubicacionFilter !== "all" && (
+                  <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
+                    Ubicación: {ubicacionFilter}
+                  </span>
+                )}
+                {unitFilter && unitFilter !== "all" && (
+                  <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                    Unidades: {unitFilter}
+                  </span>
+                )}
+                {searchTerm && (
+                  <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
+                    Búsqueda: {searchTerm}
+                  </span>
+                )}
+                {(!ocFilter || ocFilter === "all") &&
+                  (!telaFilter || telaFilter === "all") &&
+                  (!colorFilter || colorFilter === "all") &&
+                  (!ubicacionFilter || ubicacionFilter === "all") &&
+                  (!unitFilter || unitFilter === "all") &&
+                  !searchTerm && <span className="text-gray-500">Ninguno</span>}
               </div>
             </div>
           </CardContent>
 
           <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {isAdmin && <TableHead>OC</TableHead>}
-                    <TableHead>Tela</TableHead>
-                    <TableHead>Color</TableHead>
-                    {isAdmin && <TableHead>Costo</TableHead>}
-                    <TableHead>Cantidad</TableHead>
-                    <TableHead>Unidades</TableHead>
-                    {isAdmin && <TableHead>Total</TableHead>}
-                    <TableHead>Ubicación</TableHead>
-                    {isAdmin && <TableHead>Importación</TableHead>}
-                    {isAdmin && <TableHead>Acciones</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={isAdmin ? 10 : 5}
-                        className="h-24 text-center"
-                      >
-                        <div className="flex justify-center items-center">
-                          <Loader2Icon className="h-8 w-8 animate-spin text-gray-500" />
-                          <span className="ml-2">Cargando inventario...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredInventory.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={isAdmin ? 10 : 5}
-                        className="h-24 text-center"
-                      >
-                        No hay datos disponibles
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredInventory.map((item, index) => (
-                      <TableRow key={index}>
-                        {isAdmin && <TableCell>{item.OC}</TableCell>}
-                        <TableCell>{item.Tela}</TableCell>
-                        <TableCell>{item.Color}</TableCell>
-                        {isAdmin && (
-                          <TableCell>${formatNumber(item.Costo)}</TableCell>
-                        )}
-                        <TableCell>{formatNumber(item.Cantidad)}</TableCell>
-                        <TableCell>{item.Unidades}</TableCell>
-                        {isAdmin && (
-                          <TableCell>${formatNumber(item.Total)}</TableCell>
-                        )}
-                        <TableCell>{item.Ubicacion || "-"}</TableCell>
-                        {isAdmin && <TableCell>{item.Importacion}</TableCell>}
-                        {isAdmin && (
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleOpenSellDialog(index)
-                                      }
-                                    >
-                                      <MinusIcon className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Vender</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+            {/* Tabla con dirección nativa en HTML */}
+            <div className="border rounded-md overflow-hidden">
+              <div className="h-[500px] overflow-auto relative">
+                <table className="w-full text-sm border-collapse">
+                  <thead className="bg-white sticky top-0 z-10 shadow-sm">
+                    <tr>
+                      {isAdmin && (
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          OC
+                        </th>
+                      )}
+                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                        Tela
+                      </th>
+                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                        Color
+                      </th>
+                      {isAdmin && (
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Costo
+                        </th>
+                      )}
+                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                        Cantidad
+                      </th>
+                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                        Unidades
+                      </th>
+                      {isAdmin && (
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Total
+                        </th>
+                      )}
+                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                        Ubicación
+                      </th>
+                      {isAdmin && (
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Importación
+                        </th>
+                      )}
+                      {isAdmin && (
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Acciones
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoading ? (
+                      <tr>
+                        <td
+                          colSpan={isAdmin ? 10 : 5}
+                          className="p-2 align-middle text-center"
+                        >
+                          <div className="flex justify-center items-center h-24">
+                            <Loader2Icon className="h-8 w-8 animate-spin text-gray-500" />
+                            <span className="ml-2">Cargando inventario...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredInventory.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={isAdmin ? 10 : 5}
+                          className="p-2 align-middle text-center h-24"
+                        >
+                          No hay datos disponibles
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredInventory.map((item, index) => (
+                        <tr
+                          key={index}
+                          className="border-b transition-colors hover:bg-muted/50"
+                        >
+                          {isAdmin && (
+                            <td className="p-2 align-middle">{item.OC}</td>
+                          )}
+                          <td className="p-2 align-middle">{item.Tela}</td>
+                          <td className="p-2 align-middle">{item.Color}</td>
+                          {isAdmin && (
+                            <td className="p-2 align-middle">
+                              ${formatNumber(item.Costo)}
+                            </td>
+                          )}
+                          <td className="p-2 align-middle">
+                            {formatNumber(item.Cantidad)}
+                          </td>
+                          <td className="p-2 align-middle">{item.Unidades}</td>
+                          {isAdmin && (
+                            <td className="p-2 align-middle">
+                              ${formatNumber(item.Total)}
+                            </td>
+                          )}
+                          <td className="p-2 align-middle">
+                            {item.Ubicacion || "-"}
+                          </td>
+                          {isAdmin && (
+                            <td className="p-2 align-middle">
+                              {item.Importacion}
+                            </td>
+                          )}
+                          {isAdmin && (
+                            <td className="p-2 align-middle">
+                              <div className="flex space-x-2">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          handleOpenSellDialog(index)
+                                        }
+                                      >
+                                        <MinusIcon className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Vender</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
 
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleOpenAddDialog(index)}
-                                    >
-                                      <PlusIcon className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Agregar</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          </TableCell>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          handleOpenAddDialog(index)
+                                        }
+                                      >
+                                        <PlusIcon className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Agregar</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {!isLoading && filteredInventory.length > 0 && (
+                    <tfoot className="bg-muted sticky bottom-0 z-10">
+                      <tr>
+                        {isAdmin && (
+                          <td
+                            colSpan={3}
+                            className="p-2 align-middle font-bold"
+                          >
+                            Total
+                          </td>
                         )}
-                      </TableRow>
-                    ))
+                        {!isAdmin && (
+                          <td
+                            colSpan={2}
+                            className="p-2 align-middle font-bold"
+                          >
+                            Total
+                          </td>
+                        )}
+                        {isAdmin && <td className="p-2 align-middle"></td>}
+                        <td className="p-2 align-middle font-bold">
+                          {formatNumber(totalCantidad)}
+                        </td>
+                        <td className="p-2 align-middle"></td>
+                        {isAdmin && (
+                          <td className="p-2 align-middle font-bold">
+                            ${formatNumber(totalCosto)}
+                          </td>
+                        )}
+                        <td className="p-2 align-middle"></td>
+                        {isAdmin && <td className="p-2 align-middle"></td>}
+                        {isAdmin && <td className="p-2 align-middle"></td>}
+                      </tr>
+                    </tfoot>
                   )}
-                </TableBody>
-                {!isLoading && filteredInventory.length > 0 && (
-                  <TableFooter>
-                    <TableRow>
-                      {isAdmin && (
-                        <TableCell colSpan={3} className="font-bold">
-                          Total
-                        </TableCell>
-                      )}
-                      {!isAdmin && (
-                        <TableCell colSpan={2} className="font-bold">
-                          Total
-                        </TableCell>
-                      )}
-                      {isAdmin && <TableCell></TableCell>}
-                      <TableCell className="font-bold">
-                        {formatNumber(totalCantidad)}
-                      </TableCell>
-                      <TableCell></TableCell>
-                      {isAdmin && (
-                        <TableCell className="font-bold">
-                          ${formatNumber(totalCosto)}
-                        </TableCell>
-                      )}
-                      <TableCell></TableCell>
-                      {isAdmin && <TableCell></TableCell>}
-                      {isAdmin && <TableCell></TableCell>}
-                    </TableRow>
-                  </TableFooter>
-                )}
-              </Table>
+                </table>
+              </div>
             </div>
           </CardContent>
         </>
@@ -1008,15 +1451,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Diálogo para seleccionar inventario histórico - Solo para admin y major_admin */}
-      {isAdmin && (
-        <InventoryHistoryDialog
-          open={openHistoryDialog}
-          setOpen={setOpenHistoryDialog}
-          onLoadInventory={handleLoadHistoricalInventory}
-        />
-      )}
     </Card>
   );
 };

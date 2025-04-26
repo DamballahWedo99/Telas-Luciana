@@ -61,12 +61,41 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
   isLoadingUsers,
   setOpenNewUser,
 }) => {
-  const [userManagementCollapsed, setUserManagementCollapsed] = useState(false);
+  const [userManagementCollapsed, setUserManagementCollapsed] = useState(true);
   const [userSuccess, setUserSuccess] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const pendingActions = useRef<Record<string, boolean>>({});
+
+  // Función para ordenar usuarios por jerarquía
+  const sortUsersByHierarchy = (users: User[]): User[] => {
+    // Definimos el orden de los roles
+    const roleOrder: Record<string, number> = {
+      major_admin: 1,
+      admin: 2,
+      seller: 3,
+    };
+
+    // Ordenamos los usuarios según su rol
+    return [...users].sort((a, b) => {
+      return roleOrder[a.role] - roleOrder[b.role];
+    });
+  };
+
+  // Función para determinar el color de la insignia según el rol
+  const getBadgeVariant = (
+    role: string
+  ): "default" | "outline" | "secondary" => {
+    switch (role) {
+      case "major_admin":
+        return "default"; // Color principal para administradores principales
+      case "admin":
+        return "secondary"; // Color secundario para administradores
+      default:
+        return "outline"; // Color de contorno para vendedores
+    }
+  };
 
   const handleDeleteUser = (user: User) => {
     setUserToDelete(user);
@@ -131,6 +160,9 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
       }
     }
   };
+
+  // Ordenamos los usuarios por jerarquía
+  const sortedUsers = sortUsersByHierarchy(users);
 
   return (
     <Card className="mb-6">
@@ -213,7 +245,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.length === 0 ? (
+                {sortedUsers.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={5}
@@ -223,16 +255,12 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
+                  sortedUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            user.role === "seller" ? "outline" : "default"
-                          }
-                        >
+                        <Badge variant={getBadgeVariant(user.role)}>
                           {user.role === "major_admin"
                             ? "Administrador Principal"
                             : user.role === "admin"

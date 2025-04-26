@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { ChevronUpIcon, ChevronDownIcon } from "lucide-react";
+import { ChevronUpIcon, ChevronDownIcon, BarChart3Icon } from "lucide-react";
 
 import {
   BarChart,
@@ -48,7 +48,7 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
   inventory,
   filters,
 }) => {
-  const [visualizationsCollapsed, setVisualizationsCollapsed] = useState(false);
+  const [visualizationsCollapsed, setVisualizationsCollapsed] = useState(true);
 
   const formatNumber = (num: number) => {
     return num.toLocaleString("en-US", {
@@ -218,7 +218,10 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     <Card className="mb-6">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="mb-1">Visualizaciones</CardTitle>
+          <CardTitle className="flex items-center mb-1">
+            <BarChart3Icon className="mr-2 h-5 w-5" />
+            Visualizaciones
+          </CardTitle>
           <CardDescription>
             Análisis gráfico de los datos de inventario
           </CardDescription>
