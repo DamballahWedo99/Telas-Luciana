@@ -1,7 +1,8 @@
 import React, { useEffect } from "react";
-import { Search, Filter, AlertCircle } from "lucide-react";
+import { Search, Filter, AlertCircle, XCircleIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -30,8 +31,8 @@ interface OrdersFilterSectionProps {
   ordenDeCompraOptions: string[];
   tipoTelaOptions: string[];
   colorOptions: string[];
-  handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  fileUploading: boolean;
+  handleFileUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  fileUploading?: boolean;
   resetFilters: () => void;
 }
 
@@ -49,11 +50,20 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
   ordenDeCompraOptions,
   tipoTelaOptions,
   colorOptions,
+  resetFilters,
 }) => {
   // Determinar si hay opciones disponibles para mostrar en los dropdowns
   const hasOrdenDeCompraOptions = ordenDeCompraOptions.length > 0;
   const hasTipoTelaOptions = tipoTelaOptions.length > 0;
   const hasColorOptions = colorOptions.length > 0;
+
+  // Verificar si algún filtro está activo
+  const isFilterActive =
+    searchQuery !== "" ||
+    ordenDeCompraFilter !== "all" ||
+    tipoTelaFilter !== "all" ||
+    colorFilter !== "all" ||
+    ubicacionFilter !== "all";
 
   // Reset filters if selected value is no longer in available options
   useEffect(() => {
@@ -79,9 +89,9 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
 
   return (
     <div className="mb-6 bg-white p-4 rounded shadow-sm">
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
-        {/* Search bar */}
-        <div>
+      <div className="flex flex-wrap gap-4 mb-4">
+        {/* Search bar - significativamente más ancha */}
+        <div className="min-w-[300px] flex-[2_2_0%] max-w-md">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
               <Label htmlFor="search">Buscar</Label>
@@ -103,7 +113,7 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
         </div>
 
         {/* Orden de Compra filter */}
-        <div>
+        <div className="min-w-[150px] flex-1 max-w-[180px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
               <Label htmlFor="orden-compra-filter">OC</Label>
@@ -126,7 +136,10 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
               value={ordenDeCompraFilter}
               onValueChange={setOrdenDeCompraFilter}
             >
-              <SelectTrigger id="orden-compra-filter">
+              <SelectTrigger
+                id="orden-compra-filter"
+                className="w-full truncate"
+              >
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
@@ -142,7 +155,7 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
         </div>
 
         {/* Tipo de Tela filter */}
-        <div>
+        <div className="min-w-[150px] flex-1 max-w-[180px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
               <Label htmlFor="tipo-tela-filter">Tela</Label>
@@ -165,7 +178,7 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
               )}
             </div>
             <Select value={tipoTelaFilter} onValueChange={setTipoTelaFilter}>
-              <SelectTrigger id="tipo-tela-filter">
+              <SelectTrigger id="tipo-tela-filter" className="w-full truncate">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
@@ -181,7 +194,7 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
         </div>
 
         {/* Color filter */}
-        <div>
+        <div className="min-w-[150px] flex-1 max-w-[180px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
               <Label htmlFor="color-filter">Color</Label>
@@ -201,7 +214,7 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
               )}
             </div>
             <Select value={colorFilter} onValueChange={setColorFilter}>
-              <SelectTrigger id="color-filter">
+              <SelectTrigger id="color-filter" className="w-full truncate">
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
@@ -217,13 +230,13 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
         </div>
 
         {/* Ubicación filter */}
-        <div>
+        <div className="min-w-[150px] flex-1 max-w-[180px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
               <Label htmlFor="ubicacion-filter">Ubicación</Label>
             </div>
             <Select value={ubicacionFilter} onValueChange={setUbicacionFilter}>
-              <SelectTrigger id="ubicacion-filter">
+              <SelectTrigger id="ubicacion-filter" className="w-full truncate">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
@@ -235,6 +248,8 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
             </Select>
           </div>
         </div>
+
+        {/* Eliminamos el botón de limpiar de aquí ya que ahora está en la barra superior */}
       </div>
 
       {/* Filter summary */}
@@ -263,7 +278,7 @@ export const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
             </span>
           )}
           {searchQuery && (
-            <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
+            <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
               Búsqueda: {searchQuery}
             </span>
           )}

@@ -1,15 +1,6 @@
 import React from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -94,34 +85,62 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
   // Verificar que paginatedData tenga elementos antes de mostrar
   const hasData = paginatedData && paginatedData.length > 0;
 
-  // Calcular valores para cada fila
+  // Calcular total_mxp_sum para cada orden_de_compra (siguiendo la lógica de paste.txt)
+  const calculateOrdenGroups = () => {
+    const ordenGroups: Record<string, { totalMxpSum: number }> = {};
+
+    // Primero, calculamos el total_mxp para cada fila y acumulamos por orden_de_compra
+    filteredData.forEach((row) => {
+      const ordenDeCompra = row.orden_de_compra || "";
+      const totalFactura = row.total_factura || 0;
+      const tipoDeCambio = row.tipo_de_cambio || 0;
+      const totalMxp = totalFactura * tipoDeCambio;
+
+      if (!ordenGroups[ordenDeCompra]) {
+        ordenGroups[ordenDeCompra] = {
+          totalMxpSum: 0,
+        };
+      }
+      ordenGroups[ordenDeCompra].totalMxpSum += totalMxp;
+    });
+
+    return ordenGroups;
+  };
+
+  // Obtener grupos de órdenes para cálculos
+  const ordenGroups = calculateOrdenGroups();
+
+  // Calcular valores para cada fila según la lógica de paste.txt
   const calculateRowData = (row: PedidoData) => {
     // Extraer valores base (con valores predeterminados para evitar cálculos con undefined/null)
+    const ordenDeCompra = row.orden_de_compra || "";
     const totalFactura = row.total_factura || 0;
-    const tipoDeCambio = row.tipo_de_cambio || 18.5; // Valor predeterminado si es 0
+    const tipoDeCambio = row.tipo_de_cambio || 0;
     const totalGastos = row.total_gastos || 0;
     const mFactura = row.m_factura || 1; // Evitar división por cero
 
     // PASO 1: Calcular total_mxp (conversión pesos)
-    const totalMxp = totalFactura * (tipoDeCambio > 0 ? tipoDeCambio : 18.5);
+    const totalMxp = totalFactura * tipoDeCambio;
 
-    // PASO 2: Calcular tasa de cambio (proporción del gasto total)
-    // Si no hay múltiples elementos con la misma orden, podemos usar 1 (100%)
-    const tCambio = 0.17; // Asumimos que esta fila representa el 100% de la orden
+    // PASO 2: Obtener la suma total_mxp para esta orden_de_compra
+    const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1; // Evitar división por cero
 
-    // PASO 3: Calcular gastos en pesos
+    // PASO 3: Calcular t_cambio como proporción del total_mxp de esta fila al total para su orden_de_compra
+    const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
+
+    // PASO 4: Calcular gastos en pesos
     const gastosMxp = tCambio * totalGastos;
 
-    // PASO 4: Calcular DDP total en pesos
+    // PASO 5: Calcular DDP total en pesos
     const ddpTotalMxp = gastosMxp + totalMxp;
 
-    // PASO 5: Calcular DDP por unidad en pesos
+    // PASO 6: Calcular DDP por unidad en pesos
     const ddpMxpUnidad = mFactura > 0 ? ddpTotalMxp / mFactura : 0;
 
-    // PASO 6: Calcular DDP por unidad en dólares
+    // PASO 7: Calcular DDP por unidad en dólares
     const ddpUsdUnidad = tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
 
-    // PASO 7: Calcular DDP por unidad en dólares sin IVA
+    // PASO 8: Calcular DDP por unidad en dólares sin IVA
     const ddpUsdUnidadSIva = ddpUsdUnidad / 1.16;
 
     return {
@@ -137,136 +156,139 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
 
   return (
     <div className="bg-white rounded shadow-sm mb-6">
-      {/* Contenedor principal con scroll horizontal */}
-      <div className="rounded-md border overflow-hidden">
-        <ScrollArea className="w-full overflow-auto" orientation="horizontal">
-          <div className="min-w-[2500px]">
-            <Table>
-              <TableHeader className="sticky top-0 bg-white z-10">
-                <TableRow>
-                  <TableHead className="w-[880px] font-medium">
-                    Orden de Compra
-                  </TableHead>
-                  <TableHead className="w-[880px] font-medium">
-                    Tipo de Tela
-                  </TableHead>
-                  <TableHead className="w-[220px] font-medium">Color</TableHead>
-                  <TableHead className="w-[240px] font-medium">
-                    Total Factura (USD)
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    Total MXP
-                  </TableHead>
-                  <TableHead className="w-[200px] font-medium">
-                    T. Cambio
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    Gastos MXP
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    DDP Total MXP
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    DDP MXP/Unidad
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    DDP USD/Unidad
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    DDP USD/Unidad S/IVA
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    Fecha Pedido
-                  </TableHead>
-                  <TableHead className="w-[240px] font-medium">
-                    Sale Origen
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    Llega a Lázaro
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    Llega a Manzanillo
-                  </TableHead>
-                  <TableHead className="w-[340px] font-medium">
-                    Llega Almacén
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="max-h-[600px] overflow-y-auto">
-                {!hasData ? (
-                  <TableRow>
-                    <TableCell colSpan={16} className="h-24 text-center">
-                      No se encontraron resultados para los filtros
-                      seleccionados
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedData.map((row, index) => {
-                    // Calcular valores para cada celda
-                    const calculatedData = calculateRowData(row);
+      {/* Tabla con encabezado fijo inspirado en InventoryCard.tsx */}
+      <div className="border rounded-md overflow-hidden">
+        <div className="h-[500px] overflow-auto relative">
+          <table className="w-full text-sm border-collapse min-w-[2500px]">
+            <thead className="bg-white sticky top-0 z-10 shadow-sm">
+              <tr>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[180px]">
+                  Orden de Compra
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[180px]">
+                  Tipo de Tela
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Color
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  Total Factura (USD)
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  Total MXP
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
+                  T. Cambio
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  Gastos MXP
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  DDP Total MXP
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  DDP MXP/Unidad
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  DDP USD/Unidad
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[160px]">
+                  DDP USD/Unidad S/IVA
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Fecha Pedido
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Sale Origen
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Llega a Lázaro
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  Llega a Manzanillo
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
+                  Llega Almacén
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {!hasData ? (
+                <tr>
+                  <td
+                    colSpan={16}
+                    className="p-2 align-middle text-center h-24"
+                  >
+                    No se encontraron resultados para los filtros seleccionados
+                  </td>
+                </tr>
+              ) : (
+                paginatedData.map((row, index) => {
+                  // Calcular valores para cada celda usando la lógica actualizada
+                  const calculatedData = calculateRowData(row);
 
-                    return (
-                      <TableRow
-                        key={index}
-                        className={index % 2 === 0 ? "" : "bg-gray-50"}
-                      >
-                        <TableCell className="w-[180px] font-medium">
-                          {row.orden_de_compra || "-"}
-                        </TableCell>
-                        <TableCell className="w-[180px]">
-                          {row["pedido_cliente.tipo_tela"] || "-"}
-                        </TableCell>
-                        <TableCell className="w-[120px]">
-                          {row["pedido_cliente.color"] || "-"}
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          ${formatCurrency(row.total_factura || 0)}
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          $MXN {formatCurrency(calculatedData.totalMxp)}
-                        </TableCell>
-                        <TableCell className="w-[100px]">
-                          {(calculatedData.tCambio * 100).toFixed(2)}%
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          $MXN {formatCurrency(calculatedData.gastosMxp)}
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          $MXN {formatCurrency(calculatedData.ddpTotalMxp)}
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          $MXN {formatCurrency(calculatedData.ddpMxpUnidad)}
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          ${formatCurrency(calculatedData.ddpUsdUnidad)}
-                        </TableCell>
-                        <TableCell className="w-[160px]">
-                          ${formatCurrency(calculatedData.ddpUsdUnidadSIva)}
-                        </TableCell>
-                        <TableCell className="w-[120px]">
-                          {formatDate(row.fecha_pedido)}
-                        </TableCell>
-                        <TableCell className="w-[120px]">
-                          {formatDate(row.sale_origen)}
-                        </TableCell>
-                        <TableCell className="w-[120px]">
-                          {formatDate(row.llega_a_Lazaro)}
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          {formatDate(row.llega_a_Manzanillo)}
-                        </TableCell>
-                        <TableCell className="w-[140px]">
-                          {formatDate(row.llega_almacen_proveedor)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <ScrollBar orientation="horizontal" className="h-3" />
-        </ScrollArea>
+                  return (
+                    <tr
+                      key={index}
+                      className={`border-b transition-colors hover:bg-muted/50 ${
+                        index % 2 === 0 ? "" : "bg-gray-50"
+                      }`}
+                    >
+                      <td className="p-2 align-middle font-medium">
+                        {row.orden_de_compra || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row["pedido_cliente.tipo_tela"] || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row["pedido_cliente.color"] || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        ${formatCurrency(row.total_factura || 0)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        $MXN {formatCurrency(calculatedData.totalMxp)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {(calculatedData.tCambio * 100).toFixed(2)}%
+                      </td>
+                      <td className="p-2 align-middle">
+                        $MXN {formatCurrency(calculatedData.gastosMxp)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        $MXN {formatCurrency(calculatedData.ddpTotalMxp)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        $MXN {formatCurrency(calculatedData.ddpMxpUnidad)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        ${formatCurrency(calculatedData.ddpUsdUnidad)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        ${formatCurrency(calculatedData.ddpUsdUnidadSIva)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {formatDate(row.fecha_pedido)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {formatDate(row.sale_origen)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {formatDate(row.llega_a_Lazaro)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {formatDate(row.llega_a_Manzanillo)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {formatDate(row.llega_almacen_proveedor)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Paginación mejorada con shadcn/ui */}
@@ -280,7 +302,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                 className="h-9 px-4 py-2 rounded-md"
                 onClick={() => goToPage(currentPage - 1)}
               >
-                <ChevronLeftIcon className="h-4 w-4" />
+                <ChevronLeftIcon className="h-4 w-4 mr-1" />
                 Atrás
               </Button>
             )}
@@ -316,7 +338,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                 onClick={() => goToPage(currentPage + 1)}
               >
                 Siguiente
-                <ChevronRightIcon className="h-4 w-4" />
+                <ChevronRightIcon className="h-4 w-4 ml-1" />
               </Button>
             )}
           </div>
