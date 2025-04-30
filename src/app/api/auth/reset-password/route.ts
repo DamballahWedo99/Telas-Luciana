@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, { message: "El token es requerido" }),
@@ -11,6 +12,18 @@ const resetPasswordSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Aplicar rate limiting para autenticación
+  const rateLimitResult = await rateLimit(request, {
+    type: "auth",
+    message:
+      "Demasiados intentos de restablecimiento de contraseña. Por favor, inténtalo de nuevo más tarde.",
+  });
+
+  // Si se alcanzó el límite de tasa, devolver la respuesta de error
+  if (rateLimitResult) {
+    return rateLimitResult;
+  }
+
   try {
     const body = await request.json();
 
@@ -91,6 +104,18 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  // Aplicar rate limiting para autenticación
+  const rateLimitResult = await rateLimit(request, {
+    type: "auth",
+    message:
+      "Demasiadas solicitudes de verificación. Por favor, inténtalo de nuevo más tarde.",
+  });
+
+  // Si se alcanzó el límite de tasa, devolver la respuesta de error
+  if (rateLimitResult) {
+    return rateLimitResult;
+  }
+
   try {
     const url = new URL(request.url);
     const token = url.searchParams.get("token");

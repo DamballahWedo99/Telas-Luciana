@@ -20,8 +20,20 @@ const publicApiRoutes = [
 
 const adminRoutes = ["/dashboard/users", "/dashboard/settings"];
 
+// Lista de rutas que tienen su propio rate limiting
+const rateLimitedRoutes = [
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/api/contact",
+];
+
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Las rutas con rate-limiting implementado internamente se pasan directamente
+  if (rateLimitedRoutes.some((route) => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
 
   const normalizedPath =
     pathname.endsWith("/") && pathname !== "/"
@@ -54,14 +66,17 @@ export default async function middleware(req: NextRequest) {
 
   if (
     adminRoutes.some((route) => pathname.startsWith(route)) &&
-    token.role !== "admin"
+    token.role !== "admin" &&
+    token.role !== "major_admin"
   ) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   if (pathname === "/dashboard") {
     const defaultRoute =
-      token.role === "admin" ? "/dashboard/users" : "/dashboard/ventas";
+      token.role === "admin" || token.role === "major_admin"
+        ? "/dashboard/users"
+        : "/dashboard/ventas";
     return NextResponse.redirect(new URL(defaultRoute, req.url));
   }
 

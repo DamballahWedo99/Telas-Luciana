@@ -1,4 +1,6 @@
 import { sendContactEmail } from "@/lib/mail";
+import { rateLimit } from "@/lib/rate-limit";
+import { NextRequest } from "next/server";
 
 interface ContactRequest {
   name: string;
@@ -7,7 +9,19 @@ interface ContactRequest {
   message: string;
 }
 
-export async function POST(request: Request): Promise<Response> {
+export async function POST(request: NextRequest): Promise<Response> {
+  // Aplicar rate limiting para contacto
+  const rateLimitResult = await rateLimit(request, {
+    type: "contact",
+    message:
+      "Demasiados mensajes enviados. Por favor, inténtalo de nuevo más tarde.",
+  });
+
+  // Si se alcanzó el límite de tasa, devolver la respuesta de error
+  if (rateLimitResult) {
+    return rateLimitResult;
+  }
+
   const { name, email, subject, message }: ContactRequest =
     await request.json();
 

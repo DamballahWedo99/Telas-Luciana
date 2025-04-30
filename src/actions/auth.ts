@@ -8,9 +8,62 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { sendPasswordResetEmail, sendNewAccountEmail } from "@/lib/mail";
 import { loginSchema, forgotPasswordSchema, createUserSchema } from "@/lib/zod";
+import { Redis } from "@upstash/redis";
+import { Ratelimit } from "@upstash/ratelimit";
+
+// Inicializar Redis cliente
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || "",
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+});
+
+// Configurar limitador específico para login
+const loginLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "15 m"), // 5 intentos por 15 minutos
+  analytics: true,
+  prefix: "ratelimit:login",
+});
+
+// Función para verificar si el usuario excedió el límite de intentos
+async function checkLoginRateLimit(
+  email: string
+): Promise<{ limited: boolean; remaining: number }> {
+  try {
+    console.log("Verificando rate limit para:", email);
+
+    // Intentar consumir un token de la tasa
+    const { success, limit, remaining } = await loginLimiter.limit(email);
+
+    console.log(
+      `Rate limit status: success=${success}, remaining=${remaining}, limit=${limit}`
+    );
+
+    return {
+      limited: !success,
+      remaining: remaining,
+    };
+  } catch (error) {
+    console.error("Error verificando rate limit:", error);
+    return { limited: false, remaining: 5 }; // En caso de error, permitir el intento
+  }
+}
 
 export const loginAction = async (values: z.infer<typeof loginSchema>) => {
   try {
+    // Verificar si el usuario ha excedido los intentos de inicio de sesión usando Redis
+    const { limited, remaining } = await checkLoginRateLimit(values.email);
+
+    if (limited) {
+      return {
+        error:
+          "Demasiados intentos fallidos. Por favor, inténtalo de nuevo en 15 minutos o usa la opción de recuperar contraseña.",
+      };
+    }
+
+    console.log(`Intentos restantes para ${values.email}: ${remaining}`);
+
+    // Intentar iniciar sesión
     const res = await signIn("credentials", {
       email: values.email,
       password: values.password,
@@ -19,11 +72,14 @@ export const loginAction = async (values: z.infer<typeof loginSchema>) => {
     });
 
     if (res?.error) {
-      throw new AuthError(res.error);
+      console.log(`Error de autenticación para ${values.email}: ${res.error}`);
+      return { error: res.error || "Error de autenticación" };
     }
 
     return { success: true };
   } catch (error) {
+    console.error("Error capturado en loginAction:", error);
+
     if (error instanceof AuthError) {
       return { error: error.cause?.err?.message || "Error de autenticación" };
     }

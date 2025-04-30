@@ -2,8 +2,21 @@ import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { sendPasswordResetEmail } from "@/lib/mail";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  // Aplicar rate limiting para autenticación
+  const rateLimitResult = await rateLimit(request, {
+    type: "auth",
+    message:
+      "Demasiados intentos de recuperación de contraseña. Por favor, inténtalo de nuevo más tarde.",
+  });
+
+  // Si se alcanzó el límite de tasa, devolver la respuesta de error
+  if (rateLimitResult) {
+    return rateLimitResult;
+  }
+
   try {
     const { email } = await request.json();
     console.log("Solicitud de recuperación para:", { email });
