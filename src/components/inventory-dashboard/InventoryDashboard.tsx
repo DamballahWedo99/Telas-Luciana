@@ -5,7 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import { LogOutIcon, HistoryIcon, BarChart } from "lucide-react";
+import { LogOutIcon, HistoryIcon, BarChart, XCircleIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,6 +23,7 @@ import { KeyMetricsSection } from "@/components/inventory-dashboard/KeyMetricsSe
 import { NewOrderDialog } from "@/components/inventory-dashboard/NewOrderDialog";
 import { NewUserDialog } from "@/components/inventory-dashboard/NewUserDialog";
 import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
+import LockScreen from "@/components/inventory-dashboard/LockScreen";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import {
   InventoryItem,
@@ -34,6 +35,33 @@ import {
 import { getInventarioCsv } from "@/lib/s3";
 import { parseNumericValue, mapCsvFields, normalizeCsvData } from "@/lib/utils";
 
+// Hook para detectar dispositivos móviles
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Función para verificar si es un dispositivo móvil
+    const checkIsMobile = () => {
+      const mobileQuery = window.matchMedia("(max-width: 1024px)");
+      setIsMobile(mobileQuery.matches);
+    };
+
+    // Verificar solo en el cliente
+    if (typeof window !== "undefined") {
+      // Verificar al cargar
+      checkIsMobile();
+
+      // Escuchar cambios de tamaño de ventana
+      window.addEventListener("resize", checkIsMobile);
+
+      // Limpieza
+      return () => window.removeEventListener("resize", checkIsMobile);
+    }
+  }, []);
+
+  return isMobile;
+}
+
 const toastsShown = {
   loading: false,
   success: false,
@@ -44,6 +72,9 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = () => {
+  // Uso del hook para detectar dispositivos móviles
+  const isMobile = useIsMobile();
+
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [unitFilter, setUnitFilter] = useState<UnitType | "all">("all");
@@ -472,6 +503,13 @@ const Dashboard: React.FC<DashboardProps> = () => {
     });
   };
 
+  // Si estamos en un dispositivo móvil, mostrar pantalla de bloqueo
+  if (isMobile) {
+    return (
+      <LockScreen inventory={inventory} filters={filters} isAdmin={isAdmin} />
+    );
+  }
+
   // Si estamos mostrando el dashboard de pedidos, renderizamos solo ese componente
   if (showPedidosDashboard) {
     return <PedidosDashboard onBack={handleBackFromPedidosDashboard} />;
@@ -536,9 +574,18 @@ const Dashboard: React.FC<DashboardProps> = () => {
         </div>
 
         {error && (
-          <Alert variant="destructive" className="mb-4">
+          <Alert variant="destructive" className="mb-4 relative">
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 h-6 w-6 p-0"
+              onClick={() => setError("")}
+            >
+              <XCircleIcon className="h-4 w-4" />
+              <span className="sr-only">Cerrar</span>
+            </Button>
           </Alert>
         )}
 
