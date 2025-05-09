@@ -681,25 +681,28 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   );
 
   // Ahora calculamos las opciones únicas para cada filtro basado en su inventario filtrado específico
+  // CORRECCIÓN: Filtrar valores vacíos en las listas de opciones
   const uniqueOCs = useMemo(
     () =>
-      Array.from(new Set(filteredInventoryForOC.map((item) => item.OC))).sort(),
+      Array.from(new Set(filteredInventoryForOC.map((item) => item.OC)))
+        .filter((oc) => oc !== "") // Filtrar strings vacíos
+        .sort(),
     [filteredInventoryForOC]
   );
 
   const uniqueTelas = useMemo(
     () =>
-      Array.from(
-        new Set(filteredInventoryForTela.map((item) => item.Tela))
-      ).sort(),
+      Array.from(new Set(filteredInventoryForTela.map((item) => item.Tela)))
+        .filter((tela) => tela !== "") // Filtrar strings vacíos
+        .sort(),
     [filteredInventoryForTela]
   );
 
   const uniqueColors = useMemo(
     () =>
-      Array.from(
-        new Set(filteredInventoryForColor.map((item) => item.Color))
-      ).sort(),
+      Array.from(new Set(filteredInventoryForColor.map((item) => item.Color)))
+        .filter((color) => color !== "") // Filtrar strings vacíos
+        .sort(),
     [filteredInventoryForColor]
   );
 
@@ -708,7 +711,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       Array.from(
         new Set(filteredInventoryForUbicacion.map((item) => item.Ubicacion))
       )
-        .filter(Boolean)
+        .filter((ubicacion) => ubicacion !== "") // Filtrar strings vacíos
         .sort(),
     [filteredInventoryForUbicacion]
   );
@@ -1115,15 +1118,16 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                       <SelectItem value="all">Todas</SelectItem>
                       <SelectItem value="Mérida">Mérida</SelectItem>
                       <SelectItem value="Edo Mex">Edo Mex</SelectItem>
-                      {uniqueUbicaciones.map(
-                        (ubicacion) =>
-                          ubicacion !== "Mérida" &&
-                          ubicacion !== "Edo Mex" && (
-                            <SelectItem key={ubicacion} value={ubicacion}>
-                              {ubicacion}
-                            </SelectItem>
-                          )
-                      )}
+                      {uniqueUbicaciones
+                        .filter(
+                          (ubicacion) =>
+                            ubicacion !== "Mérida" && ubicacion !== "Edo Mex"
+                        )
+                        .map((ubicacion) => (
+                          <SelectItem key={ubicacion} value={ubicacion}>
+                            {ubicacion}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1226,12 +1230,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                   </thead>
                   <tbody>
                     {isLoading ? (
-                      <tr>
+                      <tr className="h-[500px]">
                         <td
                           colSpan={isAdmin ? 10 : 5}
                           className="p-2 align-middle text-center"
                         >
-                          <div className="flex justify-center items-center h-24">
+                          <div className="flex justify-center items-center">
                             <Loader2Icon className="h-8 w-8 animate-spin text-gray-500" />
                             <span className="ml-2">Cargando inventario...</span>
                           </div>

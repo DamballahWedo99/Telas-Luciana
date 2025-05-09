@@ -1,4 +1,8 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  GetObjectCommand,
+  ListObjectsV2Command,
+} from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -31,6 +35,33 @@ export async function getFileFromS3(
   }
 }
 
+// Nueva función para listar objetos en un prefijo de S3
+export async function listFilesFromS3(
+  bucket: string,
+  prefix: string
+): Promise<string[]> {
+  try {
+    const command = new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+    });
+
+    const response = await s3Client.send(command);
+
+    if (response.Contents) {
+      return response.Contents.map((item) => item.Key || "").filter((key) =>
+        key.endsWith(".json")
+      );
+    }
+
+    return [];
+  } catch (error) {
+    console.error("Error al listar archivos de S3:", error);
+    throw error;
+  }
+}
+
+// Función actualizada para manejar archivos JSON
 export async function getInventarioCsv(
   year?: string,
   month?: string
@@ -47,6 +78,9 @@ export async function getInventarioCsv(
       params.append("month", month);
     }
 
+    // Indicar que ahora queremos cargar desde JSON
+    params.append("format", "json");
+
     const queryString = params.toString();
     if (queryString) {
       url += `?${queryString}`;
@@ -60,7 +94,21 @@ export async function getInventarioCsv(
     }
 
     const data = await response.json();
-    return data.data;
+
+    // Convertimos el JSON a CSV para mantener la compatibilidad con el código existente
+    const csvHeader =
+      "OC,Tela,Color,Costo,Cantidad,Unidades,Total,Ubicacion,Importacion,FacturaDragonAzteca\n";
+    const csvRows = data.data
+      .map((item: any) => {
+        return `${item.OC || ""},${item.Tela || ""},${item.Color || ""},${
+          item.Costo || 0
+        },${item.Cantidad || 0},${item.Unidades || ""},${item.Total || 0},${
+          item.Ubicacion || ""
+        },${item.Importacion || ""},${item.FacturaDragonAzteca || ""}`;
+      })
+      .join("\n");
+
+    return csvHeader + csvRows;
   } catch (error) {
     console.error("Error al obtener inventario:", error);
     throw error;
