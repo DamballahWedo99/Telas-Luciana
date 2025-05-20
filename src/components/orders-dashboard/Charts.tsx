@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -8,13 +8,11 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
   LineChart,
   Line,
   ScatterChart,
   Scatter,
+  Cell,
 } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -45,6 +43,7 @@ interface PedidosChartsProps {
   barChartData: BarChartDataItem[];
   timelineData: TimelineDataItem[];
   deliveryData: DeliveryDataItem[];
+  onTabChange?: (value: string) => void;
 }
 
 export const PedidosCharts: React.FC<PedidosChartsProps> = ({
@@ -52,7 +51,15 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
   barChartData,
   timelineData,
   deliveryData,
+  onTabChange,
 }) => {
+  const [activeTab, setActiveTab] = useState("orders");
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (onTabChange) onTabChange(value);
+  };
+
   // Chart colors
   const COLORS = [
     "#0088FE",
@@ -71,8 +78,15 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     }).format(value);
   };
 
+  // Ordenar los datos de colores por valor (de mayor a menor)
+  const sortedColorData = [...pieChartData].sort((a, b) => b.value - a.value);
+
   return (
-    <Tabs defaultValue="orders" className="w-full">
+    <Tabs
+      defaultValue="orders"
+      className="w-full"
+      onValueChange={handleTabChange}
+    >
       <TabsList className="grid grid-cols-4 mb-4">
         <TabsTrigger value="orders">Órdenes de Compra</TabsTrigger>
         <TabsTrigger value="colors">Distribución por Color</TabsTrigger>
@@ -83,13 +97,10 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
       {/* Tab: Órdenes de Compra */}
       <TabsContent value="orders" className="mt-4">
         <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
-          <h3 className="text-lg font-semibold mb-4">
-            Top Órdenes de Compra por Total Factura
-          </h3>
           <ResponsiveContainer width="100%" height="100%">
             <RechartsBarChart
               data={barChartData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 40 }}
+              margin={{ top: 20, right: 30, left: 20, bottom: 40 }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
@@ -120,38 +131,53 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         </div>
       </TabsContent>
 
-      {/* Tab: Distribución por Color */}
+      {/* Tab: Distribución por Color (Convertido a BarChart) */}
       <TabsContent value="colors" className="mt-4">
         <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
-          <h3 className="text-lg font-semibold mb-4">Distribución por Color</h3>
           <ResponsiveContainer width="100%" height="100%">
-            <RechartsPieChart>
-              <Pie
-                data={pieChartData}
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                labelLine={true}
-                label={({ name, percent }: { name: string; percent: number }) =>
-                  `${name}: ${(percent * 100).toFixed(0)}%`
-                }
-                dataKey="value"
-              >
-                {pieChartData.map((entry, index) => (
+            <RechartsBarChart
+              data={sortedColorData}
+              margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+              layout="vertical"
+              barSize={25}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                horizontal={true}
+                vertical={false}
+              />
+              <XAxis
+                type="number"
+                axisLine={true}
+                tickLine={true}
+                tickFormatter={(value: number) => `${formatCurrency(value)}`}
+                domain={[0, "dataMax"]}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                axisLine={true}
+                tickLine={true}
+                width={150}
+                tick={{ fontSize: 12 }}
+              />
+              <Tooltip
+                formatter={(value: number) => [
+                  `${formatCurrency(value)}`,
+                  "Total",
+                ]}
+                contentStyle={{ borderRadius: "8px" }}
+              />
+              <Legend />
+              <Bar dataKey="value" name="Valor Total" radius={[0, 4, 4, 0]}>
+                {sortedColorData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={COLORS[index % COLORS.length]}
                   />
                 ))}
-              </Pie>
-              <Tooltip
-                formatter={(value: number) => [
-                  `${formatCurrency(value)}`,
-                  "Total Factura",
-                ]}
-                contentStyle={{ borderRadius: "8px" }}
-              />
-            </RechartsPieChart>
+              </Bar>
+            </RechartsBarChart>
           </ResponsiveContainer>
         </div>
       </TabsContent>
@@ -159,13 +185,10 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
       {/* Tab: Evolución Mensual */}
       <TabsContent value="timeline" className="mt-4">
         <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
-          <h3 className="text-lg font-semibold mb-4">
-            Evolución de Pedidos por Mes
-          </h3>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={timelineData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="date" axisLine={false} tickLine={false} />
@@ -214,9 +237,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
       {/* Tab: Tiempos de Entrega */}
       <TabsContent value="delivery" className="mt-4">
         <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
-          <h3 className="text-lg font-semibold mb-4">
-            Análisis de Tiempos de Entrega
-          </h3>
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />

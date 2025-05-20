@@ -10,7 +10,6 @@ import {
   DownloadIcon,
   PlusIcon,
   MinusIcon,
-  FolderOpenIcon,
   Loader2Icon,
   BoxIcon,
   AlertCircle,
@@ -57,7 +56,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
 import { getInventarioCsv } from "@/lib/s3";
 import {
   parseNumericValue,

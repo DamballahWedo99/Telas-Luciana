@@ -674,6 +674,11 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
             chartsCollapsed={chartsCollapsed}
             setChartsCollapsed={setChartsCollapsed}
             dataLength={data.length}
+            searchQuery={searchQuery}
+            ordenDeCompraFilter={ordenDeCompraFilter}
+            tipoTelaFilter={tipoTelaFilter}
+            colorFilter={colorFilter}
+            ubicacionFilter={ubicacionFilter}
           />
 
           {/* Órdenes de Compra Card */}
