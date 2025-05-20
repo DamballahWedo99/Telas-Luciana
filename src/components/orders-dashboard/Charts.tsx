@@ -13,6 +13,7 @@ import {
   ScatterChart,
   Scatter,
   Cell,
+  TooltipProps,
 } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -76,6 +77,52 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }).format(value);
+  };
+
+  // Función para formatear la fecha en el tooltip (mantener el formato original)
+  const formatDateLabel = (dateStr: string): string => {
+    // Suponiendo que dateStr tiene un formato como "2023-01"
+    const [year, month] = dateStr.split("-");
+
+    // Convertir el número de mes a nombre de mes
+    const monthNames = [
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Septiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre",
+    ];
+
+    const monthName = monthNames[parseInt(month) - 1] || month;
+
+    return `${monthName} ${year}`;
+  };
+
+  // Custom tooltip component for Timeline Tab
+  const TimelineCustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
+          <p className="font-medium text-gray-900 mb-2">
+            {formatDateLabel(label)}
+          </p>
+          <p className="text-purple-600 mb-1">
+            Cantidad de Pedidos: {payload[0].value}
+          </p>
+          <p className="text-green-600">
+            Total Facturado (USD): ${formatCurrency(payload[1].value)}
+          </p>
+        </div>
+      );
+    }
+    return null;
   };
 
   // Ordenar los datos de colores por valor (de mayor a menor)
@@ -182,7 +229,7 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         </div>
       </TabsContent>
 
-      {/* Tab: Evolución Mensual */}
+      {/* Tab: Evolución Mensual (Modificada) */}
       <TabsContent value="timeline" className="mt-4">
         <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
           <ResponsiveContainer width="100%" height="100%">
@@ -191,7 +238,15 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="date"
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => {
+                  // Extraer solo el año de la fecha (YYYY-MM)
+                  return value.split("-")[0] || value;
+                }}
+              />
               <YAxis yAxisId="left" axisLine={false} tickLine={false} />
               <YAxis
                 yAxisId="right"
@@ -199,15 +254,7 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
                 axisLine={false}
                 tickLine={false}
               />
-              <Tooltip
-                formatter={(value: number, name: string) => [
-                  name === "count"
-                    ? value.toString()
-                    : `$${formatCurrency(value)}`,
-                  name === "count" ? "Cantidad de Pedidos" : "Total Facturado",
-                ]}
-                contentStyle={{ borderRadius: "8px" }}
-              />
+              <Tooltip content={<TimelineCustomTooltip />} />
               <Legend />
               <Line
                 yAxisId="left"
