@@ -8,7 +8,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -77,142 +76,55 @@ export const OrdersMetricsCard: React.FC<OrdersMetricsCardProps> = ({
 
       {!metricsCollapsed && (
         <CardContent>
-          <Tabs defaultValue="summary" className="w-full">
-            <TabsList className="grid grid-cols-4 mb-4">
-              <TabsTrigger value="summary">Resumen</TabsTrigger>
-              <TabsTrigger value="usd">USD</TabsTrigger>
-              <TabsTrigger value="mxn">MXN</TabsTrigger>
-              <TabsTrigger value="costs">Costos</TabsTrigger>
-            </TabsList>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-lg shadow-sm border border-blue-200">
+              <h3 className="text-sm font-medium text-blue-700 mb-1">
+                Total Facturas
+              </h3>
+              <p className="text-2xl font-bold text-blue-900">
+                ${formatCurrency(totals.totalFactura)}
+              </p>
+              <p className="text-xs text-blue-600 mt-2 opacity-80">
+                USD antes de impuestos
+              </p>
+            </div>
 
-            <TabsContent value="summary">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Total Facturas
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    ${formatCurrency(totals.totalFactura)}
-                  </p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Total MXP
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    $MXN {formatCurrency(totals.totalMxp)}
-                  </p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Gastos MXP
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    $MXN {formatCurrency(totals.gastosMxp)}
-                  </p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    DDP Total
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    $MXN {formatCurrency(totals.ddpTotalMxp)}
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-lg shadow-sm border border-green-200">
+              <h3 className="text-sm font-medium text-green-700 mb-1">
+                Total MXP
+              </h3>
+              <p className="text-2xl font-bold text-green-900">
+                $MXN {formatCurrency(totals.totalMxp)}
+              </p>
+              <p className="text-xs text-green-600 mt-2 opacity-80">
+                Valor en pesos mexicanos
+              </p>
+            </div>
 
-            <TabsContent value="usd">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Total Factura (USD)
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    ${formatCurrency(totals.totalFactura)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Total en dólares antes de impuestos
-                  </p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Promedio por Pedido
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    $
-                    {formatCurrency(
-                      filteredDataLength
-                        ? totals.totalFactura / filteredDataLength
-                        : 0
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Promedio de factura por pedido
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
+            <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-5 rounded-lg shadow-sm border border-amber-200">
+              <h3 className="text-sm font-medium text-amber-700 mb-1">
+                Gastos MXP
+              </h3>
+              <p className="text-2xl font-bold text-amber-900">
+                $MXN {formatCurrency(totals.gastosMxp)}
+              </p>
+              <p className="text-xs text-amber-600 mt-2 opacity-80">
+                Total gastos asociados
+              </p>
+            </div>
 
-            <TabsContent value="mxn">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Total MXP
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    $MXN {formatCurrency(totals.totalMxp)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Total en pesos mexicanos
-                  </p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    DDP Total MXP
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    $MXN {formatCurrency(totals.ddpTotalMxp)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Delivered Duty Paid total en MXN
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="costs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Gastos MXP
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    $MXN {formatCurrency(totals.gastosMxp)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Total de gastos en pesos mexicanos
-                  </p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    % Gastos
-                  </h3>
-                  <p className="text-2xl font-bold">
-                    {formatCurrency(
-                      totals.totalMxp > 0
-                        ? (totals.gastosMxp / totals.totalMxp) * 100
-                        : 0
-                    )}
-                    %
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Porcentaje de gastos sobre el total
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-lg shadow-sm border border-purple-200">
+              <h3 className="text-sm font-medium text-purple-700 mb-1">
+                DDP Total
+              </h3>
+              <p className="text-2xl font-bold text-purple-900">
+                $MXN {formatCurrency(totals.ddpTotalMxp)}
+              </p>
+              <p className="text-xs text-purple-600 mt-2 opacity-80">
+                Delivered Duty Paid
+              </p>
+            </div>
+          </div>
         </CardContent>
       )}
     </Card>
