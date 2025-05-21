@@ -54,6 +54,7 @@ interface ChartDataItem {
 
 interface BarChartDataItem {
   name: string;
+  fullName?: string;
   total: number;
 }
 
@@ -450,7 +451,8 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
 
     const barData: BarChartDataItem[] = Object.keys(ordenGroups)
       .map((orden) => ({
-        name: orden.length > 12 ? orden.substring(0, 10) + "..." : orden,
+        name: orden, // Mantener el nombre completo sin truncar
+        fullName: orden, // Añadir un campo para el nombre completo (para referencia)
         total: ordenGroups[orden],
       }))
       .sort((a, b) => b.total - a.total)

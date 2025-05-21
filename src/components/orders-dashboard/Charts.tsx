@@ -24,6 +24,7 @@ interface ChartDataItem {
 
 interface BarChartDataItem {
   name: string;
+  fullName?: string; // Campo opcional para nombre completo
   total: number;
 }
 
@@ -125,8 +126,60 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     return null;
   };
 
+  // Tooltip personalizado para las órdenes
+  const OrdersCustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
+          <p className="font-medium text-gray-900 mb-2">
+            {data.fullName || data.name}
+          </p>
+          <p className="text-blue-600">
+            Total Facturado: ${formatCurrency(data.total)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Ordenar los datos para "Órdenes de Compra" por total (de mayor a menor)
+  const sortedBarChartData = [...barChartData].sort(
+    (a, b) => b.total - a.total
+  );
+
   // Ordenar los datos de colores por valor (de mayor a menor)
   const sortedColorData = [...pieChartData].sort((a, b) => b.value - a.value);
+
+  // Genera ticks personalizados para mostrar solo los años cuando cambian
+  const generateCustomTicks = (data: TimelineDataItem[]) => {
+    if (!data || data.length === 0) return [];
+
+    const uniqueYears = new Set<string>();
+    const customTicks: string[] = [];
+
+    data.forEach((item) => {
+      const year = item.date.split("-")[0];
+      if (!uniqueYears.has(year)) {
+        uniqueYears.add(year);
+        customTicks.push(item.date);
+      }
+    });
+
+    return customTicks;
+  };
+
+  // Calcular la altura dinámica para el gráfico de órdenes basado en la cantidad de datos
+  const calculateOrdersChartHeight = () => {
+    // Mínimo 400px, pero añade 50px por cada orden para asegurar espacio suficiente
+    const minHeight = 400;
+    const heightPerItem = 50;
+    return Math.max(minHeight, sortedBarChartData.length * heightPerItem);
+  };
+
+  // Altura dinámica para el gráfico de órdenes
+  const ordersChartHeight = calculateOrdersChartHeight();
 
   return (
     <Tabs
@@ -141,37 +194,46 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         <TabsTrigger value="delivery">Tiempos de Entrega</TabsTrigger>
       </TabsList>
 
-      {/* Tab: Órdenes de Compra */}
+      {/* Tab: Órdenes de Compra - OPTIMIZADA PARA NOMBRES COMPLETOS */}
       <TabsContent value="orders" className="mt-4">
-        <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
+        <div
+          className="w-full bg-white p-4 rounded-lg shadow-sm overflow-y-auto"
+          style={{ height: `${ordersChartHeight}px` }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <RechartsBarChart
-              data={barChartData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 40 }}
+              data={sortedBarChartData}
+              margin={{ top: 10, right: 30, left: 10, bottom: 10 }}
+              layout="vertical"
+              barSize={25}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                horizontal={true}
+                vertical={false}
+              />
               <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={60}
+                type="number"
                 axisLine={false}
                 tickLine={false}
+                tickFormatter={(value: number) => `$${formatCurrency(value)}`}
+                domain={[0, "dataMax"]}
               />
-              <YAxis axisLine={false} tickLine={false} />
-              <Tooltip
-                formatter={(value: number) => [
-                  `${formatCurrency(value)}`,
-                  "Total Factura",
-                ]}
-                contentStyle={{ borderRadius: "8px" }}
+              <YAxis
+                type="category"
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                width={200} // Ancho muy generoso para mostrar nombres completos
+                tick={{ fontSize: 12 }}
               />
+              <Tooltip content={<OrdersCustomTooltip />} />
               <Legend />
               <Bar
                 dataKey="total"
                 fill="#0088FE"
                 name="Total Factura (USD)"
-                radius={[4, 4, 0, 0]}
+                radius={[0, 4, 4, 0]}
               />
             </RechartsBarChart>
           </ResponsiveContainer>
@@ -180,7 +242,10 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
 
       {/* Tab: Distribución por Color (Convertido a BarChart) */}
       <TabsContent value="colors" className="mt-4">
-        <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
+        <div
+          className="w-full bg-white p-4 rounded-lg shadow-sm"
+          style={{ height: "320px" }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <RechartsBarChart
               data={sortedColorData}
@@ -229,9 +294,12 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         </div>
       </TabsContent>
 
-      {/* Tab: Evolución Mensual (Modificada) */}
+      {/* Tab: Evolución Mensual (Modificada) - CON FORMATO DE MONEDA EN EJE Y */}
       <TabsContent value="timeline" className="mt-4">
-        <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
+        <div
+          className="w-full bg-white p-4 rounded-lg shadow-sm"
+          style={{ height: "320px" }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={timelineData}
@@ -242,10 +310,8 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
                 dataKey="date"
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(value) => {
-                  // Extraer solo el año de la fecha (YYYY-MM)
-                  return value.split("-")[0] || value;
-                }}
+                ticks={generateCustomTicks(timelineData)}
+                tickFormatter={(value) => value.split("-")[0]}
               />
               <YAxis yAxisId="left" axisLine={false} tickLine={false} />
               <YAxis
@@ -253,6 +319,8 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
                 orientation="right"
                 axisLine={false}
                 tickLine={false}
+                tickFormatter={(value: number) => `$${formatCurrency(value)}`}
+                width={100} // Ancho aumentado para acomodar el formato de moneda
               />
               <Tooltip content={<TimelineCustomTooltip />} />
               <Legend />
@@ -283,7 +351,10 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
 
       {/* Tab: Tiempos de Entrega */}
       <TabsContent value="delivery" className="mt-4">
-        <div className="h-80 w-full bg-white p-4 rounded-lg shadow-sm">
+        <div
+          className="w-full bg-white p-4 rounded-lg shadow-sm"
+          style={{ height: "320px" }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -302,6 +373,8 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
                 unit=" USD"
                 axisLine={false}
                 tickLine={false}
+                tickFormatter={(value: number) => `$${formatCurrency(value)}`}
+                width={100} // Ancho aumentado para acomodar el formato de moneda
               />
               <Tooltip
                 cursor={{ strokeDasharray: "3 3" }}

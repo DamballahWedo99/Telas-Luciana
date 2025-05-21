@@ -145,8 +145,9 @@ export const OrdersChartsCard: React.FC<OrdersChartsCardProps> = ({
       const toastId = toast.loading("Generando PDF...");
 
       // Encontrar el contenido específico de la pestaña activa
+      // Modificado para encontrar el contenedor del gráfico con cualquier altura
       const activeTabContent = chartRef.current.querySelector(
-        `[data-state="active"] .h-80`
+        `[data-state="active"] .bg-white.p-4.rounded-lg.shadow-sm`
       );
 
       if (!activeTabContent) {
@@ -171,6 +172,8 @@ export const OrdersChartsCard: React.FC<OrdersChartsCardProps> = ({
       clonedElement.style.height = "500px";
       clonedElement.style.width = "900px";
       clonedElement.style.paddingTop = "20px";
+      // Eliminar overflow para la captura
+      clonedElement.style.overflow = "visible";
 
       // Crear un contenedor temporal para el clon
       const tempContainer = document.createElement("div");
@@ -226,7 +229,7 @@ export const OrdersChartsCard: React.FC<OrdersChartsCardProps> = ({
       document.body.appendChild(tempContainer);
 
       // Dar tiempo a que los elementos se rendericen correctamente
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 500)); // Aumentado a 500ms para dar más tiempo al renderizado
 
       // Capturar el elemento clonado como imagen
       const canvas = await html2canvas(tempContainer, {
