@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Papa from "papaparse";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -16,6 +16,9 @@ import {
   Filter,
   XCircleIcon,
   Search,
+  UploadIcon,
+  FolderOpenIcon,
+  CheckCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -88,6 +91,14 @@ interface InventoryCardProps {
   isLoading: boolean;
 }
 
+interface UploadResult {
+  uploadId: string;
+  fileName: string;
+  originalName: string;
+  fileSize: number;
+  fileUrl: string;
+}
+
 export const InventoryCard: React.FC<InventoryCardProps> = ({
   inventory,
   setInventory,
@@ -107,6 +118,21 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   isAdmin,
   isLoading,
 }) => {
+  // Estados existentes
+  const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
+  const [openSellDialog, setOpenSellDialog] = useState(false);
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(
+    null
+  );
+  const [quantityToUpdate, setQuantityToUpdate] = useState<number>(0);
+
+  // Nuevos estados para Packing List
+  const [openPackingListDialog, setOpenPackingListDialog] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Función para limpiar todos los filtros
   const resetAllFilters = () => {
     setSearchTerm("");
@@ -116,13 +142,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setColorFilter("all");
     setUbicacionFilter("all");
   };
-  const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
-  const [openSellDialog, setOpenSellDialog] = useState(false);
-  const [openAddDialog, setOpenAddDialog] = useState(false);
-  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(
-    null
-  );
-  const [quantityToUpdate, setQuantityToUpdate] = useState<number>(0);
 
   const isFilterActive = useMemo(() => {
     return (
@@ -154,6 +173,89 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       setColorFilter("all");
       setUbicacionFilter("all");
     }
+  };
+
+  // Función para formatear tamaño de archivo
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  // Manejar apertura del diálogo de Packing List
+  const handleOpenPackingListDialog = () => {
+    setOpenPackingListDialog(true);
+    setUploadResult(null);
+  };
+
+  // Manejar la selección de archivo
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Verificar si es un archivo Excel
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+      toast.error("Por favor, selecciona un archivo de Excel (.xlsx o .xls)");
+      return;
+    }
+
+    // Verificar tamaño del archivo (máximo 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast.error("El archivo es demasiado grande. Tamaño máximo: 10MB");
+      return;
+    }
+
+    handlePackingListUpload(file);
+  };
+
+  // Subir archivo al bucket
+  const handlePackingListUpload = async (file: File) => {
+    setIsUploading(true);
+    setUploadResult(null);
+
+    try {
+      // Crear FormData para enviar el archivo
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Llamar a la API route para subir el archivo
+      const response = await fetch("/api/packing-list/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al subir el Packing List");
+      }
+
+      // Obtener resultado de la carga
+      const result = await response.json();
+      setUploadResult(result);
+
+      toast.success("Archivo subido correctamente al bucket S3");
+    } catch (error) {
+      console.error("Error al subir PACKING LIST:", error);
+      toast.error(
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as Error).message
+          : "Error al subir el archivo PACKING LIST"
+      );
+    } finally {
+      setIsUploading(false);
+      // Resetear input de archivo
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // Activar el input de archivo al hacer clic en el botón
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   const handleOpenSellDialog = (index: number) => {
@@ -512,8 +614,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
-  // Primero, calculamos el inventario filtrado basado en todos los filtros excepto
-  // el propio filtro para el que estamos calculando las opciones
+  // Filtros y cálculos (código existente)
   const filteredInventoryForOC = useMemo(
     () =>
       inventory.filter((item) => {
@@ -678,12 +779,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     ]
   );
 
-  // Ahora calculamos las opciones únicas para cada filtro basado en su inventario filtrado específico
-  // CORRECCIÓN: Filtrar valores vacíos en las listas de opciones
   const uniqueOCs = useMemo(
     () =>
       Array.from(new Set(filteredInventoryForOC.map((item) => item.OC)))
-        .filter((oc) => oc !== "") // Filtrar strings vacíos
+        .filter((oc) => oc !== "")
         .sort(),
     [filteredInventoryForOC]
   );
@@ -691,7 +790,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const uniqueTelas = useMemo(
     () =>
       Array.from(new Set(filteredInventoryForTela.map((item) => item.Tela)))
-        .filter((tela) => tela !== "") // Filtrar strings vacíos
+        .filter((tela) => tela !== "")
         .sort(),
     [filteredInventoryForTela]
   );
@@ -699,7 +798,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const uniqueColors = useMemo(
     () =>
       Array.from(new Set(filteredInventoryForColor.map((item) => item.Color)))
-        .filter((color) => color !== "") // Filtrar strings vacíos
+        .filter((color) => color !== "")
         .sort(),
     [filteredInventoryForColor]
   );
@@ -709,12 +808,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       Array.from(
         new Set(filteredInventoryForUbicacion.map((item) => item.Ubicacion))
       )
-        .filter((ubicacion) => ubicacion !== "") // Filtrar strings vacíos
+        .filter((ubicacion) => ubicacion !== "")
         .sort(),
     [filteredInventoryForUbicacion]
   );
 
-  // Lógica para restablecer filtros cuando las opciones seleccionadas ya no están disponibles
   useEffect(() => {
     if (ocFilter !== "all" && !uniqueOCs.includes(ocFilter)) {
       setOcFilter("all");
@@ -796,7 +894,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     return filteredInventory.reduce((total, item) => total + item.Total, 0);
   }, [filteredInventory]);
 
-  // Verificar si hay opciones disponibles
   const hasOCOptions = uniqueOCs.length > 0;
   const hasTelaOptions = uniqueTelas.length > 0;
   const hasColorOptions = uniqueColors.length > 0;
@@ -852,8 +949,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </TooltipContent>
             </Tooltip>
 
-            {/* Botón para cargar inventario histórico - Solo para admin y major_admin */}
-
             {isAdmin && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -861,13 +956,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     variant="default"
                     size="icon"
                     className="bg-black hover:bg-gray-800 rounded-full"
-                    onClick={() => setOpenNewOrder(true)}
+                    onClick={handleOpenPackingListDialog}
                   >
                     <PlusIcon className="h-5 w-5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Añadir Nueva Orden</p>
+                  <p>Subir Packing List</p>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -926,7 +1021,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* Unidades filter - más pequeño */}
+              {/* Unidades filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -950,7 +1045,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* OC filter - Solo para admin - más pequeño */}
+              {/* OC filter - Solo para admin */}
               {isAdmin && (
                 <div className="min-w-[150px] max-w-[150px]">
                   <div className="space-y-2">
@@ -993,7 +1088,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               )}
 
-              {/* Tela filter - más pequeño */}
+              {/* Tela filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1034,7 +1129,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* Color filter - más pequeño */}
+              {/* Color filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1076,7 +1171,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* Ubicación filter - más pequeño */}
+              {/* Ubicación filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1178,7 +1273,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           </CardContent>
 
           <CardContent>
-            {/* Tabla con dirección nativa en HTML */}
+            {/* Tabla del inventario */}
             <div className="border rounded-md overflow-hidden">
               <div className="h-[500px] overflow-auto relative">
                 <table className="w-full text-sm border-collapse">
@@ -1370,6 +1465,103 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         </>
       )}
 
+      {/* Diálogo para Packing List */}
+      <Dialog
+        open={openPackingListDialog}
+        onOpenChange={setOpenPackingListDialog}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <UploadIcon className="mr-2 h-5 w-5" />
+              Subir Packing List
+            </DialogTitle>
+            <DialogDescription>
+              Sube un archivo PACKING LIST para procesar automáticamente las
+              telas y agregarlas al inventario.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+              <FolderOpenIcon className="h-12 w-12 text-gray-400 mb-4" />
+              <p className="mb-4 text-sm text-gray-500 text-center">
+                Selecciona un archivo Excel con la información del Packing List
+              </p>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                accept=".xlsx,.xls"
+              />
+              <Button
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                className="flex items-center mb-4"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                    Subiendo...
+                  </>
+                ) : (
+                  <>
+                    <UploadIcon className="mr-2 h-4 w-4" />
+                    Seleccionar Archivo
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-gray-400">
+                Formatos soportados: .xlsx, .xls (máximo 10MB)
+              </p>
+            </div>
+
+            {/* Mostrar resultado de la carga si fue exitosa */}
+            {uploadResult && (
+              <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
+                <div className="flex items-center mb-2">
+                  <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                  <h3 className="text-sm font-medium text-green-800">
+                    Archivo cargado exitosamente
+                  </h3>
+                </div>
+                <div className="text-sm text-green-700 space-y-1">
+                  <p>
+                    <strong>Archivo:</strong> {uploadResult.originalName}
+                  </p>
+                  <p>
+                    <strong>Tamaño:</strong>{" "}
+                    {formatFileSize(uploadResult.fileSize)}
+                  </p>
+                  <p>
+                    <strong>ID de carga:</strong> {uploadResult.uploadId}
+                  </p>
+                </div>
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-sm text-blue-800">
+                    <strong>Siguiente paso:</strong> El archivo ha sido cargado
+                    correctamente al bucket S3. Tu colaborador procesará este
+                    archivo con su script Python para extraer la información de
+                    las telas.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOpenPackingListDialog(false)}
+            >
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogos existentes para vender y agregar */}
       <Dialog open={openSellDialog} onOpenChange={setOpenSellDialog}>
         <DialogContent>
           <DialogHeader>

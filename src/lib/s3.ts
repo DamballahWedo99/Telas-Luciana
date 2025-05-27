@@ -4,11 +4,12 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 
+// CORREGIDO: Usar variables de entorno del servidor, no NEXT_PUBLIC_
 const s3Client = new S3Client({
   region: "us-west-2",
   credentials: {
-    accessKeyId: process.env.NEXT_PUBLIC_AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY || "",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
   },
 });
 
@@ -61,11 +62,11 @@ export async function listFilesFromS3(
   }
 }
 
-// Función actualizada para manejar archivos JSON
-export async function getInventarioCsv(
+// CORREGIDO: Función simplificada para obtener inventario directamente como JSON
+export async function getInventarioJson(
   year?: string,
   month?: string
-): Promise<string> {
+): Promise<any[]> {
   try {
     let url = "/api/s3/inventario";
     const params = new URLSearchParams();
@@ -78,7 +79,7 @@ export async function getInventarioCsv(
       params.append("month", month);
     }
 
-    // Indicar que ahora queremos cargar desde JSON
+    // Indicar que queremos formato JSON
     params.append("format", "json");
 
     const queryString = params.toString();
@@ -94,11 +95,25 @@ export async function getInventarioCsv(
     }
 
     const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error("Error al obtener inventario:", error);
+    throw error;
+  }
+}
 
-    // Convertimos el JSON a CSV para mantener la compatibilidad con el código existente
+// MANTENER: Para compatibilidad con código existente que espera CSV
+export async function getInventarioCsv(
+  year?: string,
+  month?: string
+): Promise<string> {
+  try {
+    const data = await getInventarioJson(year, month);
+
+    // Convertir JSON a CSV para mantener compatibilidad
     const csvHeader =
       "OC,Tela,Color,Costo,Cantidad,Unidades,Total,Ubicacion,Importacion,FacturaDragonAzteca\n";
-    const csvRows = data.data
+    const csvRows = data
       .map((item: any) => {
         return `${item.OC || ""},${item.Tela || ""},${item.Color || ""},${
           item.Costo || 0

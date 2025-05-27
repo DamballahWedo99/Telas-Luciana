@@ -20,6 +20,7 @@ import { InventoryCard } from "@/components/inventory-dashboard/InventoryCard";
 import { VisualizationsCard } from "@/components/inventory-dashboard/VisualizationsCard";
 import { UserManagementCard } from "@/components/inventory-dashboard/UserManagementCard";
 import { KeyMetricsSection } from "@/components/inventory-dashboard/KeyMetricsSection";
+import { PendingFabricsCard } from "@/components/inventory-dashboard/PendingFabricsCard";
 import { NewOrderDialog } from "@/components/inventory-dashboard/NewOrderDialog";
 import { NewUserDialog } from "@/components/inventory-dashboard/NewUserDialog";
 import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
@@ -589,10 +590,15 @@ const Dashboard: React.FC<DashboardProps> = () => {
           </Alert>
         )}
 
+        {/* KeyMetricsSection - Solo para admin */}
         {isAdmin && (
           <KeyMetricsSection inventory={inventory} filters={filters} />
         )}
 
+        {/* NUEVO: PendingFabricsCard - Solo para admin */}
+        <PendingFabricsCard setInventory={setInventory} isAdmin={isAdmin} />
+
+        {/* InventoryCard principal */}
         <InventoryCard
           inventory={inventory}
           setInventory={setInventory}
@@ -616,6 +622,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
           isLoading={isLoadingInventory}
         />
 
+        {/* Resto de componentes - Solo para admin */}
         {isAdmin && (
           <VisualizationsCard inventory={inventory} filters={filters} />
         )}
@@ -629,6 +636,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
           />
         )}
 
+        {/* Dialogs */}
         <NewOrderDialog
           open={openNewOrder}
           setOpen={setOpenNewOrder}
