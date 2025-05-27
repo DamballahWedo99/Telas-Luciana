@@ -89,20 +89,21 @@ export async function POST(request: NextRequest) {
     const uploadId = crypto.randomUUID();
     const timestamp = new Date().getTime();
 
-    // Construir nombre del archivo
+    // Construir nombre del archivo con formato específico
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
-    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHMMSS
-    const fileName = `${dateStr}_${timeStr}_${uploadId}_${file.name.replace(
-      /[^a-zA-Z0-9.-]/g,
-      "_"
-    )}`;
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const day = now.getDate().toString().padStart(2, "0");
+
+    // Formato: packing_lists_con_unidades_YYYY_MM_DD.xlsx
+    const fileName = `packing_lists_con_unidades_${year}_${month}_${day}.xlsx`;
 
     // Ruta completa en S3
     const s3Key = `${PACKING_LIST_PATH}${fileName}`;
 
     console.log("=== UPLOAD INFO ===");
-    console.log("Archivo:", file.name);
+    console.log("Archivo original:", file.name);
+    console.log("Nombre en S3:", fileName);
     console.log("Tamaño:", file.size, "bytes");
     console.log("Tipo:", file.type);
     console.log("S3 Key:", s3Key);
@@ -165,6 +166,7 @@ export async function POST(request: NextRequest) {
         message: "Archivo Packing List subido correctamente",
         uploadId,
         fileName: s3Key,
+        fileNameInS3: fileName, // Nombre limpio del archivo
         originalName: file.name,
         fileSize: file.size,
         fileUrl: `https://${BUCKET_NAME}.s3.us-west-2.amazonaws.com/${s3Key}`,

@@ -68,6 +68,21 @@ import {
 } from "@/lib/utils";
 import { InventoryItem, UnitType, ParsedCSVData } from "../../../types/types";
 
+interface Roll {
+  roll_number: number;
+  almacen: string;
+  kg?: number;
+  mts?: number;
+}
+
+interface PackingListEntry {
+  packing_list_id: string;
+  fabric_type: string;
+  color: string;
+  lot: number;
+  rolls: Roll[];
+}
+
 interface InventoryCardProps {
   inventory: InventoryItem[];
   setInventory: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
@@ -118,7 +133,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   isAdmin,
   isLoading,
 }) => {
-  // Estados existentes
   const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
   const [openSellDialog, setOpenSellDialog] = useState(false);
   const [openAddDialog, setOpenAddDialog] = useState(false);
@@ -126,14 +140,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     null
   );
   const [quantityToUpdate, setQuantityToUpdate] = useState<number>(0);
-
-  // Nuevos estados para Packing List
   const [openPackingListDialog, setOpenPackingListDialog] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sellMode, setSellMode] = useState<"manual" | "rolls">("manual");
+  const [packingListData, setPackingListData] = useState<PackingListEntry[]>(
+    []
+  );
+  const [selectedRolls, setSelectedRolls] = useState<number[]>([]);
+  const [isLoadingPackingList, setIsLoadingPackingList] = useState(false);
+  const [availableRolls, setAvailableRolls] = useState<Roll[]>([]);
+  const [selectedLot, setSelectedLot] = useState<number | null>(null);
+  const [availableLots, setAvailableLots] = useState<number[]>([]);
+  const [rollsGroupedByLot, setRollsGroupedByLot] = useState<
+    Map<number, Roll[]>
+  >(new Map());
 
-  // Función para limpiar todos los filtros
   const resetAllFilters = () => {
     setSearchTerm("");
     setUnitFilter("all");
@@ -175,7 +198,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
-  // Función para formatear tamaño de archivo
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -184,25 +206,21 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  // Manejar apertura del diálogo de Packing List
   const handleOpenPackingListDialog = () => {
     setOpenPackingListDialog(true);
     setUploadResult(null);
   };
 
-  // Manejar la selección de archivo
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Verificar si es un archivo Excel
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
       toast.error("Por favor, selecciona un archivo de Excel (.xlsx o .xls)");
       return;
     }
 
-    // Verificar tamaño del archivo (máximo 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       toast.error("El archivo es demasiado grande. Tamaño máximo: 10MB");
       return;
@@ -211,17 +229,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     handlePackingListUpload(file);
   };
 
-  // Subir archivo al bucket
   const handlePackingListUpload = async (file: File) => {
     setIsUploading(true);
     setUploadResult(null);
 
     try {
-      // Crear FormData para enviar el archivo
       const formData = new FormData();
       formData.append("file", file);
 
-      // Llamar a la API route para subir el archivo
       const response = await fetch("/api/packing-list/upload", {
         method: "POST",
         body: formData,
@@ -232,7 +247,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         throw new Error(errorData.error || "Error al subir el Packing List");
       }
 
-      // Obtener resultado de la carga
       const result = await response.json();
       setUploadResult(result);
 
@@ -246,22 +260,99 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       );
     } finally {
       setIsUploading(false);
-      // Resetear input de archivo
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     }
   };
 
-  // Activar el input de archivo al hacer clic en el botón
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const loadPackingListData = async (tela: string, color: string) => {
+    setIsLoadingPackingList(true);
+    try {
+      const response = await fetch(
+        `/api/packing-list/get-rolls?tela=${encodeURIComponent(
+          tela
+        )}&color=${encodeURIComponent(color)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Error al cargar los datos del packing list");
+      }
+
+      const data: PackingListEntry[] = await response.json();
+      setPackingListData(data);
+
+      const matchingEntries = data.filter(
+        (entry) => entry.fabric_type === tela && entry.color === color
+      );
+
+      if (matchingEntries.length > 0) {
+        const groupedByLot = new Map<number, Roll[]>();
+        const lots: number[] = [];
+
+        matchingEntries.forEach((entry) => {
+          if (!lots.includes(entry.lot)) {
+            lots.push(entry.lot);
+          }
+
+          const existingRolls = groupedByLot.get(entry.lot) || [];
+          groupedByLot.set(entry.lot, [...existingRolls, ...entry.rolls]);
+        });
+
+        setAvailableLots(lots.sort((a, b) => a - b));
+        setRollsGroupedByLot(groupedByLot);
+
+        if (lots.length > 0) {
+          setSelectedLot(lots[0]);
+          setAvailableRolls(groupedByLot.get(lots[0]) || []);
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar packing list:", error);
+      toast.error("Error al cargar los datos de los rollos");
+    } finally {
+      setIsLoadingPackingList(false);
+    }
+  };
+
+  const handleLotChange = (lot: number) => {
+    setSelectedLot(lot);
+    setAvailableRolls(rollsGroupedByLot.get(lot) || []);
+    setSelectedRolls([]);
+  };
+
+  const calculateTotalFromRolls = () => {
+    return availableRolls
+      .filter((_, index) => selectedRolls.includes(index))
+      .reduce((total, roll) => total + (roll.kg || roll.mts || 0), 0);
+  };
+
+  const handleRollSelection = (rollIndex: number) => {
+    setSelectedRolls((prev) => {
+      if (prev.includes(rollIndex)) {
+        return prev.filter((i) => i !== rollIndex);
+      } else {
+        return [...prev, rollIndex];
+      }
+    });
   };
 
   const handleOpenSellDialog = (index: number) => {
     setSelectedItemIndex(index);
     setQuantityToUpdate(0);
+    setSellMode("manual");
+    setSelectedRolls([]);
+    setAvailableRolls([]);
+    setSelectedLot(null);
     setOpenSellDialog(true);
+
+    if (inventory[index]) {
+      loadPackingListData(inventory[index].Tela, inventory[index].Color);
+    }
   };
 
   const handleOpenAddDialog = (index: number) => {
@@ -270,28 +361,84 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setOpenAddDialog(true);
   };
 
-  const handleSellItem = () => {
-    if (selectedItemIndex !== null && quantityToUpdate > 0) {
-      const updatedInventory = [...inventory];
-      const item = updatedInventory[selectedItemIndex];
+  const handleSellItem = async () => {
+    if (selectedItemIndex !== null) {
+      const item = inventory[selectedItemIndex];
+      let quantityToSell = 0;
 
-      if (quantityToUpdate > item.Cantidad) {
+      if (sellMode === "manual") {
+        quantityToSell = quantityToUpdate;
+      } else if (sellMode === "rolls" && selectedRolls.length > 0) {
+        quantityToSell = calculateTotalFromRolls();
+      }
+
+      if (quantityToSell <= 0) {
+        toast.error(
+          "Por favor, seleccione una cantidad válida o rollos para vender"
+        );
+        return;
+      }
+
+      if (quantityToSell > item.Cantidad) {
         toast.error(
           "La cantidad a vender no puede ser mayor que el inventario disponible"
         );
         return;
       }
 
+      const updatedInventory = [...inventory];
       updatedInventory[selectedItemIndex] = {
         ...item,
-        Cantidad: item.Cantidad - quantityToUpdate,
-        Total: item.Costo * (item.Cantidad - quantityToUpdate),
+        Cantidad: item.Cantidad - quantityToSell,
+        Total: item.Costo * (item.Cantidad - quantityToSell),
       };
 
       setInventory(updatedInventory);
+
+      if (sellMode === "rolls" && selectedRolls.length > 0) {
+        try {
+          const response = await fetch("/api/packing-list/update-rolls", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              tela: item.Tela,
+              color: item.Color,
+              lot: selectedLot,
+              soldRolls: selectedRolls.map(
+                (index) => availableRolls[index].roll_number
+              ),
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              "Error al actualizar el packing list en el servidor"
+            );
+          }
+
+          const result = await response.json();
+          console.log("Packing list actualizado:", result);
+
+          await loadPackingListData(item.Tela, item.Color);
+
+          toast.success(
+            "Rollos vendidos y packing list actualizado correctamente"
+          );
+        } catch (error) {
+          console.error("Error al actualizar el packing list:", error);
+          toast.error(
+            "Los rollos se vendieron pero hubo un error al actualizar el packing list"
+          );
+        }
+      }
+
       setOpenSellDialog(false);
       toast.success(
-        `Se vendieron ${quantityToUpdate} ${item.Unidades} de ${item.Tela} ${item.Color}`
+        `Se vendieron ${quantityToSell.toFixed(2)} ${item.Unidades} de ${
+          item.Tela
+        } ${item.Color}`
       );
     }
   };
@@ -614,7 +761,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
-  // Filtros y cálculos (código existente)
   const filteredInventoryForOC = useMemo(
     () =>
       inventory.filter((item) => {
@@ -993,7 +1139,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         <>
           <CardContent className="pt-0 pb-4">
             <div className="flex flex-wrap gap-4 mb-4">
-              {/* Search bar - más grande */}
               <div className="flex-1 min-w-[200px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1021,7 +1166,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* Unidades filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1045,7 +1189,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* OC filter - Solo para admin */}
               {isAdmin && (
                 <div className="min-w-[150px] max-w-[150px]">
                   <div className="space-y-2">
@@ -1088,7 +1231,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               )}
 
-              {/* Tela filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1129,7 +1271,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* Color filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1171,7 +1312,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </div>
               </div>
 
-              {/* Ubicación filter */}
               <div className="min-w-[150px] max-w-[150px]">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1">
@@ -1227,7 +1367,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </div>
             </div>
 
-            {/* Filter summary */}
             <div className="flex items-center gap-2 text-sm">
               <Filter size={16} className="text-gray-500" />
               <span className="text-gray-500">Filtros activos:</span>
@@ -1273,7 +1412,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           </CardContent>
 
           <CardContent>
-            {/* Tabla del inventario */}
             <div className="border rounded-md overflow-hidden">
               <div className="h-[500px] overflow-auto relative">
                 <table className="w-full text-sm border-collapse">
@@ -1465,7 +1603,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         </>
       )}
 
-      {/* Diálogo para Packing List */}
       <Dialog
         open={openPackingListDialog}
         onOpenChange={setOpenPackingListDialog}
@@ -1482,7 +1619,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
               <FolderOpenIcon className="h-12 w-12 text-gray-400 mb-4" />
               <p className="mb-4 text-sm text-gray-500 text-center">
@@ -1517,7 +1654,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </p>
             </div>
 
-            {/* Mostrar resultado de la carga si fue exitosa */}
             {uploadResult && (
               <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
                 <div className="flex items-center mb-2">
@@ -1561,31 +1697,263 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         </DialogContent>
       </Dialog>
 
-      {/* Diálogos existentes para vender y agregar */}
       <Dialog open={openSellDialog} onOpenChange={setOpenSellDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Vender Producto</DialogTitle>
             <DialogDescription>
               {selectedItemIndex !== null &&
-                `Ingrese la cantidad de ${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} que desea vender.`}
+                `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color}`}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="quantity" className="text-right">
-                Cantidad
-              </Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="0"
-                value={quantityToUpdate}
-                onChange={(e) => setQuantityToUpdate(Number(e.target.value))}
-                className="col-span-3"
-              />
+          <div className="space-y-3">
+            <div className="flex gap-4">
+              <Button
+                variant={sellMode === "manual" ? "default" : "outline"}
+                onClick={() => setSellMode("manual")}
+                className="flex-1"
+              >
+                <Input className="mr-2 h-4 w-4" />
+                Cantidad Manual
+              </Button>
+              <Button
+                variant={sellMode === "rolls" ? "default" : "outline"}
+                onClick={() => setSellMode("rolls")}
+                className="flex-1"
+              >
+                <BoxIcon className="mr-2 h-4 w-4" />
+                Por Rollos Específicos
+              </Button>
             </div>
+
+            {sellMode === "manual" ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="quantity" className="text-right">
+                    Cantidad
+                  </Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quantityToUpdate}
+                    onChange={(e) =>
+                      setQuantityToUpdate(Number(e.target.value))
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {isLoadingPackingList ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2Icon className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : availableRolls.length > 0 ? (
+                  <>
+                    {availableLots.length > 1 && (
+                      <div className="space-y-2">
+                        <Label>Seleccionar Lote</Label>
+                        <Select
+                          value={selectedLot?.toString()}
+                          onValueChange={(value) =>
+                            handleLotChange(Number(value))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccione un lote" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableLots.map((lot) => (
+                              <SelectItem key={lot} value={lot.toString()}>
+                                Lote {lot} (
+                                {rollsGroupedByLot.get(lot)?.length || 0}{" "}
+                                rollos)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div className="text-sm text-gray-600">
+                      Lote: {selectedLot} - {availableRolls.length} rollos
+                      disponibles
+                    </div>
+
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setSelectedRolls(availableRolls.map((_, i) => i))
+                        }
+                      >
+                        Todos
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedRolls([])}
+                      >
+                        Limpiar
+                      </Button>
+                    </div>
+
+                    <div className="border rounded-lg max-h-60 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="p-1 text-left text-sm">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  selectedRolls.length ===
+                                    availableRolls.length &&
+                                  availableRolls.length > 0
+                                }
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedRolls(
+                                      availableRolls.map((_, i) => i)
+                                    );
+                                  } else {
+                                    setSelectedRolls([]);
+                                  }
+                                }}
+                              />
+                            </th>
+                            <th className="p-1 text-left text-sm">Rollo #</th>
+                            <th className="p-1 text-left text-sm">Almacén</th>
+                            <th className="p-1 text-left text-sm">
+                              {availableRolls[0]?.kg !== undefined
+                                ? "Peso (kg)"
+                                : "Metros"}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {availableRolls.map((roll, index) => (
+                            <tr
+                              key={`${selectedLot}-${roll.roll_number}-${index}`}
+                              className={`border-b hover:bg-gray-50 cursor-pointer ${
+                                selectedRolls.includes(index)
+                                  ? "bg-blue-50"
+                                  : ""
+                              }`}
+                              onClick={() => handleRollSelection(index)}
+                            >
+                              <td
+                                className="p-1 text-sm"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRolls.includes(index)}
+                                  onChange={() => handleRollSelection(index)}
+                                />
+                              </td>
+                              <td className="p-1 text-sm">
+                                {roll.roll_number}
+                              </td>
+                              <td className="p-1 text-sm">
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs ${
+                                    roll.almacen === "CDMX"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-green-100 text-green-800"
+                                  }`}
+                                >
+                                  {roll.almacen}
+                                </span>
+                              </td>
+                              <td className="p-1 text-sm font-medium">
+                                {roll.kg !== undefined
+                                  ? `${roll.kg} kg`
+                                  : `${roll.mts} mts`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 sticky bottom-0">
+                          <tr>
+                            <td
+                              colSpan={3}
+                              className="p-1 text-right font-medium text-sm"
+                            >
+                              Total seleccionado:
+                            </td>
+                            <td className="p-1 font-bold text-sm">
+                              {calculateTotalFromRolls().toFixed(2)}{" "}
+                              {availableRolls[0]?.kg !== undefined
+                                ? "kg"
+                                : "mts"}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    <div className="bg-blue-50 p-2 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm">
+                          Resumen de venta:
+                        </span>
+                        <span className="text-lg font-bold">
+                          {calculateTotalFromRolls().toFixed(2)}{" "}
+                          {selectedItemIndex !== null &&
+                            inventory[selectedItemIndex]?.Unidades}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {selectedRolls.length} rollo(s) seleccionado(s) del lote{" "}
+                        {selectedLot}
+                      </div>
+                      {selectedItemIndex !== null && (
+                        <div className="text-sm mt-2">
+                          <span className="text-gray-600">
+                            Quedará en inventario:{" "}
+                          </span>
+                          <span className="font-medium">
+                            {(
+                              inventory[selectedItemIndex].Cantidad -
+                              calculateTotalFromRolls()
+                            ).toFixed(2)}{" "}
+                            {inventory[selectedItemIndex].Unidades}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : packingListData.length > 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                    <p>
+                      No se encontraron rollos disponibles para esta tela y
+                      color.
+                    </p>
+                    <p className="text-sm mt-2">
+                      Es posible que todos los rollos hayan sido vendidos.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <FolderOpenIcon className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                    <p>
+                      No se encontró información de rollos para este producto.
+                    </p>
+                    <p className="text-sm mt-2">
+                      Verifique que exista un packing list cargado para esta
+                      tela.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {selectedItemIndex !== null && (
               <div className="text-sm text-gray-500">
                 Inventario disponible:{" "}
@@ -1599,7 +1967,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             <Button variant="outline" onClick={() => setOpenSellDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSellItem}>Confirmar Venta</Button>
+            <Button
+              onClick={handleSellItem}
+              disabled={
+                (sellMode === "manual" && quantityToUpdate <= 0) ||
+                (sellMode === "rolls" && selectedRolls.length === 0)
+              }
+            >
+              Confirmar Venta
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
