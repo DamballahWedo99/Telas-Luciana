@@ -71,6 +71,13 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   const [fabricsWithCosts, setFabricsWithCosts] = useState<PendingFabric[]>([]);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
 
+  const formatNumber = (num: number): string => {
+    return new Intl.NumberFormat("es-MX", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(num);
+  };
+
   // Función para verificar archivos pending
   const checkPendingFiles = async () => {
     if (!isAdmin) return;
@@ -342,7 +349,9 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
                       <tr key={fabric.id} className="border-b hover:bg-gray-50">
                         <td className="py-2 px-4">{fabric.tela}</td>
                         <td className="py-2 px-4">{fabric.color}</td>
-                        <td className="py-2 px-4">{fabric.cantidad}</td>
+                        <td className="py-2 px-4">
+                          {formatNumber(fabric.cantidad)}
+                        </td>
                         <td className="py-2 px-4">{fabric.unidades}</td>
                         {selectedFile.fabrics.some((fabric) => fabric.oc) && (
                           <td className="py-2 px-4">{fabric.oc || "-"}</td>

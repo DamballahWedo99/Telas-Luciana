@@ -183,7 +183,7 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
     fetchData();
   }, []);
 
-  // Función para procesar los datos CSV
+  // Función para procesar los datos CSV - CORREGIDA
   const processCSVData = (csvData: string) => {
     Papa.parse<Record<string, any>>(csvData, {
       header: true,
@@ -191,12 +191,16 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
       skipEmptyLines: true,
       complete: (result) => {
         if (result.errors && result.errors.length > 0) {
+          console.error("❌ Errores en CSV:", result.errors);
           setError(`Error al analizar CSV: ${result.errors[0].message}`);
           setLoading(false);
           return;
         }
 
         try {
+          console.log("📄 Columnas encontradas en CSV:", result.meta.fields);
+          console.log("📊 Primeras 3 filas de datos:", result.data.slice(0, 3));
+
           // Primero, calculamos total_mxp para cada fila
           const rows: PedidoData[] = result.data.map((row) => {
             const totalFactura = row.total_factura || 0;
@@ -257,39 +261,68 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
             };
           });
 
+          // MEJORAR: Extracción de opciones para filtros
+          const tipoTelaSet = new Set<string>();
+          const colorSet = new Set<string>();
+          const ordenSet = new Set<string>();
+
+          processedData.forEach((row) => {
+            // Buscar en múltiples posibles nombres de columna para tela
+            const tipoTela =
+              row["pedido_cliente.tipo_tela"] ||
+              row["pedido_cliente_tipo_tela"] ||
+              row["tipo_tela"] ||
+              row["tela"] ||
+              "Sin Especificar";
+
+            // Buscar en múltiples posibles nombres de columna para color
+            const color =
+              row["pedido_cliente.color"] ||
+              row["pedido_cliente_color"] ||
+              row["color"] ||
+              "Sin Especificar";
+
+            // Orden de compra
+            const orden = row["orden_de_compra"] || "Sin Orden";
+
+            // Agregar a los sets, asegurando que sean strings
+            tipoTelaSet.add(String(tipoTela).trim());
+            colorSet.add(String(color).trim());
+            ordenSet.add(String(orden).trim());
+          });
+
+          // Convertir a arrays y ordenar
+          const tipoTelaArray = Array.from(tipoTelaSet).sort();
+          const colorArray = Array.from(colorSet).sort();
+          const ordenArray = Array.from(ordenSet).sort();
+
+          console.log(`✅ Opciones extraídas:`);
+          console.log(`   - Telas (${tipoTelaArray.length}):`, tipoTelaArray);
+          console.log(`   - Colores (${colorArray.length}):`, colorArray);
+          console.log(
+            `   - Órdenes (${ordenArray.length}):`,
+            ordenArray.slice(0, 10),
+            "..."
+          );
+
+          setOrdenDeCompraOptions(ordenArray);
+          setTipoTelaOptions(tipoTelaArray);
+          setColorOptions(colorArray);
+
           setData(processedData);
           setFilteredData(processedData);
-
-          // Extraer valores únicos para filtros
-          const ordenDeCompraSet = new Set(
-            processedData.map((row) => row.orden_de_compra).filter(Boolean)
-          );
-          const tipoTelaSet = new Set(
-            processedData
-              .map((row) => row["pedido_cliente.tipo_tela"])
-              .filter(Boolean)
-          );
-          const colorSet = new Set(
-            processedData
-              .map((row) => row["pedido_cliente.color"])
-              .filter(Boolean)
-          );
-
-          setOrdenDeCompraOptions(Array.from(ordenDeCompraSet) as string[]);
-          setTipoTelaOptions(Array.from(tipoTelaSet) as string[]);
-          setColorOptions(Array.from(colorSet) as string[]);
-
           calculateTotals(processedData);
           setError(null);
         } catch (err: any) {
+          console.error("❌ Error procesando datos:", err);
           setError(`Error al procesar los datos: ${err.message}`);
-          console.error("Error processing data:", err);
         } finally {
           setLoading(false);
           setFileUploading(false);
         }
       },
       error: (error: unknown) => {
+        console.error("❌ Error parseando CSV:", error);
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         setError(`Error al analizar CSV: ${errorMessage}`);
@@ -299,7 +332,7 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
     });
   };
 
-  // Aplicar filtros cuando cambien los valores de filtro
+  // Aplicar filtros cuando cambien los valores de filtro - CORREGIDA
   useEffect(() => {
     applyFilters();
   }, [
@@ -314,28 +347,54 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
   const applyFilters = () => {
     if (!data.length) return;
 
+    console.log(`🔍 Aplicando filtros a ${data.length} registros`);
+
     let filtered = [...data];
 
     // Aplicar filtros en orden de importancia
     if (ordenDeCompraFilter && ordenDeCompraFilter !== "all") {
+      const beforeCount = filtered.length;
       filtered = filtered.filter(
         (row) => row.orden_de_compra === ordenDeCompraFilter
+      );
+      console.log(
+        `🔍 Filtro de orden '${ordenDeCompraFilter}': ${beforeCount} → ${filtered.length}`
       );
     }
 
     if (tipoTelaFilter && tipoTelaFilter !== "all") {
-      filtered = filtered.filter(
-        (row) => row["pedido_cliente.tipo_tela"] === tipoTelaFilter
+      const beforeCount = filtered.length;
+      filtered = filtered.filter((row) => {
+        const tela =
+          row["pedido_cliente.tipo_tela"] ||
+          row["pedido_cliente_tipo_tela"] ||
+          row["tipo_tela"] ||
+          row["tela"] ||
+          "Sin Especificar";
+        return String(tela).trim() === tipoTelaFilter;
+      });
+      console.log(
+        `🔍 Filtro de tela '${tipoTelaFilter}': ${beforeCount} → ${filtered.length}`
       );
     }
 
     if (colorFilter && colorFilter !== "all") {
-      filtered = filtered.filter(
-        (row) => row["pedido_cliente.color"] === colorFilter
+      const beforeCount = filtered.length;
+      filtered = filtered.filter((row) => {
+        const color =
+          row["pedido_cliente.color"] ||
+          row["pedido_cliente_color"] ||
+          row["color"] ||
+          "Sin Especificar";
+        return String(color).trim() === colorFilter;
+      });
+      console.log(
+        `🔍 Filtro de color '${colorFilter}': ${beforeCount} → ${filtered.length}`
       );
     }
 
     if (ubicacionFilter && ubicacionFilter !== "all") {
+      const beforeCount = filtered.length;
       filtered = filtered.filter((row) => {
         if (ubicacionFilter === "almacen") {
           return (
@@ -356,20 +415,38 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
         }
         return true;
       });
+      console.log(
+        `🔍 Filtro de ubicación '${ubicacionFilter}': ${beforeCount} → ${filtered.length}`
+      );
     }
 
     // Aplicar consulta de búsqueda (insensible a mayúsculas/minúsculas)
     if (searchQuery) {
+      const beforeCount = filtered.length;
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((row) => {
+        const ordenDeCompra = row.orden_de_compra?.toLowerCase() || "";
+        const tipoTela =
+          row["pedido_cliente.tipo_tela"]?.toLowerCase() ||
+          row["pedido_cliente_tipo_tela"]?.toLowerCase() ||
+          row["tipo_tela"]?.toLowerCase() ||
+          row["tela"]?.toLowerCase() ||
+          "";
+        const color =
+          row["pedido_cliente.color"]?.toLowerCase() ||
+          row["pedido_cliente_color"]?.toLowerCase() ||
+          row["color"]?.toLowerCase() ||
+          "";
+
         return (
-          (row.orden_de_compra?.toLowerCase() || "").includes(query) ||
-          (row["pedido_cliente.tipo_tela"]?.toLowerCase() || "").includes(
-            query
-          ) ||
-          (row["pedido_cliente.color"]?.toLowerCase() || "").includes(query)
+          ordenDeCompra.includes(query) ||
+          tipoTela.includes(query) ||
+          color.includes(query)
         );
       });
+      console.log(
+        `🔍 Filtro de búsqueda '${searchQuery}': ${beforeCount} → ${filtered.length}`
+      );
     }
 
     // NUEVO: Ordenar por fecha_pedido (más reciente primero)
@@ -385,6 +462,10 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
       // Ordenar de más reciente (mayor) a más antiguo (menor)
       return dateB.getTime() - dateA.getTime();
     });
+
+    console.log(
+      `✅ Filtros aplicados: ${data.length} → ${filtered.length} registros`
+    );
 
     setFilteredData(filtered);
     calculateTotals(filtered);
@@ -419,25 +500,68 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
     setDeliveryData(chartData.deliveryData);
   };
 
-  // Preparar datos para gráficos
+  // Preparar datos para gráficos - CORREGIDA
   const prepareChartData = (filteredRows: PedidoData[]) => {
-    // Para gráfico circular - distribución por color
+    console.log(
+      `🔍 Preparando datos de gráficos para ${filteredRows.length} filas`
+    );
+
+    // Para gráfico circular - distribución por color (MEJORADO)
     const colorGroups: Record<string, number> = {};
+    const telaGroups: Record<string, number> = {};
+
     filteredRows.forEach((row) => {
-      const color = row["pedido_cliente.color"] || "Sin Color";
-      if (!colorGroups[color]) {
-        colorGroups[color] = 0;
+      // Mejorar la obtención del color
+      const color =
+        row["pedido_cliente.color"] ||
+        row["pedido_cliente_color"] ||
+        row["color"] ||
+        "Sin Color";
+
+      // Mejorar la obtención de la tela
+      const tela =
+        row["pedido_cliente.tipo_tela"] ||
+        row["pedido_cliente_tipo_tela"] ||
+        row["tipo_tela"] ||
+        row["tela"] ||
+        "Sin Tela";
+
+      const colorKey = String(color).trim();
+      const telaKey = String(tela).trim();
+      const facturaValue = row.total_factura || 0;
+
+      // Agrupar por color
+      if (!colorGroups[colorKey]) {
+        colorGroups[colorKey] = 0;
       }
-      colorGroups[color] += row.total_factura || 0;
+      colorGroups[colorKey] += facturaValue;
+
+      // Agrupar por tela
+      if (!telaGroups[telaKey]) {
+        telaGroups[telaKey] = 0;
+      }
+      telaGroups[telaKey] += facturaValue;
     });
 
+    console.log(
+      `📊 Colores encontrados (${Object.keys(colorGroups).length}):`,
+      Object.keys(colorGroups)
+    );
+    console.log(
+      `📊 Telas encontradas (${Object.keys(telaGroups).length}):`,
+      Object.keys(telaGroups)
+    );
+
+    // Crear datos para gráficos SIN LÍMITES
     const pieData: ChartDataItem[] = Object.keys(colorGroups)
       .map((color) => ({
         name: color,
         value: colorGroups[color],
       }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 7); // Top 7 colores
+      .sort((a, b) => b.value - a.value);
+    // ✅ SIN .slice() - Muestra TODOS los colores
+
+    console.log(`✅ Datos de colores preparados: ${pieData.length} elementos`);
 
     // Para gráfico de barras - total_factura por orden_de_compra
     const ordenGroups: Record<string, number> = {};
@@ -456,7 +580,7 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
         total: ordenGroups[orden],
       }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 10); // Top 10 órdenes
+      .slice(0, 10); // Top 10 órdenes (este límite está bien para el gráfico de barras)
 
     // Para línea de tiempo - pedidos por fecha
     const dateGroups: Record<string, { count: number; totalFactura: number }> =
@@ -523,6 +647,13 @@ const PedidosDashboard: React.FC<PedidosDashboardProps> = ({
 
     // Ordenar por tiempo de entrega
     deliveryData.sort((a, b) => a.days - b.days);
+
+    console.log(`✅ Datos de gráficos preparados:`, {
+      colores: pieData.length,
+      ordenes: barData.length,
+      timeline: timelineData.length,
+      delivery: deliveryData.length,
+    });
 
     return {
       pieData,

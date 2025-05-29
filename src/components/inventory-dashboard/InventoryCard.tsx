@@ -388,6 +388,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [rollsGroupedByLot, setRollsGroupedByLot] = useState<
     Map<number, Roll[]>
   >(new Map());
+  const [isProcessingTransfer, setIsProcessingTransfer] = useState(false);
 
   const resetAllFilters = () => {
     setSearchTerm("");
@@ -876,6 +877,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return;
       }
 
+      // Activar el estado de procesamiento
+      setIsProcessingTransfer(true);
+
+      // Resto del código de la función permanece igual...
       // Preparar datos para la actualización
       const oldItem = {
         OC: item.OC || "",
@@ -939,171 +944,180 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       let inventoryUpdateSuccess = false;
       let packingListUpdateSuccess = false;
 
-      // 1. Actualizar inventario en S3
       try {
-        console.log("📦 ACTUALIZANDO INVENTARIO EN S3...");
-        const inventoryUpdateResponse = await fetch(
-          "/api/s3/inventario/update",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              oldItem,
-              newItem: newMeridaItem,
-              quantityChange: quantityToTransfer,
-            }),
-          }
-        );
+        // 1. Actualizar inventario en S3
+        try {
+          console.log("📦 ACTUALIZANDO INVENTARIO EN S3...");
+          const inventoryUpdateResponse = await fetch(
+            "/api/s3/inventario/update",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                oldItem,
+                newItem: newMeridaItem,
+                quantityChange: quantityToTransfer,
+              }),
+            }
+          );
 
-        const inventoryResponseData = await inventoryUpdateResponse.json();
-        console.log("📦 RESPUESTA INVENTARIO:", inventoryResponseData);
+          const inventoryResponseData = await inventoryUpdateResponse.json();
+          console.log("📦 RESPUESTA INVENTARIO:", inventoryResponseData);
 
-        if (!inventoryUpdateResponse.ok) {
-          // Manejar errores específicos del inventario
-          if (inventoryUpdateResponse.status === 404) {
-            throw new Error(
-              `No se encontró el item en el inventario S3. Criterios de búsqueda: ${JSON.stringify(
-                inventoryResponseData.searchCriteria || oldItem
-              )}`
-            );
-          } else {
-            throw new Error(
-              inventoryResponseData.error ||
-                "Error al actualizar inventario en S3"
-            );
+          if (!inventoryUpdateResponse.ok) {
+            // Manejar errores específicos del inventario
+            if (inventoryUpdateResponse.status === 404) {
+              throw new Error(
+                `No se encontró el item en el inventario S3. Criterios de búsqueda: ${JSON.stringify(
+                  inventoryResponseData.searchCriteria || oldItem
+                )}`
+              );
+            } else {
+              throw new Error(
+                inventoryResponseData.error ||
+                  "Error al actualizar inventario en S3"
+              );
+            }
           }
+
+          console.log("✅ INVENTARIO ACTUALIZADO EN S3");
+          inventoryUpdateSuccess = true;
+        } catch (inventoryError) {
+          console.error(
+            "❌ ERROR AL ACTUALIZAR INVENTARIO EN S3:",
+            inventoryError
+          );
+          toast.error(
+            `Error en inventario S3: ${
+              inventoryError instanceof Error
+                ? inventoryError.message
+                : String(inventoryError)
+            }`
+          );
         }
 
-        console.log("✅ INVENTARIO ACTUALIZADO EN S3");
-        inventoryUpdateSuccess = true;
-      } catch (inventoryError) {
-        console.error(
-          "❌ ERROR AL ACTUALIZAR INVENTARIO EN S3:",
-          inventoryError
-        );
-        toast.error(
-          `Error en inventario S3: ${
-            inventoryError instanceof Error
-              ? inventoryError.message
-              : String(inventoryError)
-          }`
-        );
-      }
-
-      // 2. Actualizar packing list si es modo rolls
-      if (transferMode === "rolls" && selectedTransferRolls.length > 0) {
-        try {
-          console.log("📋 ACTUALIZANDO PACKING LIST...", {
-            tela: item.Tela,
-            color: item.Color,
-            lot: selectedLot,
-            transferRolls: selectedTransferRolls.map(
-              (index) => availableTransferRolls[index].roll_number
-            ),
-          });
-
-          const response = await fetch("/api/packing-list/transfer-rolls", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
+        // 2. Actualizar packing list si es modo rolls
+        if (transferMode === "rolls" && selectedTransferRolls.length > 0) {
+          try {
+            console.log("📋 ACTUALIZANDO PACKING LIST...", {
               tela: item.Tela,
               color: item.Color,
               lot: selectedLot,
               transferRolls: selectedTransferRolls.map(
                 (index) => availableTransferRolls[index].roll_number
               ),
-            }),
-          });
+            });
 
-          const packingListResponseData = await response.json();
-          console.log("📋 RESPUESTA PACKING LIST:", packingListResponseData);
+            const response = await fetch("/api/packing-list/transfer-rolls", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                tela: item.Tela,
+                color: item.Color,
+                lot: selectedLot,
+                transferRolls: selectedTransferRolls.map(
+                  (index) => availableTransferRolls[index].roll_number
+                ),
+              }),
+            });
 
-          if (!response.ok) {
-            // Manejar errores específicos del packing list
-            if (
-              response.status === 404 &&
-              packingListResponseData.nonExistentRolls
-            ) {
-              throw new Error(
-                `Los rollos ${packingListResponseData.nonExistentRolls.join(
-                  ", "
-                )} no existen en el packing list. Rollos disponibles: ${
-                  packingListResponseData.availableRolls?.join(", ") ||
-                  "ninguno"
-                }`
-              );
-            } else if (
-              response.status === 400 &&
-              packingListResponseData.rollsNotInCDMX
-            ) {
-              throw new Error(
-                `Los siguientes rollos no están en CDMX: ${packingListResponseData.rollsNotInCDMX
-                  .map((r: any) => `#${r.roll_number} (${r.current_location})`)
-                  .join(", ")}`
-              );
-            } else {
-              throw new Error(
-                packingListResponseData.error ||
-                  "Error al actualizar el packing list en el servidor"
-              );
+            const packingListResponseData = await response.json();
+            console.log("📋 RESPUESTA PACKING LIST:", packingListResponseData);
+
+            if (!response.ok) {
+              // Manejar errores específicos del packing list
+              if (
+                response.status === 404 &&
+                packingListResponseData.nonExistentRolls
+              ) {
+                throw new Error(
+                  `Los rollos ${packingListResponseData.nonExistentRolls.join(
+                    ", "
+                  )} no existen en el packing list. Rollos disponibles: ${
+                    packingListResponseData.availableRolls?.join(", ") ||
+                    "ninguno"
+                  }`
+                );
+              } else if (
+                response.status === 400 &&
+                packingListResponseData.rollsNotInCDMX
+              ) {
+                throw new Error(
+                  `Los siguientes rollos no están en CDMX: ${packingListResponseData.rollsNotInCDMX
+                    .map(
+                      (r: any) => `#${r.roll_number} (${r.current_location})`
+                    )
+                    .join(", ")}`
+                );
+              } else {
+                throw new Error(
+                  packingListResponseData.error ||
+                    "Error al actualizar el packing list en el servidor"
+                );
+              }
             }
+
+            const result = packingListResponseData;
+            console.log("✅ PACKING LIST ACTUALIZADO:", result);
+
+            await loadTransferPackingListData(item.Tela, item.Color);
+            packingListUpdateSuccess = true;
+          } catch (error) {
+            console.error("❌ ERROR AL ACTUALIZAR PACKING LIST:", error);
+            toast.error(
+              `Error en packing list: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            );
           }
-
-          const result = packingListResponseData;
-          console.log("✅ PACKING LIST ACTUALIZADO:", result);
-
-          await loadTransferPackingListData(item.Tela, item.Color);
-          packingListUpdateSuccess = true;
-        } catch (error) {
-          console.error("❌ ERROR AL ACTUALIZAR PACKING LIST:", error);
-          toast.error(
-            `Error en packing list: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
+        } else {
+          packingListUpdateSuccess = true; // No hay packing list que actualizar
         }
-      } else {
-        packingListUpdateSuccess = true; // No hay packing list que actualizar
-      }
 
-      // 3. Mostrar mensaje final basado en los estados
-      if (inventoryUpdateSuccess && packingListUpdateSuccess) {
-        if (transferMode === "rolls") {
-          toast.success(
-            "✅ Rollos trasladados correctamente. Tanto inventario como packing list fueron actualizados."
+        // 3. Mostrar mensaje final basado en los estados
+        if (inventoryUpdateSuccess && packingListUpdateSuccess) {
+          if (transferMode === "rolls") {
+            toast.success(
+              "✅ Rollos trasladados correctamente. Tanto inventario como packing list fueron actualizados."
+            );
+          } else {
+            toast.success(
+              `✅ Se trasladaron ${quantityToTransfer.toFixed(2)} ${
+                item.Unidades
+              } de ${item.Tela} ${
+                item.Color
+              } de CDMX a Mérida y se guardó en S3`
+            );
+          }
+        } else if (inventoryUpdateSuccess && !packingListUpdateSuccess) {
+          toast.warning(
+            "⚠️ El inventario fue actualizado correctamente, pero hubo un error al actualizar el packing list."
+          );
+        } else if (!inventoryUpdateSuccess && packingListUpdateSuccess) {
+          toast.warning(
+            "⚠️ El packing list fue actualizado, pero hubo un error al actualizar el inventario en S3."
           );
         } else {
-          toast.success(
-            `✅ Se trasladaron ${quantityToTransfer.toFixed(2)} ${
-              item.Unidades
-            } de ${item.Tela} ${item.Color} de CDMX a Mérida y se guardó en S3`
+          toast.error(
+            "❌ Hubo errores al actualizar tanto el inventario como el packing list. Los cambios solo están en memoria."
           );
         }
-      } else if (inventoryUpdateSuccess && !packingListUpdateSuccess) {
-        toast.warning(
-          "⚠️ El inventario fue actualizado correctamente, pero hubo un error al actualizar el packing list."
-        );
-      } else if (!inventoryUpdateSuccess && packingListUpdateSuccess) {
-        toast.warning(
-          "⚠️ El packing list fue actualizado, pero hubo un error al actualizar el inventario en S3."
-        );
-      } else {
-        toast.error(
-          "❌ Hubo errores al actualizar tanto el inventario como el packing list. Los cambios solo están en memoria."
-        );
+
+        setOpenTransferDialog(false);
+
+        console.log("🏁 TRASLADO COMPLETADO:", {
+          inventoryUpdateSuccess,
+          packingListUpdateSuccess,
+          quantityTransferred: quantityToTransfer,
+        });
+      } finally {
+        // Desactivar el estado de procesamiento
+        setIsProcessingTransfer(false);
       }
-
-      setOpenTransferDialog(false);
-
-      console.log("🏁 TRASLADO COMPLETADO:", {
-        inventoryUpdateSuccess,
-        packingListUpdateSuccess,
-        quantityTransferred: quantityToTransfer,
-      });
     }
   };
 
@@ -2301,14 +2315,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     <strong>ID de carga:</strong> {uploadResult.uploadId}
                   </p>
                 </div>
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-sm text-blue-800">
-                    <strong>Siguiente paso:</strong> El archivo ha sido cargado
-                    correctamente al bucket S3. Tu colaborador procesará este
-                    archivo con su script Python para extraer la información de
-                    las telas.
-                  </p>
-                </div>
               </div>
             )}
           </div>
@@ -2890,17 +2896,27 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             <Button
               variant="outline"
               onClick={() => setOpenTransferDialog(false)}
+              disabled={isProcessingTransfer}
             >
               Cancelar
             </Button>
             <Button
               onClick={handleTransferItem}
               disabled={
+                isProcessingTransfer ||
                 (transferMode === "manual" && quantityToUpdate <= 0) ||
                 (transferMode === "rolls" && selectedTransferRolls.length === 0)
               }
+              className="flex items-center gap-2"
             >
-              Confirmar Traslado
+              {isProcessingTransfer ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                "Confirmar Traslado"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
