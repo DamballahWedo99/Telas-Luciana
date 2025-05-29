@@ -36,26 +36,18 @@ import {
 import { getInventarioCsv } from "@/lib/s3";
 import { parseNumericValue, mapCsvFields, normalizeCsvData } from "@/lib/utils";
 
-// Hook para detectar dispositivos móviles
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Función para verificar si es un dispositivo móvil
     const checkIsMobile = () => {
       const mobileQuery = window.matchMedia("(max-width: 1024px)");
       setIsMobile(mobileQuery.matches);
     };
 
-    // Verificar solo en el cliente
     if (typeof window !== "undefined") {
-      // Verificar al cargar
       checkIsMobile();
-
-      // Escuchar cambios de tamaño de ventana
       window.addEventListener("resize", checkIsMobile);
-
-      // Limpieza
       return () => window.removeEventListener("resize", checkIsMobile);
     }
   }, []);
@@ -72,8 +64,118 @@ interface DashboardProps {
   onLogout?: () => void;
 }
 
+function processInventoryData(data: any[]): InventoryItem[] {
+  const processedItems: InventoryItem[] = [];
+
+  data.forEach((item: any) => {
+    const costo = parseNumericValue(item.Costo);
+    const cantidad = parseNumericValue(item.Cantidad);
+
+    // Normalizar importación
+    const normalizeImportacion = (value: string): "DA" | "HOY" => {
+      const normalized = (value || "").toString().toLowerCase().trim();
+      if (normalized === "hoy") return "HOY";
+      if (normalized === "da") return "DA";
+      if (normalized === "nan" || normalized === "") return "-" as "DA" | "HOY";
+      return (value || "").toString().toUpperCase() as "DA" | "HOY";
+    };
+
+    let ubicacion = "";
+    let cantidadFinal = cantidad;
+
+    if (item.almacen) {
+      ubicacion = item.almacen === "CDMX" ? "CDMX" : "Mérida";
+    } else if (item.CDMX !== undefined && item.MID !== undefined) {
+      const cantidadCDMX = parseNumericValue(item.CDMX);
+      const cantidadMID = parseNumericValue(item.MID);
+
+      if (cantidadCDMX > 0 && cantidadMID > 0) {
+        const baseItem = {
+          OC: item.OC || "",
+          Tela: item.Tela || "",
+          Color: item.Color || "",
+          Costo: costo,
+          Unidades: (item.Unidades || "").toString().toUpperCase() as UnitType,
+          Importacion: normalizeImportacion(
+            item.Importacion || item.Importación || ""
+          ),
+          FacturaDragonAzteca:
+            item["Factura Dragón Azteca"] ||
+            item["Factura Dragon Azteca"] ||
+            item.FacturaDragonAzteca ||
+            "",
+        };
+
+        processedItems.push({
+          ...baseItem,
+          Cantidad: cantidadCDMX,
+          Total: costo * cantidadCDMX,
+          Ubicacion: "CDMX",
+        });
+
+        processedItems.push({
+          ...baseItem,
+          Cantidad: cantidadMID,
+          Total: costo * cantidadMID,
+          Ubicacion: "Mérida",
+        });
+
+        return;
+      } else if (cantidadCDMX > 0) {
+        ubicacion = "CDMX";
+        cantidadFinal = cantidadCDMX;
+      } else if (cantidadMID > 0) {
+        ubicacion = "Mérida";
+        cantidadFinal = cantidadMID;
+      } else {
+        ubicacion = item.Ubicacion || "";
+      }
+    } else {
+      ubicacion = item.Ubicacion || "";
+
+      if (!ubicacion) {
+        const oc = (item.OC || "").toLowerCase();
+
+        if (
+          oc.includes("ttl-04-25") ||
+          oc.includes("ttl-02-2025") ||
+          oc.includes("dr-05-25")
+        ) {
+          ubicacion = "CDMX";
+        } else if (oc.includes("dsma-03-23") || oc.includes("dsma-04-23")) {
+          ubicacion = "Mérida";
+        } else {
+          ubicacion = "CDMX";
+        }
+      }
+    }
+
+    const finalItem = {
+      OC: item.OC || "",
+      Tela: item.Tela || "",
+      Color: item.Color || "",
+      Costo: costo,
+      Cantidad: cantidadFinal,
+      Unidades: (item.Unidades || "").toString().toUpperCase() as UnitType,
+      Total: costo * cantidadFinal,
+      Ubicacion: ubicacion,
+      Importacion: normalizeImportacion(
+        item.Importacion || item.Importación || ""
+      ),
+      FacturaDragonAzteca:
+        item["Factura Dragón Azteca"] ||
+        item["Factura Dragon Azteca"] ||
+        item.FacturaDragonAzteca ||
+        "",
+    };
+
+    processedItems.push(finalItem);
+  });
+
+  return processedItems;
+}
+
 const Dashboard: React.FC<DashboardProps> = () => {
-  // Uso del hook para detectar dispositivos móviles
   const isMobile = useIsMobile();
 
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -148,7 +250,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
   };
 
   useEffect(() => {
-    async function loadInventoryFromS3() {
+    async function loadInventoryFromAPI() {
       if (!session?.user || inventoryLoadedRef.current) return;
 
       try {
@@ -159,95 +261,31 @@ const Dashboard: React.FC<DashboardProps> = () => {
         const currentYear = now.getFullYear().toString();
         const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
 
-        const csvData = await getInventarioCsv(currentYear, currentMonth);
+        const response = await fetch(
+          `/api/s3/inventario?year=${currentYear}&month=${currentMonth}`
+        );
 
-        Papa.parse<ParsedCSVData>(csvData, {
-          header: true,
-          skipEmptyLines: true,
-          dynamicTyping: false,
-          delimiter: ",",
-          delimitersToGuess: [",", ";", "\t", "|"],
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
 
-          transform: (value, field) => {
-            if (field === "Costo" || field === "Cantidad") {
-              return value
-                .replace(/\s/g, "")
-                .replace(/\$/g, "")
-                .replace(/,/g, ".");
-            }
-            return value;
-          },
+        const jsonData = await response.json();
 
-          complete: (results: Papa.ParseResult<ParsedCSVData>) => {
-            try {
-              console.log("Columnas detectadas:", results.meta.fields);
-              console.log("Datos de muestra:", results.data.slice(0, 3));
+        if (jsonData.error) {
+          throw new Error(jsonData.error);
+        }
 
-              const fieldMap = mapCsvFields(results.meta.fields || []);
-              console.log("Mapeo de campos:", fieldMap);
+        if (!jsonData.data || !Array.isArray(jsonData.data)) {
+          throw new Error("Formato de datos inválido");
+        }
 
-              let dataToProcess = results.data;
-              if (
-                Object.keys(fieldMap).length > 0 &&
-                Object.keys(fieldMap).length !== results.meta.fields?.length
-              ) {
-                dataToProcess = normalizeCsvData(results.data, fieldMap);
-              }
+        const parsedData = processInventoryData(jsonData.data);
 
-              const parsedData = dataToProcess.map((item: any) => {
-                const costo = parseNumericValue(item.Costo);
-                const cantidad = parseNumericValue(item.Cantidad);
-                const total = costo * cantidad;
-
-                if (isNaN(costo)) {
-                  console.warn("Valor de costo inválido:", item.Costo);
-                }
-                if (isNaN(cantidad)) {
-                  console.warn("Valor de cantidad inválido:", item.Cantidad);
-                }
-
-                return {
-                  OC: item.OC || "",
-                  Tela: item.Tela || "",
-                  Color: item.Color || "",
-                  Costo: costo,
-                  Cantidad: cantidad,
-                  Unidades: (item.Unidades || "") as UnitType,
-                  Total: total,
-                  Ubicacion: item.Ubicacion || "",
-                  Importacion: (item.Importacion || item.Importación || "") as
-                    | "DA"
-                    | "HOY",
-                  FacturaDragonAzteca:
-                    item["Factura Dragón Azteca"] ||
-                    item["Factura Dragon Azteca"] ||
-                    item.FacturaDragonAzteca ||
-                    "",
-                } as InventoryItem;
-              });
-
-              setInventory(parsedData);
-              showToastOnce(
-                "success",
-                "Inventario cargado desde S3 exitosamente"
-              );
-              inventoryLoadedRef.current = true;
-            } catch (err) {
-              console.error("Error parsing CSV from S3:", err);
-              toast.error(
-                "Error al procesar el archivo CSV de S3. Verifique el formato."
-              );
-              setError("Error al procesar el archivo CSV de S3.");
-            }
-          },
-          error: (error: Error) => {
-            console.error("CSV parsing error:", error);
-            toast.error("Error al leer el archivo CSV de S3");
-            setError("Error al leer el archivo CSV de S3.");
-          },
-        });
+        setInventory(parsedData);
+        showToastOnce("success", "Inventario cargado desde S3 exitosamente");
+        inventoryLoadedRef.current = true;
       } catch (error) {
-        console.error("Error loading inventory from S3:", error);
+        console.error("Error loading inventory from API:", error);
         toast.error(
           "Error al cargar el inventario desde S3. Verifica la conexión."
         );
@@ -259,7 +297,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
       }
     }
 
-    loadInventoryFromS3();
+    loadInventoryFromAPI();
 
     return () => {};
   }, [session?.user]);
@@ -269,95 +307,31 @@ const Dashboard: React.FC<DashboardProps> = () => {
       setIsLoadingInventory(true);
       toast.info(`Cargando inventario de ${getMonthName(month)} ${year}...`);
 
-      const csvData = await getInventarioCsv(year, month);
+      const response = await fetch(
+        `/api/s3/inventario?year=${year}&month=${month}`
+      );
 
-      Papa.parse<ParsedCSVData>(csvData, {
-        header: true,
-        skipEmptyLines: true,
-        dynamicTyping: false,
-        delimiter: ",",
-        delimitersToGuess: [",", ";", "\t", "|"],
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
 
-        transform: (value, field) => {
-          if (field === "Costo" || field === "Cantidad") {
-            return value
-              .replace(/\s/g, "")
-              .replace(/\$/g, "")
-              .replace(/,/g, ".");
-          }
-          return value;
-        },
+      const jsonData = await response.json();
 
-        complete: (results: Papa.ParseResult<ParsedCSVData>) => {
-          try {
-            console.log(
-              `Columnas en CSV de ${month}/${year}:`,
-              results.meta.fields
-            );
-            console.log("Datos de muestra:", results.data.slice(0, 3));
+      if (jsonData.error) {
+        throw new Error(jsonData.error);
+      }
 
-            const fieldMap = mapCsvFields(results.meta.fields || []);
-            console.log("Mapeo de campos:", fieldMap);
+      if (!jsonData.data || !Array.isArray(jsonData.data)) {
+        throw new Error("Formato de datos inválido");
+      }
 
-            let dataToProcess = results.data;
-            if (
-              Object.keys(fieldMap).length > 0 &&
-              Object.keys(fieldMap).length !== results.meta.fields?.length
-            ) {
-              dataToProcess = normalizeCsvData(results.data, fieldMap);
-            }
+      const parsedData = processInventoryData(jsonData.data);
 
-            const parsedData = dataToProcess.map((item: any) => {
-              const costo = parseNumericValue(item.Costo);
-              const cantidad = parseNumericValue(item.Cantidad);
-              const total = costo * cantidad;
-
-              if (isNaN(costo)) {
-                console.warn("Valor de costo inválido:", item.Costo);
-              }
-              if (isNaN(cantidad)) {
-                console.warn("Valor de cantidad inválido:", item.Cantidad);
-              }
-
-              return {
-                OC: item.OC || "",
-                Tela: item.Tela || "",
-                Color: item.Color || "",
-                Costo: costo,
-                Cantidad: cantidad,
-                Unidades: (item.Unidades || "") as UnitType,
-                Total: total,
-                Ubicacion: item.Ubicacion || "",
-                Importacion: (item.Importacion || item.Importación || "") as
-                  | "DA"
-                  | "HOY",
-                FacturaDragonAzteca:
-                  item["Factura Dragón Azteca"] ||
-                  item["Factura Dragon Azteca"] ||
-                  item.FacturaDragonAzteca ||
-                  "",
-              } as InventoryItem;
-            });
-
-            setInventory(parsedData);
-            toast.success(
-              `Inventario de ${getMonthName(
-                month
-              )} ${year} cargado exitosamente`
-            );
-            setShowHistory(true);
-          } catch (err) {
-            console.error("Error parsing historical CSV:", err);
-            toast.error(
-              "Error al procesar el archivo CSV histórico. Verifique el formato."
-            );
-          }
-        },
-        error: (error: Error) => {
-          console.error("Historical CSV parsing error:", error);
-          toast.error("Error al leer el archivo CSV histórico");
-        },
-      });
+      setInventory(parsedData);
+      toast.success(
+        `Inventario de ${getMonthName(month)} ${year} cargado exitosamente`
+      );
+      setShowHistory(true);
     } catch (error) {
       console.error("Error loading historical inventory:", error);
       toast.error(
@@ -442,11 +416,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
       complete: (results: Papa.ParseResult<ParsedCSVData>) => {
         try {
-          console.log("Columnas detectadas:", results.meta.fields);
-          console.log("Datos de muestra:", results.data.slice(0, 3));
-
           const fieldMap = mapCsvFields(results.meta.fields || []);
-          console.log("Mapeo de campos:", fieldMap);
 
           let dataToProcess = results.data;
           if (
@@ -456,37 +426,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
             dataToProcess = normalizeCsvData(results.data, fieldMap);
           }
 
-          const parsedData = dataToProcess.map((item: any) => {
-            const costo = parseNumericValue(item.Costo);
-            const cantidad = parseNumericValue(item.Cantidad);
-            const total = costo * cantidad;
-
-            if (isNaN(costo)) {
-              console.warn("Valor de costo inválido:", item.Costo);
-            }
-            if (isNaN(cantidad)) {
-              console.warn("Valor de cantidad inválido:", item.Cantidad);
-            }
-
-            return {
-              OC: item.OC || "",
-              Tela: item.Tela || "",
-              Color: item.Color || "",
-              Costo: costo,
-              Cantidad: cantidad,
-              Unidades: (item.Unidades || "") as UnitType,
-              Total: total,
-              Ubicacion: item.Ubicacion || "",
-              Importacion: (item.Importacion || item.Importación || "") as
-                | "DA"
-                | "HOY",
-              FacturaDragonAzteca:
-                item["Factura Dragón Azteca"] ||
-                item["Factura Dragon Azteca"] ||
-                item.FacturaDragonAzteca ||
-                "",
-            } as InventoryItem;
-          });
+          const parsedData = processInventoryData(dataToProcess);
 
           setInventory(parsedData);
           toast.success("Archivo cargado exitosamente");
@@ -504,14 +444,12 @@ const Dashboard: React.FC<DashboardProps> = () => {
     });
   };
 
-  // Si estamos en un dispositivo móvil, mostrar pantalla de bloqueo
   if (isMobile) {
     return (
       <LockScreen inventory={inventory} filters={filters} isAdmin={isAdmin} />
     );
   }
 
-  // Si estamos mostrando el dashboard de pedidos, renderizamos solo ese componente
   if (showPedidosDashboard) {
     return <PedidosDashboard onBack={handleBackFromPedidosDashboard} />;
   }
@@ -590,15 +528,12 @@ const Dashboard: React.FC<DashboardProps> = () => {
           </Alert>
         )}
 
-        {/* KeyMetricsSection - Solo para admin */}
         {isAdmin && (
           <KeyMetricsSection inventory={inventory} filters={filters} />
         )}
 
-        {/* NUEVO: PendingFabricsCard - Solo para admin */}
         <PendingFabricsCard setInventory={setInventory} isAdmin={isAdmin} />
 
-        {/* InventoryCard principal */}
         <InventoryCard
           inventory={inventory}
           setInventory={setInventory}
@@ -622,7 +557,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
           isLoading={isLoadingInventory}
         />
 
-        {/* Resto de componentes - Solo para admin */}
         {isAdmin && (
           <VisualizationsCard inventory={inventory} filters={filters} />
         )}
@@ -636,7 +570,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
           />
         )}
 
-        {/* Dialogs */}
         <NewOrderDialog
           open={openNewOrder}
           setOpen={setOpenNewOrder}
@@ -668,3 +601,5 @@ const Dashboard: React.FC<DashboardProps> = () => {
 };
 
 export default Dashboard;
+
+export { processInventoryData };

@@ -114,6 +114,227 @@ interface UploadResult {
   fileUrl: string;
 }
 
+// Función mejorada para procesar datos de inventario y determinar ubicación
+function processInventoryData(data: any[]): InventoryItem[] {
+  console.log(
+    "🔄 [InventoryCard] Iniciando processInventoryData con",
+    data.length,
+    "elementos"
+  );
+  const processedItems: InventoryItem[] = [];
+
+  data.forEach((item: any, index: number) => {
+    console.log(
+      `\n--- [InventoryCard] Procesando item ${index + 1}/${data.length} ---`
+    );
+    console.log("Tela:", item.Tela, "Color:", item.Color);
+    console.log("Datos raw:", {
+      OC: item.OC,
+      Ubicacion: item.Ubicacion,
+      almacen: item.almacen,
+      CDMX: item.CDMX,
+      MID: item.MID,
+      Cantidad: item.Cantidad,
+    });
+
+    const costo = parseNumericValue(item.Costo);
+    const cantidad = parseNumericValue(item.Cantidad);
+
+    if (isNaN(costo)) {
+      console.warn("⚠️ [InventoryCard] Valor de costo inválido:", item.Costo);
+    }
+    if (isNaN(cantidad)) {
+      console.warn(
+        "⚠️ [InventoryCard] Valor de cantidad inválido:",
+        item.Cantidad
+      );
+    }
+
+    // Determinar ubicación basada en las columnas disponibles
+    let ubicacion = "";
+    let cantidadFinal = cantidad;
+
+    // CASO 1: Priorizar la columna 'almacen' si existe (datos más recientes)
+    if (item.almacen) {
+      ubicacion = item.almacen === "CDMX" ? "CDMX" : "Mérida";
+      console.log(
+        "✅ [InventoryCard] Usando columna 'almacen':",
+        item.almacen,
+        "→",
+        ubicacion
+      );
+    }
+    // CASO 2: Si no hay columna almacen, usar las columnas CDMX y MID
+    else if (item.CDMX !== undefined && item.MID !== undefined) {
+      const cantidadCDMX = parseNumericValue(item.CDMX);
+      const cantidadMID = parseNumericValue(item.MID);
+
+      console.log(
+        "📊 [InventoryCard] Cantidades - CDMX:",
+        cantidadCDMX,
+        "MID:",
+        cantidadMID
+      );
+
+      // Si hay cantidad en ambas ubicaciones, crear entradas separadas
+      if (cantidadCDMX > 0 && cantidadMID > 0) {
+        console.log("🔄 [InventoryCard] Creando dos entradas separadas");
+
+        // Entrada para CDMX
+        const cdmxItem = {
+          OC: item.OC || "",
+          Tela: item.Tela || "",
+          Color: item.Color || "",
+          Costo: costo,
+          Cantidad: cantidadCDMX,
+          Unidades: (item.Unidades || "") as UnitType,
+          Total: costo * cantidadCDMX,
+          Ubicacion: "CDMX",
+          Importacion: (item.Importacion || item.Importación || "") as
+            | "DA"
+            | "HOY",
+          FacturaDragonAzteca:
+            item["Factura Dragón Azteca"] ||
+            item["Factura Dragon Azteca"] ||
+            item.FacturaDragonAzteca ||
+            "",
+        };
+
+        console.log("✅ [InventoryCard] Item CDMX creado:", cdmxItem);
+        processedItems.push(cdmxItem);
+
+        // Entrada para Mérida
+        const meridaItem = {
+          OC: item.OC || "",
+          Tela: item.Tela || "",
+          Color: item.Color || "",
+          Costo: costo,
+          Cantidad: cantidadMID,
+          Unidades: (item.Unidades || "") as UnitType,
+          Total: costo * cantidadMID,
+          Ubicacion: "Mérida",
+          Importacion: (item.Importacion || item.Importación || "") as
+            | "DA"
+            | "HOY",
+          FacturaDragonAzteca:
+            item["Factura Dragón Azteca"] ||
+            item["Factura Dragon Azteca"] ||
+            item.FacturaDragonAzteca ||
+            "",
+        };
+
+        console.log("✅ [InventoryCard] Item Mérida creado:", meridaItem);
+        processedItems.push(meridaItem);
+
+        return; // No agregar más entradas para este item
+      }
+      // Solo hay cantidad en CDMX
+      else if (cantidadCDMX > 0) {
+        ubicacion = "CDMX";
+        cantidadFinal = cantidadCDMX;
+        console.log(
+          "✅ [InventoryCard] Solo CDMX tiene cantidad:",
+          cantidadCDMX
+        );
+      }
+      // Solo hay cantidad en Mérida
+      else if (cantidadMID > 0) {
+        ubicacion = "Mérida";
+        cantidadFinal = cantidadMID;
+        console.log(
+          "✅ [InventoryCard] Solo Mérida tiene cantidad:",
+          cantidadMID
+        );
+      }
+      // No hay cantidad en ninguna ubicación específica
+      else {
+        ubicacion = item.Ubicacion || "";
+        console.log(
+          "⚠️ [InventoryCard] No hay cantidad específica, usando ubicación original:",
+          ubicacion
+        );
+      }
+    }
+    // CASO 3: Si no hay columnas CDMX/MID ni almacen, usar la ubicación original
+    else {
+      ubicacion = item.Ubicacion || "";
+
+      // SOLUCIÓN TEMPORAL: Si no hay ubicación, asignar una por defecto
+      if (!ubicacion) {
+        // Buscar patrones en el OC para determinar ubicación
+        const oc = (item.OC || "").toLowerCase();
+
+        // Reglas básicas basadas en patrones observados
+        if (
+          oc.includes("ttl-04-25") ||
+          oc.includes("ttl-02-2025") ||
+          oc.includes("dr-05-25")
+        ) {
+          ubicacion = "CDMX"; // Órdenes más recientes típicamente van a CDMX
+        } else if (oc.includes("dsma-03-23") || oc.includes("dsma-04-23")) {
+          ubicacion = "Mérida"; // Órdenes más antiguas pueden estar en Mérida
+        } else {
+          ubicacion = "CDMX"; // Por defecto CDMX para órdenes nuevas
+        }
+
+        console.log(
+          "🔧 [TEMPORAL] [InventoryCard] Asignando ubicación por patrón OC:",
+          oc,
+          "→",
+          ubicacion
+        );
+      }
+
+      console.log(
+        "⚠️ [InventoryCard] No hay columnas CDMX/MID ni almacen, usando ubicación:",
+        ubicacion
+      );
+    }
+
+    // Crear la entrada del inventario
+    const finalItem = {
+      OC: item.OC || "",
+      Tela: item.Tela || "",
+      Color: item.Color || "",
+      Costo: costo,
+      Cantidad: cantidadFinal,
+      Unidades: (item.Unidades || "") as UnitType,
+      Total: costo * cantidadFinal,
+      Ubicacion: ubicacion,
+      Importacion: (item.Importacion || item.Importación || "") as "DA" | "HOY",
+      FacturaDragonAzteca:
+        item["Factura Dragón Azteca"] ||
+        item["Factura Dragon Azteca"] ||
+        item.FacturaDragonAzteca ||
+        "",
+    };
+
+    console.log("✅ [InventoryCard] Item final creado:", {
+      Tela: finalItem.Tela,
+      Color: finalItem.Color,
+      Cantidad: finalItem.Cantidad,
+      Ubicacion: finalItem.Ubicacion,
+    });
+
+    processedItems.push(finalItem);
+  });
+
+  console.log(
+    "🎉 [InventoryCard] processInventoryData completado.",
+    processedItems.length,
+    "items procesados"
+  );
+  console.log("📊 [InventoryCard] Resumen de ubicaciones:");
+  const ubicacionCount = processedItems.reduce((acc, item) => {
+    acc[item.Ubicacion || "Sin ubicación"] =
+      (acc[item.Ubicacion || "Sin ubicación"] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  console.log(ubicacionCount);
+
+  return processedItems;
+}
+
 export const InventoryCard: React.FC<InventoryCardProps> = ({
   inventory,
   setInventory,
@@ -136,6 +357,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
   const [openSellDialog, setOpenSellDialog] = useState(false);
   const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [openTransferDialog, setOpenTransferDialog] = useState(false);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(
     null
   );
@@ -145,12 +367,22 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sellMode, setSellMode] = useState<"manual" | "rolls">("manual");
+  const [transferMode, setTransferMode] = useState<"manual" | "rolls">(
+    "manual"
+  );
   const [packingListData, setPackingListData] = useState<PackingListEntry[]>(
     []
   );
   const [selectedRolls, setSelectedRolls] = useState<number[]>([]);
+  const [selectedTransferRolls, setSelectedTransferRolls] = useState<number[]>(
+    []
+  );
   const [isLoadingPackingList, setIsLoadingPackingList] = useState(false);
+  const [isLoadingTransferList, setIsLoadingTransferList] = useState(false);
   const [availableRolls, setAvailableRolls] = useState<Roll[]>([]);
+  const [availableTransferRolls, setAvailableTransferRolls] = useState<Roll[]>(
+    []
+  );
   const [selectedLot, setSelectedLot] = useState<number | null>(null);
   const [availableLots, setAvailableLots] = useState<number[]>([]);
   const [rollsGroupedByLot, setRollsGroupedByLot] = useState<
@@ -319,10 +551,72 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
+  const loadTransferPackingListData = async (tela: string, color: string) => {
+    setIsLoadingTransferList(true);
+    try {
+      const response = await fetch(
+        `/api/packing-list/get-rolls?tela=${encodeURIComponent(
+          tela
+        )}&color=${encodeURIComponent(color)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Error al cargar los datos del packing list");
+      }
+
+      const data: PackingListEntry[] = await response.json();
+
+      const matchingEntries = data.filter(
+        (entry) => entry.fabric_type === tela && entry.color === color
+      );
+
+      if (matchingEntries.length > 0) {
+        const groupedByLot = new Map<number, Roll[]>();
+        const lots: number[] = [];
+
+        matchingEntries.forEach((entry) => {
+          if (!lots.includes(entry.lot)) {
+            lots.push(entry.lot);
+          }
+
+          const cdmxRolls = entry.rolls.filter(
+            (roll) => roll.almacen === "CDMX"
+          );
+          if (cdmxRolls.length > 0) {
+            const existingRolls = groupedByLot.get(entry.lot) || [];
+            groupedByLot.set(entry.lot, [...existingRolls, ...cdmxRolls]);
+          }
+        });
+
+        setAvailableLots(lots.sort((a, b) => a - b));
+        setRollsGroupedByLot(groupedByLot);
+
+        if (lots.length > 0) {
+          setSelectedLot(lots[0]);
+          setAvailableTransferRolls(groupedByLot.get(lots[0]) || []);
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar packing list para traslado:", error);
+      toast.error("Error al cargar los datos de los rollos para traslado");
+    } finally {
+      setIsLoadingTransferList(false);
+    }
+  };
+
   const handleLotChange = (lot: number) => {
     setSelectedLot(lot);
     setAvailableRolls(rollsGroupedByLot.get(lot) || []);
     setSelectedRolls([]);
+  };
+
+  const handleLotChangeForTransfer = (lot: number) => {
+    setSelectedLot(lot);
+    const cdmxRolls =
+      rollsGroupedByLot.get(lot)?.filter((roll) => roll.almacen === "CDMX") ||
+      [];
+    setAvailableTransferRolls(cdmxRolls);
+    setSelectedTransferRolls([]);
   };
 
   const calculateTotalFromRolls = () => {
@@ -331,8 +625,24 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       .reduce((total, roll) => total + (roll.kg || roll.mts || 0), 0);
   };
 
+  const calculateTotalFromTransferRolls = () => {
+    return availableTransferRolls
+      .filter((_, index) => selectedTransferRolls.includes(index))
+      .reduce((total, roll) => total + (roll.kg || roll.mts || 0), 0);
+  };
+
   const handleRollSelection = (rollIndex: number) => {
     setSelectedRolls((prev) => {
+      if (prev.includes(rollIndex)) {
+        return prev.filter((i) => i !== rollIndex);
+      } else {
+        return [...prev, rollIndex];
+      }
+    });
+  };
+
+  const handleTransferRollSelection = (rollIndex: number) => {
+    setSelectedTransferRolls((prev) => {
       if (prev.includes(rollIndex)) {
         return prev.filter((i) => i !== rollIndex);
       } else {
@@ -361,6 +671,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setOpenAddDialog(true);
   };
 
+  const handleOpenTransferDialog = (index: number) => {
+    setSelectedItemIndex(index);
+    setQuantityToUpdate(0);
+    setTransferMode("manual");
+    setSelectedTransferRolls([]);
+    setAvailableTransferRolls([]);
+    setSelectedLot(null);
+    setOpenTransferDialog(true);
+
+    if (inventory[index]) {
+      loadTransferPackingListData(
+        inventory[index].Tela,
+        inventory[index].Color
+      );
+    }
+  };
+
   const handleSellItem = async () => {
     if (selectedItemIndex !== null) {
       const item = inventory[selectedItemIndex];
@@ -386,6 +713,16 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return;
       }
 
+      // Preparar datos para la actualización
+      const oldItem = {
+        OC: item.OC,
+        Tela: item.Tela,
+        Color: item.Color,
+        Ubicacion: item.Ubicacion,
+        Cantidad: item.Cantidad,
+      };
+
+      // Actualizar estado local
       const updatedInventory = [...inventory];
       updatedInventory[selectedItemIndex] = {
         ...item,
@@ -395,6 +732,39 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
       setInventory(updatedInventory);
 
+      // Intentar actualizar el inventario en S3
+      try {
+        const inventoryUpdateResponse = await fetch(
+          "/api/s3/inventario/update",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              oldItem,
+              // No hay newItem en ventas, solo se reduce la cantidad
+              quantityChange: quantityToSell,
+            }),
+          }
+        );
+
+        if (!inventoryUpdateResponse.ok) {
+          const errorData = await inventoryUpdateResponse.json();
+          throw new Error(
+            errorData.error || "Error al actualizar inventario en S3"
+          );
+        }
+
+        console.log("Inventario actualizado en S3 correctamente");
+      } catch (inventoryError) {
+        console.error("Error al actualizar inventario en S3:", inventoryError);
+        toast.error(
+          "La venta se realizó localmente pero hubo un error al guardarla en S3. Los cambios se perderán al recargar la página."
+        );
+      }
+
+      // Actualizar packing list si es modo rolls
       if (sellMode === "rolls" && selectedRolls.length > 0) {
         try {
           const response = await fetch("/api/packing-list/update-rolls", {
@@ -424,22 +794,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           await loadPackingListData(item.Tela, item.Color);
 
           toast.success(
-            "Rollos vendidos y packing list actualizado correctamente"
+            "Rollos vendidos y tanto inventario como packing list actualizados correctamente"
           );
         } catch (error) {
           console.error("Error al actualizar el packing list:", error);
           toast.error(
-            "Los rollos se vendieron pero hubo un error al actualizar el packing list"
+            "El inventario fue actualizado pero hubo un error al actualizar el packing list"
           );
         }
+      } else {
+        toast.success(
+          `Se vendieron ${quantityToSell.toFixed(2)} ${item.Unidades} de ${
+            item.Tela
+          } ${item.Color} y se guardó en S3`
+        );
       }
 
       setOpenSellDialog(false);
-      toast.success(
-        `Se vendieron ${quantityToSell.toFixed(2)} ${item.Unidades} de ${
-          item.Tela
-        } ${item.Color}`
-      );
     }
   };
 
@@ -459,6 +830,280 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       toast.success(
         `Se agregaron ${quantityToUpdate} ${item.Unidades} de ${item.Tela} ${item.Color}`
       );
+    }
+  };
+
+  const handleTransferItem = async () => {
+    if (selectedItemIndex !== null) {
+      const item = inventory[selectedItemIndex];
+
+      console.log("🚀 INICIANDO TRASLADO:", {
+        item: {
+          OC: item.OC,
+          Tela: item.Tela,
+          Color: item.Color,
+          Ubicacion: item.Ubicacion,
+          Cantidad: item.Cantidad,
+        },
+        transferMode,
+        selectedTransferRolls: selectedTransferRolls.length,
+      });
+
+      if (item.Ubicacion !== "CDMX") {
+        toast.error("Solo se pueden trasladar productos que están en CDMX");
+        return;
+      }
+
+      let quantityToTransfer = 0;
+
+      if (transferMode === "manual") {
+        quantityToTransfer = quantityToUpdate;
+      } else if (transferMode === "rolls" && selectedTransferRolls.length > 0) {
+        quantityToTransfer = calculateTotalFromTransferRolls();
+      }
+
+      if (quantityToTransfer <= 0) {
+        toast.error(
+          "Por favor, seleccione una cantidad válida o rollos para trasladar"
+        );
+        return;
+      }
+
+      if (quantityToTransfer > item.Cantidad) {
+        toast.error(
+          "La cantidad a trasladar no puede ser mayor que el inventario disponible en CDMX"
+        );
+        return;
+      }
+
+      // Preparar datos para la actualización
+      const oldItem = {
+        OC: item.OC || "",
+        Tela: item.Tela || "",
+        Color: item.Color || "",
+        Ubicacion: item.Ubicacion || "",
+        Cantidad: item.Cantidad,
+      };
+
+      const newMeridaItem = {
+        OC: item.OC || "",
+        Tela: item.Tela || "",
+        Color: item.Color || "",
+        Ubicacion: "Mérida",
+        Cantidad: quantityToTransfer,
+        Costo: item.Costo,
+        Unidades: item.Unidades || "",
+        Total: item.Costo * quantityToTransfer,
+        Importacion: item.Importacion || "",
+        FacturaDragonAzteca: item.FacturaDragonAzteca || "",
+      };
+
+      console.log("📊 DATOS DE ACTUALIZACIÓN:", {
+        oldItem,
+        newMeridaItem,
+        quantityChange: quantityToTransfer,
+      });
+
+      // Actualizar estado local primero (para feedback inmediato)
+      const updatedInventory = [...inventory];
+
+      updatedInventory[selectedItemIndex] = {
+        ...item,
+        Cantidad: item.Cantidad - quantityToTransfer,
+        Total: item.Costo * (item.Cantidad - quantityToTransfer),
+      };
+
+      const meridaIndex = updatedInventory.findIndex(
+        (invItem) =>
+          invItem.Tela === item.Tela &&
+          invItem.Color === item.Color &&
+          invItem.Ubicacion === "Mérida" &&
+          invItem.OC === item.OC
+      );
+
+      if (meridaIndex >= 0) {
+        updatedInventory[meridaIndex] = {
+          ...updatedInventory[meridaIndex],
+          Cantidad: updatedInventory[meridaIndex].Cantidad + quantityToTransfer,
+          Total:
+            updatedInventory[meridaIndex].Costo *
+            (updatedInventory[meridaIndex].Cantidad + quantityToTransfer),
+        };
+      } else {
+        updatedInventory.push(newMeridaItem);
+      }
+
+      setInventory(updatedInventory);
+
+      // Variables para rastrear el estado de las operaciones
+      let inventoryUpdateSuccess = false;
+      let packingListUpdateSuccess = false;
+
+      // 1. Actualizar inventario en S3
+      try {
+        console.log("📦 ACTUALIZANDO INVENTARIO EN S3...");
+        const inventoryUpdateResponse = await fetch(
+          "/api/s3/inventario/update",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              oldItem,
+              newItem: newMeridaItem,
+              quantityChange: quantityToTransfer,
+            }),
+          }
+        );
+
+        const inventoryResponseData = await inventoryUpdateResponse.json();
+        console.log("📦 RESPUESTA INVENTARIO:", inventoryResponseData);
+
+        if (!inventoryUpdateResponse.ok) {
+          // Manejar errores específicos del inventario
+          if (inventoryUpdateResponse.status === 404) {
+            throw new Error(
+              `No se encontró el item en el inventario S3. Criterios de búsqueda: ${JSON.stringify(
+                inventoryResponseData.searchCriteria || oldItem
+              )}`
+            );
+          } else {
+            throw new Error(
+              inventoryResponseData.error ||
+                "Error al actualizar inventario en S3"
+            );
+          }
+        }
+
+        console.log("✅ INVENTARIO ACTUALIZADO EN S3");
+        inventoryUpdateSuccess = true;
+      } catch (inventoryError) {
+        console.error(
+          "❌ ERROR AL ACTUALIZAR INVENTARIO EN S3:",
+          inventoryError
+        );
+        toast.error(
+          `Error en inventario S3: ${
+            inventoryError instanceof Error
+              ? inventoryError.message
+              : String(inventoryError)
+          }`
+        );
+      }
+
+      // 2. Actualizar packing list si es modo rolls
+      if (transferMode === "rolls" && selectedTransferRolls.length > 0) {
+        try {
+          console.log("📋 ACTUALIZANDO PACKING LIST...", {
+            tela: item.Tela,
+            color: item.Color,
+            lot: selectedLot,
+            transferRolls: selectedTransferRolls.map(
+              (index) => availableTransferRolls[index].roll_number
+            ),
+          });
+
+          const response = await fetch("/api/packing-list/transfer-rolls", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              tela: item.Tela,
+              color: item.Color,
+              lot: selectedLot,
+              transferRolls: selectedTransferRolls.map(
+                (index) => availableTransferRolls[index].roll_number
+              ),
+            }),
+          });
+
+          const packingListResponseData = await response.json();
+          console.log("📋 RESPUESTA PACKING LIST:", packingListResponseData);
+
+          if (!response.ok) {
+            // Manejar errores específicos del packing list
+            if (
+              response.status === 404 &&
+              packingListResponseData.nonExistentRolls
+            ) {
+              throw new Error(
+                `Los rollos ${packingListResponseData.nonExistentRolls.join(
+                  ", "
+                )} no existen en el packing list. Rollos disponibles: ${
+                  packingListResponseData.availableRolls?.join(", ") ||
+                  "ninguno"
+                }`
+              );
+            } else if (
+              response.status === 400 &&
+              packingListResponseData.rollsNotInCDMX
+            ) {
+              throw new Error(
+                `Los siguientes rollos no están en CDMX: ${packingListResponseData.rollsNotInCDMX
+                  .map((r: any) => `#${r.roll_number} (${r.current_location})`)
+                  .join(", ")}`
+              );
+            } else {
+              throw new Error(
+                packingListResponseData.error ||
+                  "Error al actualizar el packing list en el servidor"
+              );
+            }
+          }
+
+          const result = packingListResponseData;
+          console.log("✅ PACKING LIST ACTUALIZADO:", result);
+
+          await loadTransferPackingListData(item.Tela, item.Color);
+          packingListUpdateSuccess = true;
+        } catch (error) {
+          console.error("❌ ERROR AL ACTUALIZAR PACKING LIST:", error);
+          toast.error(
+            `Error en packing list: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      } else {
+        packingListUpdateSuccess = true; // No hay packing list que actualizar
+      }
+
+      // 3. Mostrar mensaje final basado en los estados
+      if (inventoryUpdateSuccess && packingListUpdateSuccess) {
+        if (transferMode === "rolls") {
+          toast.success(
+            "✅ Rollos trasladados correctamente. Tanto inventario como packing list fueron actualizados."
+          );
+        } else {
+          toast.success(
+            `✅ Se trasladaron ${quantityToTransfer.toFixed(2)} ${
+              item.Unidades
+            } de ${item.Tela} ${item.Color} de CDMX a Mérida y se guardó en S3`
+          );
+        }
+      } else if (inventoryUpdateSuccess && !packingListUpdateSuccess) {
+        toast.warning(
+          "⚠️ El inventario fue actualizado correctamente, pero hubo un error al actualizar el packing list."
+        );
+      } else if (!inventoryUpdateSuccess && packingListUpdateSuccess) {
+        toast.warning(
+          "⚠️ El packing list fue actualizado, pero hubo un error al actualizar el inventario en S3."
+        );
+      } else {
+        toast.error(
+          "❌ Hubo errores al actualizar tanto el inventario como el packing list. Los cambios solo están en memoria."
+        );
+      }
+
+      setOpenTransferDialog(false);
+
+      console.log("🏁 TRASLADO COMPLETADO:", {
+        inventoryUpdateSuccess,
+        packingListUpdateSuccess,
+        quantityTransferred: quantityToTransfer,
+      });
     }
   };
 
@@ -689,54 +1334,33 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         complete: (results: Papa.ParseResult<ParsedCSVData>) => {
           try {
             console.log(
-              `Columnas en CSV de ${month}/${year}:`,
+              `📊 [InventoryCard] Columnas en CSV de ${month}/${year}:`,
               results.meta.fields
             );
-            console.log("Ejemplo de datos:", results.data.slice(0, 3));
+            console.log(
+              "📊 [InventoryCard] Ejemplo de datos:",
+              results.data.slice(0, 3)
+            );
 
             const fieldMap = mapCsvFields(results.meta.fields || []);
-            console.log("Mapeo de campos:", fieldMap);
+            console.log("📊 [InventoryCard] Mapeo de campos:", fieldMap);
 
             let dataToProcess = results.data;
             if (
               Object.keys(fieldMap).length > 0 &&
               Object.keys(fieldMap).length !== results.meta.fields?.length
             ) {
+              console.log("🔄 [InventoryCard] Normalizando datos CSV...");
               dataToProcess = normalizeCsvData(results.data, fieldMap);
             }
 
-            const parsedData = dataToProcess.map((item: any) => {
-              const costo = parseNumericValue(item.Costo);
-              const cantidad = parseNumericValue(item.Cantidad);
-              const total = costo * cantidad;
+            console.log("🔄 [InventoryCard] Procesando datos históricos...");
+            // Usar la nueva función de procesamiento
+            const parsedData = processInventoryData(dataToProcess);
 
-              if (isNaN(costo)) {
-                console.warn("Valor de costo inválido:", item.Costo);
-              }
-              if (isNaN(cantidad)) {
-                console.warn("Valor de cantidad inválido:", item.Cantidad);
-              }
-
-              return {
-                OC: item.OC || "",
-                Tela: item.Tela || "",
-                Color: item.Color || "",
-                Costo: costo,
-                Cantidad: cantidad,
-                Unidades: (item.Unidades || "") as UnitType,
-                Total: total,
-                Ubicacion: item.Ubicacion || "",
-                Importacion: (item.Importacion || item.Importación || "") as
-                  | "DA"
-                  | "HOY",
-                FacturaDragonAzteca:
-                  item["Factura Dragón Azteca"] ||
-                  item["Factura Dragon Azteca"] ||
-                  item.FacturaDragonAzteca ||
-                  "",
-              } as InventoryItem;
-            });
-
+            console.log(
+              "✅ [InventoryCard] Datos históricos procesados, estableciendo inventario..."
+            );
             setInventory(parsedData);
             toast.success(
               `Inventario de ${getMonthName(
@@ -1349,18 +1973,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="CDMX">CDMX</SelectItem>
                       <SelectItem value="Mérida">Mérida</SelectItem>
-                      <SelectItem value="Edo Mex">Edo Mex</SelectItem>
-                      {uniqueUbicaciones
-                        .filter(
-                          (ubicacion) =>
-                            ubicacion !== "Mérida" && ubicacion !== "Edo Mex"
-                        )
-                        .map((ubicacion) => (
-                          <SelectItem key={ubicacion} value={ubicacion}>
-                            {ubicacion}
-                          </SelectItem>
-                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1543,14 +2157,27 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                         size="sm"
                                         variant="outline"
                                         onClick={() =>
-                                          handleOpenAddDialog(index)
+                                          handleOpenTransferDialog(index)
                                         }
+                                        disabled={item.Ubicacion !== "CDMX"}
                                       >
-                                        <PlusIcon className="h-4 w-4" />
+                                        <svg
+                                          className="h-4 w-4"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          stroke="currentColor"
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                                          />
+                                        </svg>
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      <p>Agregar</p>
+                                      <p>Trasladar a Mérida</p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -1975,6 +2602,305 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               }
             >
               Confirmar Venta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openTransferDialog} onOpenChange={setOpenTransferDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <svg
+                className="mr-2 h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                />
+              </svg>
+              Trasladar a Mérida
+            </DialogTitle>
+            <DialogDescription>
+              {selectedItemIndex !== null &&
+                `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} (Desde CDMX)`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex gap-4">
+              <Button
+                variant={transferMode === "manual" ? "default" : "outline"}
+                onClick={() => setTransferMode("manual")}
+                className="flex-1"
+              >
+                <Input className="mr-2 h-4 w-4" />
+                Cantidad Manual
+              </Button>
+              <Button
+                variant={transferMode === "rolls" ? "default" : "outline"}
+                onClick={() => setTransferMode("rolls")}
+                className="flex-1"
+              >
+                <BoxIcon className="mr-2 h-4 w-4" />
+                Por Rollos Específicos
+              </Button>
+            </div>
+
+            {transferMode === "manual" ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="transfer-quantity" className="text-right">
+                    Cantidad
+                  </Label>
+                  <Input
+                    id="transfer-quantity"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quantityToUpdate}
+                    onChange={(e) =>
+                      setQuantityToUpdate(Number(e.target.value))
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {isLoadingTransferList ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2Icon className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : availableTransferRolls.length > 0 ? (
+                  <>
+                    {availableLots.length > 1 && (
+                      <div className="space-y-2">
+                        <Label>Seleccionar Lote</Label>
+                        <Select
+                          value={selectedLot?.toString()}
+                          onValueChange={(value) =>
+                            handleLotChangeForTransfer(Number(value))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccione un lote" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableLots.map((lot) => {
+                              const cdmxRolls =
+                                rollsGroupedByLot
+                                  .get(lot)
+                                  ?.filter((roll) => roll.almacen === "CDMX") ||
+                                [];
+                              return cdmxRolls.length > 0 ? (
+                                <SelectItem key={lot} value={lot.toString()}>
+                                  Lote {lot} ({cdmxRolls.length} rollos en CDMX)
+                                </SelectItem>
+                              ) : null;
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div className="text-sm text-gray-600">
+                      Lote: {selectedLot} - {availableTransferRolls.length}{" "}
+                      rollos disponibles en CDMX
+                    </div>
+
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setSelectedTransferRolls(
+                            availableTransferRolls.map((_, i) => i)
+                          )
+                        }
+                      >
+                        Todos
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedTransferRolls([])}
+                      >
+                        Limpiar
+                      </Button>
+                    </div>
+
+                    <div className="border rounded-lg max-h-60 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="p-1 text-left text-sm">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  selectedTransferRolls.length ===
+                                    availableTransferRolls.length &&
+                                  availableTransferRolls.length > 0
+                                }
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedTransferRolls(
+                                      availableTransferRolls.map((_, i) => i)
+                                    );
+                                  } else {
+                                    setSelectedTransferRolls([]);
+                                  }
+                                }}
+                              />
+                            </th>
+                            <th className="p-1 text-left text-sm">Rollo #</th>
+                            <th className="p-1 text-left text-sm">Almacén</th>
+                            <th className="p-1 text-left text-sm">
+                              {availableTransferRolls[0]?.kg !== undefined
+                                ? "Peso (kg)"
+                                : "Metros"}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {availableTransferRolls.map((roll, index) => (
+                            <tr
+                              key={`transfer-${selectedLot}-${roll.roll_number}-${index}`}
+                              className={`border-b hover:bg-gray-50 cursor-pointer ${
+                                selectedTransferRolls.includes(index)
+                                  ? "bg-blue-50"
+                                  : ""
+                              }`}
+                              onClick={() => handleTransferRollSelection(index)}
+                            >
+                              <td
+                                className="p-1 text-sm"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTransferRolls.includes(
+                                    index
+                                  )}
+                                  onChange={() =>
+                                    handleTransferRollSelection(index)
+                                  }
+                                />
+                              </td>
+                              <td className="p-1 text-sm">
+                                {roll.roll_number}
+                              </td>
+                              <td className="p-1 text-sm">
+                                <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                  {roll.almacen}
+                                </span>
+                              </td>
+                              <td className="p-1 text-sm font-medium">
+                                {roll.kg !== undefined
+                                  ? `${roll.kg} kg`
+                                  : `${roll.mts} mts`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 sticky bottom-0">
+                          <tr>
+                            <td
+                              colSpan={3}
+                              className="p-1 text-right font-medium text-sm"
+                            >
+                              Total a trasladar:
+                            </td>
+                            <td className="p-1 font-bold text-sm">
+                              {calculateTotalFromTransferRolls().toFixed(2)}{" "}
+                              {availableTransferRolls[0]?.kg !== undefined
+                                ? "kg"
+                                : "mts"}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    <div className="bg-green-50 p-2 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm">
+                          Resumen de traslado:
+                        </span>
+                        <span className="text-lg font-bold">
+                          {calculateTotalFromTransferRolls().toFixed(2)}{" "}
+                          {selectedItemIndex !== null &&
+                            inventory[selectedItemIndex]?.Unidades}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {selectedTransferRolls.length} rollo(s) seleccionado(s)
+                        del lote {selectedLot}
+                      </div>
+                      <div className="text-sm mt-2">
+                        <span className="text-gray-600">De CDMX → Mérida</span>
+                      </div>
+                      {selectedItemIndex !== null && (
+                        <div className="text-sm mt-1">
+                          <span className="text-gray-600">
+                            Quedará en CDMX:{" "}
+                          </span>
+                          <span className="font-medium">
+                            {(
+                              inventory[selectedItemIndex].Cantidad -
+                              calculateTotalFromTransferRolls()
+                            ).toFixed(2)}{" "}
+                            {inventory[selectedItemIndex].Unidades}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                    <p>
+                      No se encontraron rollos disponibles en CDMX para esta
+                      tela y color.
+                    </p>
+                    <p className="text-sm mt-2">
+                      Verifique que existan rollos en CDMX para trasladar a
+                      Mérida.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedItemIndex !== null && (
+              <div className="text-sm text-gray-500">
+                Inventario disponible en CDMX:{" "}
+                {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
+                {inventory[selectedItemIndex]?.Unidades}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOpenTransferDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleTransferItem}
+              disabled={
+                (transferMode === "manual" && quantityToUpdate <= 0) ||
+                (transferMode === "rolls" && selectedTransferRolls.length === 0)
+              }
+            >
+              Confirmar Traslado
             </Button>
           </DialogFooter>
         </DialogContent>
