@@ -19,6 +19,7 @@ import {
   UploadIcon,
   FolderOpenIcon,
   CheckCircle,
+  PencilIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -389,6 +390,66 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     Map<number, Roll[]>
   >(new Map());
   const [isProcessingTransfer, setIsProcessingTransfer] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [isEditingInProgress, setIsEditingInProgress] = useState(false);
+
+  const handleOpenEditDialog = (index: number) => {
+    setSelectedItemIndex(index);
+    setEditingItem({ ...inventory[index] });
+    setOpenEditDialog(true);
+  };
+
+  const handleEditItem = async () => {
+    if (selectedItemIndex !== null && editingItem) {
+      setIsEditingInProgress(true);
+
+      const oldItem = {
+        OC: inventory[selectedItemIndex].OC,
+        Tela: inventory[selectedItemIndex].Tela,
+        Color: inventory[selectedItemIndex].Color,
+        Ubicacion: inventory[selectedItemIndex].Ubicacion,
+        Cantidad: inventory[selectedItemIndex].Cantidad,
+      };
+
+      const updatedInventory = [...inventory];
+      updatedInventory[selectedItemIndex] = {
+        ...editingItem,
+        Total: editingItem.Costo * editingItem.Cantidad,
+      };
+
+      setInventory(updatedInventory);
+
+      try {
+        const response = await fetch("/api/s3/inventario/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            oldItem,
+            newItem: editingItem,
+            isEdit: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Error al actualizar inventario");
+        }
+
+        toast.success("Producto actualizado correctamente");
+      } catch (error) {
+        console.error("Error al actualizar inventario:", error);
+        toast.error("Error al actualizar el producto en S3");
+      } finally {
+        setIsEditingInProgress(false);
+      }
+
+      setOpenEditDialog(false);
+      setEditingItem(null);
+    }
+  };
 
   const resetAllFilters = () => {
     setSearchTerm("");
@@ -2152,6 +2213,25 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                         size="sm"
                                         variant="outline"
                                         onClick={() =>
+                                          handleOpenEditDialog(index)
+                                        }
+                                      >
+                                        <PencilIcon className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Editar</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
                                           handleOpenSellDialog(index)
                                         }
                                       >
@@ -2960,6 +3040,195 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               Cancelar
             </Button>
             <Button onClick={handleAddItem}>Confirmar Adición</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Producto</DialogTitle>
+          </DialogHeader>
+
+          {editingItem && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-oc" className="text-right">
+                  OC
+                </Label>
+                <Input
+                  id="edit-oc"
+                  value={editingItem.OC}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, OC: e.target.value })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-tela" className="text-right">
+                  Tela
+                </Label>
+                <Input
+                  id="edit-tela"
+                  value={editingItem.Tela}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, Tela: e.target.value })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-color" className="text-right">
+                  Color
+                </Label>
+                <Input
+                  id="edit-color"
+                  value={editingItem.Color}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, Color: e.target.value })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-costo" className="text-right">
+                  Costo
+                </Label>
+                <Input
+                  id="edit-costo"
+                  type="number"
+                  step="0.01"
+                  value={editingItem.Costo}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      Costo: Number(e.target.value),
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-cantidad" className="text-right">
+                  Cantidad
+                </Label>
+                <Input
+                  id="edit-cantidad"
+                  type="number"
+                  step="0.01"
+                  value={editingItem.Cantidad}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      Cantidad: Number(e.target.value),
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-unidades" className="text-right">
+                  Unidades
+                </Label>
+                <Select
+                  value={editingItem.Unidades}
+                  onValueChange={(value) =>
+                    setEditingItem({
+                      ...editingItem,
+                      Unidades: value as UnitType,
+                    })
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MTS">MTS</SelectItem>
+                    <SelectItem value="KGS">KGS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-ubicacion" className="text-right">
+                  Ubicación
+                </Label>
+                <Select
+                  value={editingItem.Ubicacion}
+                  onValueChange={(value) =>
+                    setEditingItem({ ...editingItem, Ubicacion: value })
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CDMX">CDMX</SelectItem>
+                    <SelectItem value="Mérida">Mérida</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-importacion" className="text-right">
+                  Importación
+                </Label>
+                <Select
+                  value={editingItem.Importacion}
+                  onValueChange={(value) =>
+                    setEditingItem({
+                      ...editingItem,
+                      Importacion: value as "DA" | "HOY",
+                    })
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DA">DA</SelectItem>
+                    <SelectItem value="HOY">HOY</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Total</Label>
+                <div className="col-span-3 p-2 bg-gray-50 rounded">
+                  ${formatNumber(editingItem.Costo * editingItem.Cantidad)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOpenEditDialog(false)}
+              disabled={isEditingInProgress}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleEditItem}
+              disabled={isEditingInProgress}
+              className="flex items-center gap-2"
+            >
+              {isEditingInProgress ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Guardar Cambios"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
