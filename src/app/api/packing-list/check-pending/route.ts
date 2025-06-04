@@ -1,3 +1,4 @@
+// app/api/packing-list/check-pending/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import {
   S3Client,
@@ -5,9 +6,7 @@ import {
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
-import { rateLimit } from "@/lib/rate-limit";
 
-// Configurar cliente S3
 const s3Client = new S3Client({
   region: "us-west-2",
   credentials: {
@@ -16,74 +15,47 @@ const s3Client = new S3Client({
   },
 });
 
-const BUCKET_NAME = "telas-luciana";
+// Interfaces para tipar los datos
+interface InventoryItem {
+  OC?: string;
+  Tela?: string;
+  Color?: string;
+  Unidades?: string;
+  Cantidad?: number | string;
+  Costo?: number | string;
+  Total?: number | string;
+  Importación?: string;
+  Importacion?: string;
+  almacen?: string;
+  status?: string;
+  Ubicacion?: string;
+  FacturaDragonAzteca?: string;
+}
 
-interface PendingFabric {
+interface ProcessedFabric {
   id: string;
   tela: string;
   color: string;
   cantidad: number;
   unidades: string;
-  oc?: string;
-  costo: number | null;
-  status: string;
-  sourceFile?: string;
-  sourceFileKey?: string;
+  oc: string;
+  costo: null;
 }
 
-interface PendingFile {
+interface PendingFileInfo {
   fileName: string;
   uploadId: string;
   originalName: string;
   processedAt: string;
-  fabrics: PendingFabric[];
+  fabrics: ProcessedFabric[];
   totalFabrics: number;
 }
 
-// Función para preprocesar el JSON con NaN valores
-const fixInvalidJSON = (content: string): string => {
-  return content.replace(/: *NaN/g, ": null");
-};
-
-// Función para verificar si un item necesita asignación de costos
-const needsCostAssignment = (itemData: any): boolean => {
-  // 1. Si ya tiene status "successful", no necesita procesamiento
-  if (itemData.status === "successful") {
-    return false;
-  }
-
-  // 2. Verificar si tiene costo asignado
-  const hasCosto =
-    itemData.Costo !== null &&
-    itemData.Costo !== undefined &&
-    itemData.Costo !== "" &&
-    itemData.Costo !== 0;
-
-  // 3. Si no tiene costo, necesita asignación
-  if (!hasCosto) {
-    return true;
-  }
-
-  // 4. Si tiene costo pero status es "pending", también necesita procesamiento
-  if (itemData.status === "pending") {
-    return true;
-  }
-
-  // 5. Por defecto, si no cumple las condiciones anteriores, no necesita procesamiento
-  return false;
-};
-
 export async function GET(request: NextRequest) {
-  try {
-    // Aplicar rate limiting
-    const rateLimitResult = await rateLimit(request, {
-      type: "api",
-      message: "Demasiadas consultas. Por favor, inténtalo de nuevo más tarde.",
-    });
+  const startTime = Date.now();
 
-    if (rateLimitResult) {
-      return rateLimitResult;
-    }
+  try {
+    console.log("🔍 [CHECK-PENDING] === VERIFICANDO ARCHIVOS PENDING ===");
 
     // Verificar autenticación
     const session = await auth();
@@ -91,21 +63,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Verificar permisos de usuario
-    const isAdmin =
-      session.user.role === "admin" || session.user.role === "major_admin";
-    if (!isAdmin) {
-      return NextResponse.json(
-        { error: "No autorizado para esta acción" },
-        { status: 403 }
-      );
+    // Solo admins pueden verificar archivos pending
+    if (session.user.role !== "admin" && session.user.role !== "major_admin") {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
-    // Obtener la carpeta actual de inventario
+    // 🔧 FIX: SOLO LEER, NO CREAR ARCHIVOS
+    // Buscar archivos con status "pending" en el bucket
     const now = new Date();
-    const year = now.getFullYear().toString();
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const currentYear = now.getFullYear().toString();
 
+    // 🔧 FIX: Generar mes con primera letra mayúscula para coincidir con Lambda
     const monthNames = [
       "Enero",
       "Febrero",
@@ -120,174 +88,204 @@ export async function GET(request: NextRequest) {
       "Noviembre",
       "Diciembre",
     ];
+    const currentMonth = monthNames[now.getMonth()];
+    const prefix = `Inventario/${currentYear}/${currentMonth}/`;
 
-    const monthIndex = parseInt(month) - 1;
-    const monthName =
-      monthIndex >= 0 && monthIndex < 12 ? monthNames[monthIndex] : "Marzo";
+    console.log(`📁 [CHECK-PENDING] Buscando en carpeta: ${prefix}`);
 
-    const folderPrefix = `Inventario/${year}/${monthName}/`;
-    console.log(`Verificando pending en: ${folderPrefix}`);
-
-    // Listar archivos en la carpeta actual de inventario
     const listCommand = new ListObjectsV2Command({
-      Bucket: BUCKET_NAME,
-      Prefix: folderPrefix,
+      Bucket: "telas-luciana",
+      Prefix: prefix,
     });
 
     const listResponse = await s3Client.send(listCommand);
-
-    if (!listResponse.Contents || listResponse.Contents.length === 0) {
-      return NextResponse.json({
-        hasPendingFiles: false,
-        pendingFiles: [],
-        message: "No hay archivos de inventario para verificar",
-      });
-    }
-
-    // Filtrar archivos JSON de inventario (incluir tanto inventario-row como inventario_)
-    const inventoryJsonFiles = listResponse.Contents.filter(
-      (item) =>
-        item.Key &&
-        item.Key.endsWith(".json") &&
-        (item.Key.includes("inventario-row") ||
-          item.Key.includes("inventario_"))
-    ).map((item) => item.Key!);
-
-    if (inventoryJsonFiles.length === 0) {
-      return NextResponse.json({
-        hasPendingFiles: false,
-        pendingFiles: [],
-        message: "No hay archivos de inventario JSON",
-      });
-    }
+    const jsonFiles = (listResponse.Contents || [])
+      .filter((item) => item.Key && item.Key.endsWith(".json"))
+      .map((item) => item.Key!)
+      .filter((key) => !key.includes("_backup_"));
 
     console.log(
-      `Archivos JSON de inventario encontrados: ${inventoryJsonFiles.length}`
+      `📄 [CHECK-PENDING] Encontrados ${jsonFiles.length} archivos JSON`
     );
 
-    // Agrupar archivos por packing list ID (extraído del contenido)
-    const pendingFabricsByPackingList: { [key: string]: PendingFabric[] } = {};
-    const packingListInfo: {
-      [key: string]: {
-        originalName: string;
-        processedAt: string;
-        uploadId: string;
-      };
-    } = {};
-    let totalPendingItems = 0;
-    let totalProcessed = 0;
-    let totalErrors = 0;
+    const pendingFiles: PendingFileInfo[] = [];
 
-    // Procesar cada archivo individual de inventario
-    for (const fileKey of inventoryJsonFiles) {
+    // 🔧 FIX: SOLO LEER archivos existentes, NO crear nuevos
+    for (const fileKey of jsonFiles) {
       try {
-        totalProcessed++;
+        console.log(`🔍 [CHECK-PENDING] Procesando archivo: ${fileKey}`);
+
         const getCommand = new GetObjectCommand({
-          Bucket: BUCKET_NAME,
+          Bucket: "telas-luciana",
           Key: fileKey,
         });
 
-        const fileResponse = await s3Client.send(getCommand);
+        const getResponse = await s3Client.send(getCommand);
+        const fileContent = await getResponse.Body?.transformToString();
 
-        if (fileResponse.Body) {
-          let fileContent = await fileResponse.Body.transformToString();
-          fileContent = fixInvalidJSON(fileContent);
+        if (!fileContent) {
+          console.log(`⚠️ [CHECK-PENDING] Archivo vacío: ${fileKey}`);
+          continue;
+        }
 
-          const itemData = JSON.parse(fileContent);
+        const jsonData = JSON.parse(fileContent);
+        console.log(`📦 [CHECK-PENDING] Estructura de datos en ${fileKey}:`, {
+          isArray: Array.isArray(jsonData),
+          hasData: !!jsonData.data,
+          dataIsArray: Array.isArray(jsonData.data),
+          keysInRoot: Object.keys(jsonData),
+          totalItems: Array.isArray(jsonData)
+            ? jsonData.length
+            : Array.isArray(jsonData.data)
+            ? jsonData.data.length
+            : 0,
+        });
 
-          // NUEVA LÓGICA: Verificar si necesita asignación de costos
-          if (needsCostAssignment(itemData)) {
-            const packingListId = itemData.OC || "SIN_OC";
+        // 🔧 FIX: Manejar diferentes formatos de JSON
+        let dataToProcess: InventoryItem[] = [];
 
-            // Generar ID único para este item
-            const itemId = `${fileKey
-              .split("/")
-              .pop()
-              ?.replace(".json", "")}_${Date.now()}`;
+        // CASO 1: Array directo
+        if (Array.isArray(jsonData)) {
+          console.log(
+            `📦 [CHECK-PENDING] Array directo encontrado en ${fileKey}`
+          );
+          dataToProcess = jsonData;
+        }
+        // CASO 2: Objeto con propiedad 'data' que contiene array
+        else if (jsonData && jsonData.data && Array.isArray(jsonData.data)) {
+          console.log(
+            `📦 [CHECK-PENDING] Datos anidados encontrados en ${fileKey}, extrayendo array de data...`
+          );
+          dataToProcess = jsonData.data;
+        }
+        // CASO 3: Objeto individual (cada fila es un archivo separado)
+        else if (
+          jsonData &&
+          typeof jsonData === "object" &&
+          jsonData.Tela &&
+          jsonData.Color
+        ) {
+          console.log(
+            `📦 [CHECK-PENDING] Objeto individual encontrado en ${fileKey}`
+          );
+          dataToProcess = [jsonData]; // Convertir objeto individual a array
+        }
+        // CASO 4: Formato no reconocido
+        else {
+          console.log(
+            `⚠️ [CHECK-PENDING] Formato no reconocido en ${fileKey}:`,
+            typeof jsonData
+          );
+          continue; // Saltar este archivo
+        }
 
-            const pendingItem: PendingFabric = {
-              id: itemId,
-              tela: itemData.Tela || "",
-              color: itemData.Color || "",
-              cantidad: itemData.Cantidad || 0,
-              unidades: itemData.Unidades || "MTS",
-              oc: itemData.OC || "",
-              costo: itemData.Costo || null,
-              status: itemData.status || "pending", // Asignar "pending" si no tiene status
-              sourceFile: fileKey.split("/").pop(),
-              sourceFileKey: fileKey,
-            };
+        console.log(
+          `🔍 [CHECK-PENDING] Procesando ${dataToProcess.length} items en ${fileKey}`
+        );
 
-            if (!pendingFabricsByPackingList[packingListId]) {
-              pendingFabricsByPackingList[packingListId] = [];
+        // Verificar si tiene items con status "pending"
+        const pendingItems = dataToProcess.filter((item: InventoryItem) => {
+          const hasPendingStatus = item.status === "pending";
+          if (hasPendingStatus) {
+            console.log(
+              `✅ [CHECK-PENDING] Item pending encontrado: ${item.Tela} ${item.Color} (Cantidad: ${item.Cantidad})`
+            );
+          }
+          return hasPendingStatus;
+        });
 
-              // Información del packing list
-              packingListInfo[packingListId] = {
-                originalName: `Packing List ${packingListId}`,
-                processedAt:
-                  fileResponse.LastModified?.toISOString() ||
-                  new Date().toISOString(),
-                uploadId:
-                  itemData.upload_id || `pl_${packingListId}_${Date.now()}`,
-              };
-            }
+        console.log(
+          `📊 [CHECK-PENDING] Items pending en ${fileKey}: ${pendingItems.length} de ${dataToProcess.length} totales`
+        );
 
-            pendingFabricsByPackingList[packingListId].push(pendingItem);
-            totalPendingItems++;
+        if (pendingItems.length > 0) {
+          // Procesar items pending SOLO para mostrar, NO para crear archivos
+          const fabrics = pendingItems
+            .map((item: InventoryItem, index: number) => ({
+              id: `${fileKey}-${index}`,
+              tela: item.Tela || "",
+              color: item.Color || "",
+              cantidad: parseFloat(String(item.Cantidad)) || 0,
+              unidades: item.Unidades || "",
+              oc: item.OC || "",
+              costo: null, // Será asignado por el usuario
+            }))
+            .filter((fabric: ProcessedFabric) => fabric.tela && fabric.color); // Solo telas válidas
+
+          console.log(
+            `✅ [CHECK-PENDING] Telas válidas procesadas: ${fabrics.length}`
+          );
+
+          if (fabrics.length > 0) {
+            pendingFiles.push({
+              fileName: fileKey,
+              uploadId: fileKey.replace(/[^a-zA-Z0-9]/g, ""),
+              originalName: fileKey.split("/").pop() || fileKey,
+              processedAt:
+                getResponse.LastModified?.toISOString() ||
+                new Date().toISOString(),
+              fabrics: fabrics,
+              totalFabrics: fabrics.length,
+            });
 
             console.log(
-              `✅ Item pending encontrado: ${itemData.Tela} ${
-                itemData.Color
-              } (Status: ${itemData.status || "NO_STATUS"})`
+              `📋 [CHECK-PENDING] Archivo agregado a pending: ${fileKey} con ${fabrics.length} telas`
             );
           }
         }
-      } catch (fileError) {
-        console.error(`Error procesando archivo ${fileKey}:`, fileError);
-        totalErrors++;
-        continue;
+      } catch (parseError) {
+        console.warn(
+          `⚠️ [CHECK-PENDING] Error procesando archivo ${fileKey}:`,
+          parseError
+        );
+        // Continuar con el siguiente archivo, no fallar toda la operación
       }
     }
 
-    // Convertir a formato esperado por el frontend
-    const pendingFiles: PendingFile[] = Object.entries(
-      pendingFabricsByPackingList
-    ).map(([packingListId, fabrics]) => ({
-      fileName: `pending_${packingListId}`,
-      uploadId: packingListInfo[packingListId].uploadId,
-      originalName: packingListInfo[packingListId].originalName,
-      processedAt: packingListInfo[packingListId].processedAt,
-      fabrics,
-      totalFabrics: fabrics.length,
-    }));
+    const hasPendingFiles = pendingFiles.length > 0;
+    const totalPendingFiles = pendingFiles.length;
+    const totalPendingFabrics = pendingFiles.reduce(
+      (sum, file) => sum + file.totalFabrics,
+      0
+    );
 
-    console.log(`=== RESULTADO VERIFICACIÓN ===`);
-    console.log(`Archivos procesados: ${totalProcessed}`);
-    console.log(`Items pending encontrados: ${totalPendingItems}`);
-    console.log(`Packing lists con items pending: ${pendingFiles.length}`);
-    console.log(`Errores: ${totalErrors}`);
-    console.log(`===============================`);
+    const duration = Date.now() - startTime;
 
+    console.log(`✅ [CHECK-PENDING] Completado en ${duration}ms`);
+    console.log(
+      `📊 [CHECK-PENDING] Resultado: ${totalPendingFiles} archivos, ${totalPendingFabrics} telas pending`
+    );
+
+    // 🚨 IMPORTANTE: SOLO RETORNAR DATOS, NO CREAR ARCHIVOS
     return NextResponse.json({
-      hasPendingFiles: pendingFiles.length > 0,
+      success: true,
+      hasPendingFiles,
+      totalPendingFiles,
+      totalPendingFabrics,
       pendingFiles,
-      totalPendingFiles: pendingFiles.length,
-      totalPendingItems,
-      summary: {
-        pendingFiles: pendingFiles.length,
-        totalItems: totalPendingItems,
-        filesChecked: inventoryJsonFiles.length,
-        filesProcessed: totalProcessed,
-        errors: totalErrors,
-        folderChecked: folderPrefix,
+      message: hasPendingFiles
+        ? `Se encontraron ${totalPendingFiles} archivos con ${totalPendingFabrics} telas pendientes`
+        : "No hay archivos pending",
+      duration: `${duration}ms`,
+      // 🔧 DEBUG: Agregar info de debugging
+      debug: {
+        searchPath: prefix,
+        totalJsonFiles: jsonFiles.length,
+        processedFiles: jsonFiles.length,
+        timestamp: new Date().toISOString(),
       },
     });
   } catch (error) {
-    console.error("Error verificando archivos pending:", error);
+    const duration = Date.now() - startTime;
+    console.error(`❌ [CHECK-PENDING] Error después de ${duration}ms:`, error);
+
     return NextResponse.json(
       {
         error: "Error interno del servidor",
         details: error instanceof Error ? error.message : "Error desconocido",
+        hasPendingFiles: false,
+        pendingFiles: [],
+        duration: `${duration}ms`,
       },
       { status: 500 }
     );

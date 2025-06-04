@@ -125,6 +125,11 @@ const normalizeInventoryItem = (item: any) => {
   return normalizedItem;
 };
 
+// 🚨 FUNCIÓN PARA FILTRAR ITEMS PENDING
+const isPendingItem = (item: any): boolean => {
+  return item.status === "pending";
+};
+
 export async function GET(request: NextRequest) {
   try {
     // Aplicar rate limiting para API general
@@ -205,6 +210,7 @@ export async function GET(request: NextRequest) {
     // Cargar y combinar datos de todos los archivos JSON
     const inventoryData = [];
     const failedFiles = [];
+    let pendingItemsSkipped = 0; // Contador de items pending saltados
 
     for (const fileKey of filesToProcess) {
       try {
@@ -228,14 +234,31 @@ export async function GET(request: NextRequest) {
             if (Array.isArray(jsonData)) {
               // Normalizar cada elemento del array
               jsonData.forEach((item) => {
+                // 🚨 FILTRO CRÍTICO: Verificar si el item tiene status "pending"
+                if (isPendingItem(item)) {
+                  pendingItemsSkipped++;
+                  console.log(
+                    `⏭️ [INVENTORY] Saltando item pending: ${item.Tela} ${item.Color} (status: ${item.status})`
+                  );
+                  return; // No procesar este item
+                }
+
                 const normalizedItem = normalizeInventoryItem(item);
                 inventoryData.push(normalizedItem);
               });
             }
             // Si es un objeto individual, lo añadimos como un elemento
             else {
-              const normalizedItem = normalizeInventoryItem(jsonData);
-              inventoryData.push(normalizedItem);
+              // 🚨 FILTRO CRÍTICO: Verificar si el item tiene status "pending"
+              if (isPendingItem(jsonData)) {
+                pendingItemsSkipped++;
+                console.log(
+                  `⏭️ [INVENTORY] Saltando item pending individual: ${jsonData.Tela} ${jsonData.Color} (status: ${jsonData.status})`
+                );
+              } else {
+                const normalizedItem = normalizeInventoryItem(jsonData);
+                inventoryData.push(normalizedItem);
+              }
             }
           } catch (e) {
             console.error(`Error al parsear JSON de ${fileKey}`);
@@ -256,11 +279,24 @@ export async function GET(request: NextRequest) {
       } productos`
     );
 
+    // 🚨 LOG IMPORTANTE: Mostrar cuántos items pending fueron filtrados
+    if (pendingItemsSkipped > 0) {
+      console.log(
+        `✅ [INVENTORY] ${pendingItemsSkipped} items con status "pending" fueron filtrados y NO incluidos en el inventario`
+      );
+    }
+
     // Si tenemos datos, devolvemos el listado completo
     if (inventoryData.length > 0) {
       return NextResponse.json({
         data: inventoryData,
         failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
+        // 🚨 AGREGAR INFO DE DEBUG SOBRE ITEMS PENDING
+        debug: {
+          pendingItemsSkipped,
+          totalProcessedItems: inventoryData.length,
+          excludePendingActive: true,
+        },
       });
     } else if (failedFiles.length > 0) {
       return NextResponse.json(

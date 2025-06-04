@@ -9,7 +9,7 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   PlusIcon,
-  MinusIcon,
+  DollarSign,
   Loader2Icon,
   BoxIcon,
   AlertCircle,
@@ -20,6 +20,7 @@ import {
   FolderOpenIcon,
   CheckCircle,
   PencilIcon,
+  UndoIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -115,18 +116,37 @@ interface UploadResult {
   fileUrl: string;
 }
 
-// Función mejorada para procesar datos de inventario y determinar ubicación
 function processInventoryData(data: any[]): InventoryItem[] {
   console.log(
     "🔄 [InventoryCard] Iniciando processInventoryData con",
     data.length,
     "elementos"
   );
+
+  const filteredData = data.filter((item: any) => {
+    const isPending = item.status === "pending";
+    if (isPending) {
+      console.log(
+        `⏭️ [InventoryCard] Saltando item pending: ${item.Tela} ${item.Color} (status: ${item.status})`
+      );
+      return false;
+    }
+    return true;
+  });
+
+  console.log(
+    `✅ [InventoryCard] Filtrados ${
+      data.length - filteredData.length
+    } items pending. Procesando ${filteredData.length} items válidos.`
+  );
+
   const processedItems: InventoryItem[] = [];
 
-  data.forEach((item: any, index: number) => {
+  filteredData.forEach((item: any, index: number) => {
     console.log(
-      `\n--- [InventoryCard] Procesando item ${index + 1}/${data.length} ---`
+      `\n--- [InventoryCard] Procesando item ${index + 1}/${
+        filteredData.length
+      } ---`
     );
     console.log("Tela:", item.Tela, "Color:", item.Color);
     console.log("Datos raw:", {
@@ -136,6 +156,7 @@ function processInventoryData(data: any[]): InventoryItem[] {
       CDMX: item.CDMX,
       MID: item.MID,
       Cantidad: item.Cantidad,
+      status: item.status || "success",
     });
 
     const costo = parseNumericValue(item.Costo);
@@ -151,11 +172,9 @@ function processInventoryData(data: any[]): InventoryItem[] {
       );
     }
 
-    // Determinar ubicación basada en las columnas disponibles
     let ubicacion = "";
     let cantidadFinal = cantidad;
 
-    // CASO 1: Priorizar la columna 'almacen' si existe (datos más recientes)
     if (item.almacen) {
       ubicacion = item.almacen === "CDMX" ? "CDMX" : "Mérida";
       console.log(
@@ -164,9 +183,7 @@ function processInventoryData(data: any[]): InventoryItem[] {
         "→",
         ubicacion
       );
-    }
-    // CASO 2: Si no hay columna almacen, usar las columnas CDMX y MID
-    else if (item.CDMX !== undefined && item.MID !== undefined) {
+    } else if (item.CDMX !== undefined && item.MID !== undefined) {
       const cantidadCDMX = parseNumericValue(item.CDMX);
       const cantidadMID = parseNumericValue(item.MID);
 
@@ -177,11 +194,9 @@ function processInventoryData(data: any[]): InventoryItem[] {
         cantidadMID
       );
 
-      // Si hay cantidad en ambas ubicaciones, crear entradas separadas
       if (cantidadCDMX > 0 && cantidadMID > 0) {
         console.log("🔄 [InventoryCard] Creando dos entradas separadas");
 
-        // Entrada para CDMX
         const cdmxItem = {
           OC: item.OC || "",
           Tela: item.Tela || "",
@@ -204,7 +219,6 @@ function processInventoryData(data: any[]): InventoryItem[] {
         console.log("✅ [InventoryCard] Item CDMX creado:", cdmxItem);
         processedItems.push(cdmxItem);
 
-        // Entrada para Mérida
         const meridaItem = {
           OC: item.OC || "",
           Tela: item.Tela || "",
@@ -227,55 +241,44 @@ function processInventoryData(data: any[]): InventoryItem[] {
         console.log("✅ [InventoryCard] Item Mérida creado:", meridaItem);
         processedItems.push(meridaItem);
 
-        return; // No agregar más entradas para este item
-      }
-      // Solo hay cantidad en CDMX
-      else if (cantidadCDMX > 0) {
+        return;
+      } else if (cantidadCDMX > 0) {
         ubicacion = "CDMX";
         cantidadFinal = cantidadCDMX;
         console.log(
           "✅ [InventoryCard] Solo CDMX tiene cantidad:",
           cantidadCDMX
         );
-      }
-      // Solo hay cantidad en Mérida
-      else if (cantidadMID > 0) {
+      } else if (cantidadMID > 0) {
         ubicacion = "Mérida";
         cantidadFinal = cantidadMID;
         console.log(
           "✅ [InventoryCard] Solo Mérida tiene cantidad:",
           cantidadMID
         );
-      }
-      // No hay cantidad en ninguna ubicación específica
-      else {
+      } else {
         ubicacion = item.Ubicacion || "";
         console.log(
           "⚠️ [InventoryCard] No hay cantidad específica, usando ubicación original:",
           ubicacion
         );
       }
-    }
-    // CASO 3: Si no hay columnas CDMX/MID ni almacen, usar la ubicación original
-    else {
+    } else {
       ubicacion = item.Ubicacion || "";
 
-      // SOLUCIÓN TEMPORAL: Si no hay ubicación, asignar una por defecto
       if (!ubicacion) {
-        // Buscar patrones en el OC para determinar ubicación
         const oc = (item.OC || "").toLowerCase();
 
-        // Reglas básicas basadas en patrones observados
         if (
           oc.includes("ttl-04-25") ||
           oc.includes("ttl-02-2025") ||
           oc.includes("dr-05-25")
         ) {
-          ubicacion = "CDMX"; // Órdenes más recientes típicamente van a CDMX
+          ubicacion = "CDMX";
         } else if (oc.includes("dsma-03-23") || oc.includes("dsma-04-23")) {
-          ubicacion = "Mérida"; // Órdenes más antiguas pueden estar en Mérida
+          ubicacion = "Mérida";
         } else {
-          ubicacion = "CDMX"; // Por defecto CDMX para órdenes nuevas
+          ubicacion = "CDMX";
         }
 
         console.log(
@@ -292,7 +295,6 @@ function processInventoryData(data: any[]): InventoryItem[] {
       );
     }
 
-    // Crear la entrada del inventario
     const finalItem = {
       OC: item.OC || "",
       Tela: item.Tela || "",
@@ -323,14 +325,17 @@ function processInventoryData(data: any[]): InventoryItem[] {
   console.log(
     "🎉 [InventoryCard] processInventoryData completado.",
     processedItems.length,
-    "items procesados"
+    "items procesados (sin pending)"
   );
   console.log("📊 [InventoryCard] Resumen de ubicaciones:");
-  const ubicacionCount = processedItems.reduce((acc, item) => {
-    acc[item.Ubicacion || "Sin ubicación"] =
-      (acc[item.Ubicacion || "Sin ubicación"] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const ubicacionCount = processedItems.reduce(
+    (acc: Record<string, number>, item: any) => {
+      acc[item.Ubicacion || "Sin ubicación"] =
+        (acc[item.Ubicacion || "Sin ubicación"] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
   console.log(ubicacionCount);
 
   return processedItems;
@@ -393,6 +398,489 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isEditingInProgress, setIsEditingInProgress] = useState(false);
+  const [openReturnsDialog, setOpenReturnsDialog] = useState(false);
+  const [isLoadingReturns, setIsLoadingReturns] = useState(false);
+  const [availableSoldRolls, setAvailableSoldRolls] = useState<any[]>([]);
+  const [selectedReturnRolls, setSelectedReturnRolls] = useState<number[]>([]);
+  const [isProcessingReturns, setIsProcessingReturns] = useState(false);
+  const [groupedSoldRolls, setGroupedSoldRolls] = useState<
+    Record<string, any[]>
+  >({});
+  const [selectedOC, setSelectedOC] = useState<string | null>(null);
+  const [isProcessingSell, setIsProcessingSell] = useState(false);
+  const [selectedOCForReturns, setSelectedOCForReturns] = useState<string>("");
+  const [selectedLotForReturns, setSelectedLotForReturns] =
+    useState<string>("");
+  const [availableOCs, setAvailableOCs] = useState<string[]>([]);
+  const [availableLotsForReturns, setAvailableLotsForReturns] = useState<
+    number[]
+  >([]);
+  const [groupedByOCAndLot, setGroupedByOCAndLot] = useState<
+    Record<string, Record<number, any[]>>
+  >({});
+
+  const handleOpenReturnsDialog = async () => {
+    setOpenReturnsDialog(true);
+    setIsLoadingReturns(true);
+    setSelectedReturnRolls([]);
+    setGroupedSoldRolls({});
+    setSelectedOC(null);
+    setSelectedOCForReturns("");
+    setSelectedLotForReturns("");
+    setAvailableOCs([]);
+    setAvailableLotsForReturns([]);
+    setGroupedByOCAndLot({});
+
+    try {
+      console.log(
+        "🔍 [RETURNS] Cargando rollos vendidos desde historial real..."
+      );
+
+      const response = await fetch(
+        "/api/returns/get-sold-rolls?only_returnable=true&days=90&limit=1000"
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al cargar rollos vendidos");
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Respuesta no exitosa del servidor");
+      }
+
+      console.log("📊 [RETURNS] Datos recibidos:", data.summary);
+
+      const availableRolls = data.rolls.filter(
+        (roll: any) => roll.available_for_return
+      );
+
+      setAvailableSoldRolls(availableRolls);
+
+      if (availableRolls.length === 0) {
+        toast.info("No hay rollos disponibles para devolución en este momento");
+        setIsLoadingReturns(false);
+        return;
+      }
+
+      // Agrupar por OC y Lote
+      const groupedByOCAndLot: Record<string, Record<number, any[]>> = {};
+      const ocsSet = new Set<string>();
+
+      availableRolls.forEach((roll: any) => {
+        const oc = roll.oc;
+        const lot = roll.lot;
+
+        ocsSet.add(oc);
+
+        if (!groupedByOCAndLot[oc]) {
+          groupedByOCAndLot[oc] = {};
+        }
+
+        if (!groupedByOCAndLot[oc][lot]) {
+          groupedByOCAndLot[oc][lot] = [];
+        }
+
+        groupedByOCAndLot[oc][lot].push(roll);
+      });
+
+      const ocs = Array.from(ocsSet).sort();
+      setAvailableOCs(ocs);
+      setGroupedByOCAndLot(groupedByOCAndLot);
+
+      // Seleccionar la primera OC por defecto
+      if (ocs.length > 0) {
+        const firstOC = ocs[0];
+        setSelectedOCForReturns(firstOC);
+
+        // Obtener lotes disponibles para la primera OC
+        const lotsForFirstOC = Object.keys(groupedByOCAndLot[firstOC] || {})
+          .map(Number)
+          .sort((a, b) => a - b);
+        setAvailableLotsForReturns(lotsForFirstOC);
+      }
+
+      toast.success(
+        `Cargados ${availableRolls.length} rollos disponibles para devolución`
+      );
+    } catch (error) {
+      console.error("❌ [RETURNS] Error cargando rollos vendidos:", error);
+      toast.error(
+        `Error al cargar rollos vendidos: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`
+      );
+      setAvailableSoldRolls([]);
+    } finally {
+      setIsLoadingReturns(false);
+    }
+  };
+
+  // Función para formatear números mientras se escriben
+  const formatInputNumber = (value: string): string => {
+    // Remover todo excepto números y punto decimal
+    const cleanValue = value.replace(/[^\d.]/g, "");
+
+    // Dividir en parte entera y decimal
+    const parts = cleanValue.split(".");
+    const integerPart = parts[0];
+    const decimalPart = parts[1];
+
+    // Formatear parte entera con comas
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+    // Reconstruir el número
+    if (decimalPart !== undefined) {
+      return `${formattedInteger}.${decimalPart}`;
+    }
+
+    return formattedInteger;
+  };
+
+  // Función para obtener el valor numérico limpio
+  const parseInputNumber = (value: string): number => {
+    const cleanValue = value.replace(/,/g, "");
+    return parseFloat(cleanValue) || 0;
+  };
+
+  const handleOCChangeForReturns = (newOC: string) => {
+    setSelectedOCForReturns(newOC);
+    setSelectedLotForReturns(""); // Limpiar selección de lote
+    setSelectedReturnRolls([]); // Limpiar selección de rollos
+
+    // Actualizar lotes disponibles para la OC seleccionada
+    const lotsForOC = Object.keys(groupedByOCAndLot[newOC] || {})
+      .map(Number)
+      .sort((a, b) => a - b);
+    setAvailableLotsForReturns(lotsForOC);
+  };
+
+  const handleLotChangeForReturns = (newLot: string) => {
+    setSelectedLotForReturns(newLot === "all" ? "" : newLot);
+    setSelectedReturnRolls([]); // Limpiar selección de rollos
+  };
+
+  const getFilteredRollsForReturns = () => {
+    if (!selectedOCForReturns || !groupedByOCAndLot[selectedOCForReturns]) {
+      return [];
+    }
+
+    let rolls: any[] = [];
+
+    if (selectedLotForReturns) {
+      // Si hay lote seleccionado, mostrar solo ese lote
+      const lotNumber = parseInt(selectedLotForReturns);
+      rolls = groupedByOCAndLot[selectedOCForReturns][lotNumber] || [];
+    } else {
+      // Si no hay lote seleccionado, mostrar todos los lotes de la OC
+      Object.values(groupedByOCAndLot[selectedOCForReturns]).forEach(
+        (lotRolls) => {
+          rolls.push(...lotRolls);
+        }
+      );
+    }
+
+    return rolls.filter((roll: any) => roll.available_for_return);
+  };
+
+  const calculateTotalReturnQuantityFiltered = () => {
+    const filteredRolls = getFilteredRollsForReturns();
+    return filteredRolls
+      .filter((_: any, index: number) => selectedReturnRolls.includes(index))
+      .reduce((total: number, roll: any) => total + roll.sold_quantity, 0);
+  };
+
+  const handleReturnRollSelectionFiltered = (rollIndex: number) => {
+    setSelectedReturnRolls((prev) => {
+      if (prev.includes(rollIndex)) {
+        return prev.filter((i) => i !== rollIndex);
+      } else {
+        return [...prev, rollIndex];
+      }
+    });
+  };
+
+  const handleProcessReturns = async () => {
+    if (selectedReturnRolls.length === 0) {
+      toast.error("Seleccione al menos un rollo para devolver");
+      return;
+    }
+
+    if (!selectedOC) {
+      toast.error("No se ha seleccionado una orden de compra válida");
+      return;
+    }
+
+    setIsProcessingReturns(true);
+
+    try {
+      console.log("🔄 [RETURNS] Iniciando procesamiento de devoluciones...");
+
+      const currentRolls = getCurrentOCRolls();
+      const rollsToReturn = selectedReturnRolls.map((index) => {
+        const roll = currentRolls[index];
+        return {
+          roll_number: roll.roll_number,
+          fabric_type: roll.fabric_type,
+          color: roll.color,
+          lot: roll.lot,
+          oc: roll.oc,
+          almacen: roll.almacen,
+          return_quantity: roll.sold_quantity,
+          units: roll.units,
+          costo: roll.costo || 0,
+          return_reason: "Devolución procesada desde interfaz",
+          sale_id: roll.sale_id,
+          original_sold_date: roll.sold_date,
+        };
+      });
+
+      console.log(
+        `📋 [RETURNS] Procesando devolución de ${rollsToReturn.length} rollos`
+      );
+
+      const response = await fetch("/api/returns/process-returns", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rolls: rollsToReturn,
+          return_reason:
+            "Devolución procesada desde interfaz de administración",
+          notes: `Devolución de ${rollsToReturn.length} rollos de la OC ${selectedOC}`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al procesar la devolución");
+      }
+
+      const result = await response.json();
+
+      console.log("✅ [RETURNS] Resultado del procesamiento:", result);
+
+      if (!result.success) {
+        throw new Error(result.message || "El procesamiento no fue exitoso");
+      }
+
+      if (result.summary.successful > 0) {
+        toast.success(
+          `✅ Devolución exitosa: ${result.summary.successful} rollos procesados`
+        );
+
+        if (result.results.successful.length > 0) {
+          const updatedInventory = [...inventory];
+
+          for (const returnedRoll of result.results.successful) {
+            const rollData = rollsToReturn.find(
+              (r) => r.roll_number === returnedRoll.roll_number
+            );
+            if (!rollData) continue;
+
+            const existingIndex = updatedInventory.findIndex(
+              (item) =>
+                item.OC === rollData.oc &&
+                item.Tela === rollData.fabric_type &&
+                item.Color === rollData.color &&
+                item.Ubicacion === rollData.almacen
+            );
+
+            if (existingIndex >= 0) {
+              updatedInventory[existingIndex].Cantidad +=
+                rollData.return_quantity;
+              updatedInventory[existingIndex].Total =
+                updatedInventory[existingIndex].Costo *
+                updatedInventory[existingIndex].Cantidad;
+            } else {
+              const newItem = {
+                OC: rollData.oc,
+                Tela: rollData.fabric_type,
+                Color: rollData.color,
+                Costo: rollData.costo,
+                Cantidad: rollData.return_quantity,
+                Unidades: rollData.units as UnitType,
+                Total: rollData.costo * rollData.return_quantity,
+                Ubicacion: rollData.almacen,
+                Importacion: "DA" as "DA" | "HOY",
+                FacturaDragonAzteca: "",
+              };
+              updatedInventory.push(newItem);
+            }
+          }
+
+          setInventory(updatedInventory);
+          console.log("🔄 [RETURNS] Inventario local actualizado");
+        }
+
+        if (result.summary.failed > 0) {
+          toast.warning(
+            `⚠️ ${result.summary.failed} rollos no pudieron ser procesados completamente`
+          );
+        }
+      } else {
+        toast.error(
+          `❌ No se pudieron procesar las devoluciones: ${result.message}`
+        );
+      }
+
+      if (result.summary.successful > 0) {
+        setOpenReturnsDialog(false);
+      }
+    } catch (error) {
+      console.error("❌ [RETURNS] Error procesando devoluciones:", error);
+      toast.error(
+        `Error al procesar devoluciones: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`
+      );
+    } finally {
+      setIsProcessingReturns(false);
+    }
+  };
+
+  const handleProcessReturnsWithData = async (rollsToReturn: any[]) => {
+    if (rollsToReturn.length === 0) {
+      toast.error("Seleccione al menos un rollo para devolver");
+      return;
+    }
+
+    setIsProcessingReturns(true);
+
+    try {
+      console.log("🔄 [RETURNS] Iniciando procesamiento de devoluciones...");
+
+      const response = await fetch("/api/returns/process-returns", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rolls: rollsToReturn,
+          return_reason:
+            "Devolución procesada desde interfaz de administración",
+          notes: `Devolución de ${
+            rollsToReturn.length
+          } rollos de la OC ${selectedOCForReturns}${
+            selectedLotForReturns ? ` - Lote ${selectedLotForReturns}` : ""
+          }`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al procesar la devolución");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || "El procesamiento no fue exitoso");
+      }
+
+      if (result.summary.successful > 0) {
+        toast.success(
+          `✅ Devolución exitosa: ${result.summary.successful} rollos procesados`
+        );
+
+        // Actualizar inventario local si es necesario
+        if (result.results.successful.length > 0) {
+          const updatedInventory = [...inventory];
+
+          for (const returnedRoll of result.results.successful) {
+            const rollData = rollsToReturn.find(
+              (r) => r.roll_number === returnedRoll.roll_number
+            );
+            if (!rollData) continue;
+
+            const existingIndex = updatedInventory.findIndex(
+              (item) =>
+                item.OC === rollData.oc &&
+                item.Tela === rollData.fabric_type &&
+                item.Color === rollData.color &&
+                item.Ubicacion === rollData.almacen
+            );
+
+            if (existingIndex >= 0) {
+              updatedInventory[existingIndex].Cantidad +=
+                rollData.return_quantity;
+              updatedInventory[existingIndex].Total =
+                updatedInventory[existingIndex].Costo *
+                updatedInventory[existingIndex].Cantidad;
+            } else {
+              const newItem = {
+                OC: rollData.oc,
+                Tela: rollData.fabric_type,
+                Color: rollData.color,
+                Costo: rollData.costo,
+                Cantidad: rollData.return_quantity,
+                Unidades: rollData.units as UnitType,
+                Total: rollData.costo * rollData.return_quantity,
+                Ubicacion: rollData.almacen,
+                Importacion: "DA" as "DA" | "HOY",
+                FacturaDragonAzteca: "",
+              };
+              updatedInventory.push(newItem);
+            }
+          }
+
+          setInventory(updatedInventory);
+        }
+
+        if (result.summary.failed > 0) {
+          toast.warning(
+            `⚠️ ${result.summary.failed} rollos no pudieron ser procesados completamente`
+          );
+        }
+      } else {
+        toast.error(
+          `❌ No se pudieron procesar las devoluciones: ${result.message}`
+        );
+      }
+
+      if (result.summary.successful > 0) {
+        setOpenReturnsDialog(false);
+      }
+    } catch (error) {
+      console.error("❌ [RETURNS] Error procesando devoluciones:", error);
+      toast.error(
+        `Error al procesar devoluciones: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`
+      );
+    } finally {
+      setIsProcessingReturns(false);
+    }
+  };
+
+  const getCurrentOCRolls = () => {
+    if (!selectedOC || !groupedSoldRolls[selectedOC]) {
+      return [];
+    }
+    return groupedSoldRolls[selectedOC].filter(
+      (roll: any) => roll.available_for_return
+    );
+  };
+
+  const calculateTotalReturnQuantity = () => {
+    const currentRolls = getCurrentOCRolls();
+    return currentRolls
+      .filter((_: any, index: number) => selectedReturnRolls.includes(index))
+      .reduce((total: number, roll: any) => total + roll.sold_quantity, 0);
+  };
+
+  const handleReturnRollSelection = (rollIndex: number) => {
+    setSelectedReturnRolls((prev) => {
+      if (prev.includes(rollIndex)) {
+        return prev.filter((i) => i !== rollIndex);
+      } else {
+        return [...prev, rollIndex];
+      }
+    });
+  };
 
   const handleOpenEditDialog = (index: number) => {
     setSelectedItemIndex(index);
@@ -545,6 +1033,21 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       setUploadResult(result);
 
       toast.success("Archivo subido correctamente al bucket S3");
+
+      console.log("🚀 [InventoryCard] Disparando evento packing-list-uploaded");
+      const event = new CustomEvent("packing-list-uploaded", {
+        detail: {
+          fileName: file.name,
+          uploadId: result.uploadId,
+          uploadedAt: new Date().toISOString(),
+          result: result,
+        },
+      });
+
+      window.dispatchEvent(event);
+      console.log(
+        "✅ [InventoryCard] Evento packing-list-uploaded disparado exitosamente"
+      );
     } catch (error) {
       console.error("Error al subir PACKING LIST:", error);
       toast.error(
@@ -564,9 +1067,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     fileInputRef.current?.click();
   };
 
-  const loadPackingListData = async (tela: string, color: string) => {
+  const loadPackingListData = async (
+    tela: string,
+    color: string,
+    ubicacion: string
+  ) => {
     setIsLoadingPackingList(true);
     try {
+      console.log(`🔍 [PACKING-LIST] Cargando rollos para venta:`, {
+        tela,
+        color,
+        ubicacion,
+      });
+
       const response = await fetch(
         `/api/packing-list/get-rolls?tela=${encodeURIComponent(
           tela
@@ -584,6 +1097,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         (entry) => entry.fabric_type === tela && entry.color === color
       );
 
+      console.log(
+        `📦 [PACKING-LIST] Entries encontradas:`,
+        matchingEntries.length
+      );
+
       if (matchingEntries.length > 0) {
         const groupedByLot = new Map<number, Roll[]>();
         const lots: number[] = [];
@@ -593,16 +1111,54 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             lots.push(entry.lot);
           }
 
-          const existingRolls = groupedByLot.get(entry.lot) || [];
-          groupedByLot.set(entry.lot, [...existingRolls, ...entry.rolls]);
+          const rollsFromLocation = entry.rolls.filter((roll) => {
+            const rollLocation = roll.almacen === "CDMX" ? "CDMX" : "Mérida";
+            const matches = rollLocation === ubicacion;
+
+            if (!matches) {
+              console.log(
+                `⏭️ [PACKING-LIST] Rollo ${roll.roll_number} omitido: está en ${rollLocation}, necesitamos ${ubicacion}`
+              );
+            }
+
+            return matches;
+          });
+
+          console.log(
+            `📍 [PACKING-LIST] Lote ${entry.lot}: ${rollsFromLocation.length}/${entry.rolls.length} rollos en ${ubicacion}`
+          );
+
+          if (rollsFromLocation.length > 0) {
+            const existingRolls = groupedByLot.get(entry.lot) || [];
+            groupedByLot.set(entry.lot, [
+              ...existingRolls,
+              ...rollsFromLocation,
+            ]);
+          }
         });
 
-        setAvailableLots(lots.sort((a, b) => a - b));
+        const lotsWithRolls = lots.filter((lot) => {
+          const rollsInLot = groupedByLot.get(lot) || [];
+          return rollsInLot.length > 0;
+        });
+
+        console.log(
+          `✅ [PACKING-LIST] Lotes con rollos en ${ubicacion}:`,
+          lotsWithRolls
+        );
+
+        setAvailableLots(lotsWithRolls.sort((a, b) => a - b));
         setRollsGroupedByLot(groupedByLot);
 
-        if (lots.length > 0) {
-          setSelectedLot(lots[0]);
-          setAvailableRolls(groupedByLot.get(lots[0]) || []);
+        if (lotsWithRolls.length > 0) {
+          setSelectedLot(lotsWithRolls[0]);
+          setAvailableRolls(groupedByLot.get(lotsWithRolls[0]) || []);
+        } else {
+          setSelectedLot(null);
+          setAvailableRolls([]);
+          console.log(
+            `⚠️ [PACKING-LIST] No hay rollos disponibles en ${ubicacion} para ${tela} ${color}`
+          );
         }
       }
     } catch (error) {
@@ -616,6 +1172,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const loadTransferPackingListData = async (tela: string, color: string) => {
     setIsLoadingTransferList(true);
     try {
+      console.log(
+        `🔄 [TRANSFER-PACKING-LIST] Cargando rollos para traslado desde CDMX:`,
+        {
+          tela,
+          color,
+        }
+      );
+
       const response = await fetch(
         `/api/packing-list/get-rolls?tela=${encodeURIComponent(
           tela
@@ -644,18 +1208,30 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           const cdmxRolls = entry.rolls.filter(
             (roll) => roll.almacen === "CDMX"
           );
+
+          console.log(
+            `📍 [TRANSFER-PACKING-LIST] Lote ${entry.lot}: ${cdmxRolls.length}/${entry.rolls.length} rollos en CDMX`
+          );
+
           if (cdmxRolls.length > 0) {
             const existingRolls = groupedByLot.get(entry.lot) || [];
             groupedByLot.set(entry.lot, [...existingRolls, ...cdmxRolls]);
           }
         });
 
-        setAvailableLots(lots.sort((a, b) => a - b));
+        const lotsWithCdmxRolls = lots.filter((lot) => {
+          const rollsInLot = groupedByLot.get(lot) || [];
+          return rollsInLot.length > 0;
+        });
+
+        setAvailableLots(lotsWithCdmxRolls.sort((a, b) => a - b));
         setRollsGroupedByLot(groupedByLot);
 
-        if (lots.length > 0) {
-          setSelectedLot(lots[0]);
-          setAvailableTransferRolls(groupedByLot.get(lots[0]) || []);
+        if (lotsWithCdmxRolls.length > 0) {
+          setSelectedLot(lotsWithCdmxRolls[0]);
+          setAvailableTransferRolls(
+            groupedByLot.get(lotsWithCdmxRolls[0]) || []
+          );
         }
       }
     } catch (error) {
@@ -720,17 +1296,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setSelectedRolls([]);
     setAvailableRolls([]);
     setSelectedLot(null);
+    setIsProcessingSell(false);
     setOpenSellDialog(true);
 
     if (inventory[index]) {
-      loadPackingListData(inventory[index].Tela, inventory[index].Color);
-    }
-  };
+      const item = inventory[index];
+      console.log(`🛒 [SELL] Abriendo diálogo de venta para:`, {
+        Tela: item.Tela,
+        Color: item.Color,
+        Ubicacion: item.Ubicacion,
+      });
 
-  const handleOpenAddDialog = (index: number) => {
-    setSelectedItemIndex(index);
-    setQuantityToUpdate(0);
-    setOpenAddDialog(true);
+      loadPackingListData(item.Tela, item.Color, item.Ubicacion || "CDMX");
+    }
   };
 
   const handleOpenTransferDialog = (index: number) => {
@@ -743,10 +1321,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setOpenTransferDialog(true);
 
     if (inventory[index]) {
-      loadTransferPackingListData(
-        inventory[index].Tela,
-        inventory[index].Color
-      );
+      const item = inventory[index];
+      console.log(`🔄 [TRANSFER] Abriendo diálogo de traslado desde:`, {
+        Tela: item.Tela,
+        Color: item.Color,
+        Ubicacion: item.Ubicacion,
+      });
+
+      loadTransferPackingListData(item.Tela, item.Color);
     }
   };
 
@@ -775,27 +1357,36 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return;
       }
 
-      // Preparar datos para la actualización
-      const oldItem = {
-        OC: item.OC,
-        Tela: item.Tela,
-        Color: item.Color,
-        Ubicacion: item.Ubicacion,
-        Cantidad: item.Cantidad,
-      };
+      setIsProcessingSell(true);
 
-      // Actualizar estado local
-      const updatedInventory = [...inventory];
-      updatedInventory[selectedItemIndex] = {
-        ...item,
-        Cantidad: item.Cantidad - quantityToSell,
-        Total: item.Costo * (item.Cantidad - quantityToSell),
-      };
-
-      setInventory(updatedInventory);
-
-      // Intentar actualizar el inventario en S3
       try {
+        console.log("🛒 [SELL] Iniciando venta de producto:", {
+          OC: item.OC,
+          Tela: item.Tela,
+          Color: item.Color,
+          Ubicacion: item.Ubicacion,
+          CantidadActual: item.Cantidad,
+          CantidadAVender: quantityToSell,
+          Modo: sellMode,
+        });
+
+        // 1. PRIMERO: Actualizar inventario en S3
+        const inventoryUpdatePayload = {
+          oldItem: {
+            OC: item.OC || "",
+            Tela: item.Tela || "",
+            Color: item.Color || "",
+            Ubicacion: item.Ubicacion || "",
+            Cantidad: item.Cantidad,
+            Costo: item.Costo,
+            Unidades: item.Unidades || "",
+          },
+          quantityChange: quantityToSell,
+          operation: "sell",
+        };
+
+        console.log("📦 [SELL] Enviando payload a S3:", inventoryUpdatePayload);
+
         const inventoryUpdateResponse = await fetch(
           "/api/s3/inventario/update",
           {
@@ -803,76 +1394,189 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              oldItem,
-              // No hay newItem en ventas, solo se reduce la cantidad
-              quantityChange: quantityToSell,
-            }),
+            body: JSON.stringify(inventoryUpdatePayload),
           }
         );
 
         if (!inventoryUpdateResponse.ok) {
           const errorData = await inventoryUpdateResponse.json();
+          console.error("❌ [SELL] Error respuesta S3:", errorData);
           throw new Error(
             errorData.error || "Error al actualizar inventario en S3"
           );
         }
 
-        console.log("Inventario actualizado en S3 correctamente");
-      } catch (inventoryError) {
-        console.error("Error al actualizar inventario en S3:", inventoryError);
-        toast.error(
-          "La venta se realizó localmente pero hubo un error al guardarla en S3. Los cambios se perderán al recargar la página."
-        );
-      }
+        const inventoryResult = await inventoryUpdateResponse.json();
+        console.log("✅ [SELL] Inventario actualizado en S3:", inventoryResult);
 
-      // Actualizar packing list si es modo rolls
-      if (sellMode === "rolls" && selectedRolls.length > 0) {
-        try {
-          const response = await fetch("/api/packing-list/update-rolls", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              tela: item.Tela,
-              color: item.Color,
-              lot: selectedLot,
-              soldRolls: selectedRolls.map(
-                (index) => availableRolls[index].roll_number
-              ),
-            }),
-          });
+        // 2. SEGUNDO: Actualizar estado local solo después del éxito en S3
+        // NOTA: Solo actualizar si el backend fue exitoso, porque el backend ya manejó la resta
+        const updatedInventory = [...inventory];
 
-          if (!response.ok) {
-            throw new Error(
-              "Error al actualizar el packing list en el servidor"
-            );
-          }
-
-          const result = await response.json();
-          console.log("Packing list actualizado:", result);
-
-          await loadPackingListData(item.Tela, item.Color);
-
-          toast.success(
-            "Rollos vendidos y tanto inventario como packing list actualizados correctamente"
-          );
-        } catch (error) {
-          console.error("Error al actualizar el packing list:", error);
-          toast.error(
-            "El inventario fue actualizado pero hubo un error al actualizar el packing list"
+        // Verificar si el item aún existe después de la venta
+        const newQuantity = item.Cantidad - quantityToSell;
+        if (newQuantity > 0) {
+          // Item todavía tiene inventario
+          updatedInventory[selectedItemIndex] = {
+            ...item,
+            Cantidad: newQuantity,
+            Total: item.Costo * newQuantity,
+          };
+        } else {
+          // Item sin inventario - remover del array local
+          updatedInventory.splice(selectedItemIndex, 1);
+          console.log(
+            `🗑️ [SELL] Item removido del inventario local (cantidad = 0)`
           );
         }
-      } else {
-        toast.success(
-          `Se vendieron ${quantityToSell.toFixed(2)} ${item.Unidades} de ${
-            item.Tela
-          } ${item.Color} y se guardó en S3`
-        );
-      }
 
-      setOpenSellDialog(false);
+        setInventory(updatedInventory);
+
+        // 3. TERCERO: Guardar historial de ventas (TANTO para rollos como manual)
+        try {
+          console.log("💾 [SELL] Guardando venta en historial...");
+
+          let soldRollsData: any[] = [];
+
+          if (sellMode === "rolls" && selectedRolls.length > 0) {
+            // Venta por rollos específicos
+            soldRollsData = selectedRolls.map((rollIndex) => {
+              const roll = availableRolls[rollIndex];
+              return {
+                roll_number: roll.roll_number,
+                fabric_type: item.Tela,
+                color: item.Color,
+                lot: selectedLot!,
+                oc: item.OC,
+                almacen: roll.almacen,
+                sold_quantity: roll.kg || roll.mts || 0,
+                units: item.Unidades,
+                costo: item.Costo,
+                sold_date: new Date().toISOString(),
+                sold_by: "",
+                available_for_return: true,
+                sale_type: "rolls",
+              };
+            });
+          } else if (sellMode === "manual") {
+            // Venta manual - crear un registro ficticio
+            const currentDate = new Date();
+            const timestamp = currentDate.getTime();
+            const manualRollNumber = `MANUAL-${timestamp.toString().slice(-6)}`;
+
+            soldRollsData = [
+              {
+                roll_number: manualRollNumber,
+                fabric_type: item.Tela,
+                color: item.Color,
+                lot: 0, // Lote 0 para ventas manuales
+                oc: item.OC,
+                almacen: item.Ubicacion,
+                sold_quantity: quantityToSell,
+                units: item.Unidades,
+                costo: item.Costo,
+                sold_date: currentDate.toISOString(),
+                sold_by: "",
+                available_for_return: true,
+                sale_type: "manual",
+              },
+            ];
+          }
+
+          if (soldRollsData.length > 0) {
+            const salesResponse = await fetch("/api/sales/save-sold-rolls", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                rolls: soldRollsData,
+                sale_notes:
+                  sellMode === "rolls"
+                    ? `Venta de ${selectedRolls.length} rollos del lote ${selectedLot}`
+                    : `Venta manual de ${quantityToSell.toFixed(2)} ${
+                        item.Unidades
+                      }`,
+                customer_info: "",
+              }),
+            });
+
+            if (!salesResponse.ok) {
+              const salesError = await salesResponse.json();
+              console.error("❌ [SELL] Error en historial:", salesError);
+              throw new Error(
+                salesError.error || "Error al guardar historial de ventas"
+              );
+            }
+
+            const salesResult = await salesResponse.json();
+            console.log("✅ [SELL] Historial guardado:", salesResult);
+          }
+
+          // 4. CUARTO: Actualizar packing list (solo para ventas por rollos)
+          if (sellMode === "rolls" && selectedRolls.length > 0) {
+            const packingResponse = await fetch(
+              "/api/packing-list/update-rolls",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  tela: item.Tela,
+                  color: item.Color,
+                  lot: selectedLot,
+                  soldRolls: selectedRolls.map(
+                    (index) => availableRolls[index].roll_number
+                  ),
+                }),
+              }
+            );
+
+            if (!packingResponse.ok) {
+              throw new Error("Error al actualizar el packing list");
+            }
+
+            await loadPackingListData(item.Tela, item.Color, item.Ubicacion);
+
+            toast.success(
+              `✅ Venta completada: ${quantityToSell.toFixed(2)} ${
+                item.Unidades
+              } de ${item.Tela} ${
+                item.Color
+              }. Inventario, packing list e historial actualizados.`
+            );
+          } else {
+            toast.success(
+              `✅ Venta manual completada: ${quantityToSell.toFixed(2)} ${
+                item.Unidades
+              } de ${item.Tela} ${
+                item.Color
+              }. Inventario e historial actualizados.`
+            );
+          }
+        } catch (error) {
+          console.error("❌ [SELL] Error en procesos secundarios:", error);
+          toast.warning(
+            `Inventario actualizado, pero error en: ${
+              error instanceof Error ? error.message : "proceso secundario"
+            }`
+          );
+        }
+
+        setOpenSellDialog(false);
+      } catch (error) {
+        console.error("❌ [SELL] Error general:", error);
+        toast.error(
+          `Error en la venta: ${
+            error instanceof Error ? error.message : "Error desconocido"
+          }`
+        );
+
+        // NO actualizar estado local si hay error en S3
+      } finally {
+        setIsProcessingSell(false);
+      }
     }
   };
 
@@ -899,13 +1603,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     if (selectedItemIndex !== null) {
       const item = inventory[selectedItemIndex];
 
-      console.log("🚀 INICIANDO TRASLADO:", {
+      console.log("🚀 INICIANDO TRASLADO CON CONSOLIDACIÓN:", {
         item: {
           OC: item.OC,
           Tela: item.Tela,
           Color: item.Color,
           Ubicacion: item.Ubicacion,
           Cantidad: item.Cantidad,
+          Costo: item.Costo,
+          Unidades: item.Unidades,
         },
         transferMode,
         selectedTransferRolls: selectedTransferRolls.length,
@@ -938,39 +1644,92 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return;
       }
 
-      // Activar el estado de procesamiento
       setIsProcessingTransfer(true);
 
-      // Resto del código de la función permanece igual...
-      // Preparar datos para la actualización
       const oldItem = {
         OC: item.OC || "",
         Tela: item.Tela || "",
         Color: item.Color || "",
         Ubicacion: item.Ubicacion || "",
         Cantidad: item.Cantidad,
-      };
-
-      const newMeridaItem = {
-        OC: item.OC || "",
-        Tela: item.Tela || "",
-        Color: item.Color || "",
-        Ubicacion: "Mérida",
-        Cantidad: quantityToTransfer,
         Costo: item.Costo,
         Unidades: item.Unidades || "",
-        Total: item.Costo * quantityToTransfer,
-        Importacion: item.Importacion || "",
-        FacturaDragonAzteca: item.FacturaDragonAzteca || "",
       };
 
-      console.log("📊 DATOS DE ACTUALIZACIÓN:", {
-        oldItem,
-        newMeridaItem,
-        quantityChange: quantityToTransfer,
+      const existingMeridaItem = inventory.find(
+        (invItem) =>
+          invItem.Tela.toLowerCase() === item.Tela.toLowerCase() &&
+          invItem.Color.toLowerCase() === item.Color.toLowerCase() &&
+          invItem.Ubicacion === "Mérida" &&
+          invItem.OC === item.OC &&
+          Math.abs(invItem.Costo - item.Costo) < 0.01 &&
+          invItem.Unidades === item.Unidades
+      );
+
+      console.log("🔍 BÚSQUEDA DE ITEM CONSOLIDABLE:", {
+        found: !!existingMeridaItem,
+        criteria: {
+          OC: item.OC,
+          Tela: item.Tela,
+          Color: item.Color,
+          Ubicacion: "Mérida",
+          Costo: item.Costo,
+          Unidades: item.Unidades,
+        },
+        existingItem: existingMeridaItem
+          ? {
+              OC: existingMeridaItem.OC,
+              Cantidad: existingMeridaItem.Cantidad,
+              Ubicacion: existingMeridaItem.Ubicacion,
+            }
+          : null,
       });
 
-      // Actualizar estado local primero (para feedback inmediato)
+      let updatePayload: any;
+
+      if (existingMeridaItem) {
+        console.log("✅ CONSOLIDANDO CON ITEM EXISTENTE EN MÉRIDA");
+
+        updatePayload = {
+          transferType: "consolidate",
+          oldItem,
+          existingMeridaItem: {
+            OC: existingMeridaItem.OC,
+            Tela: existingMeridaItem.Tela,
+            Color: existingMeridaItem.Color,
+            Ubicacion: existingMeridaItem.Ubicacion,
+            Cantidad: existingMeridaItem.Cantidad,
+            Costo: existingMeridaItem.Costo,
+            Unidades: existingMeridaItem.Unidades,
+          },
+          quantityToTransfer,
+          newMeridaQuantity: existingMeridaItem.Cantidad + quantityToTransfer,
+        };
+      } else {
+        console.log("🆕 CREANDO NUEVO ITEM EN MÉRIDA");
+
+        const newMeridaItem = {
+          OC: item.OC || "",
+          Tela: item.Tela || "",
+          Color: item.Color || "",
+          Ubicacion: "Mérida",
+          Cantidad: quantityToTransfer,
+          Costo: item.Costo,
+          Unidades: item.Unidades || "",
+          Total: item.Costo * quantityToTransfer,
+          Importacion: item.Importacion || "",
+          FacturaDragonAzteca: item.FacturaDragonAzteca || "",
+          status: "completed",
+        };
+
+        updatePayload = {
+          transferType: "create",
+          oldItem,
+          newItem: newMeridaItem,
+          quantityToTransfer,
+        };
+      }
+
       const updatedInventory = [...inventory];
 
       updatedInventory[selectedItemIndex] = {
@@ -979,36 +1738,51 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         Total: item.Costo * (item.Cantidad - quantityToTransfer),
       };
 
-      const meridaIndex = updatedInventory.findIndex(
-        (invItem) =>
-          invItem.Tela === item.Tela &&
-          invItem.Color === item.Color &&
-          invItem.Ubicacion === "Mérida" &&
-          invItem.OC === item.OC
-      );
+      if (existingMeridaItem) {
+        const meridaIndex = updatedInventory.findIndex(
+          (invItem) =>
+            invItem.Tela.toLowerCase() ===
+              existingMeridaItem.Tela.toLowerCase() &&
+            invItem.Color.toLowerCase() ===
+              existingMeridaItem.Color.toLowerCase() &&
+            invItem.Ubicacion === "Mérida" &&
+            invItem.OC === existingMeridaItem.OC &&
+            Math.abs(invItem.Costo - existingMeridaItem.Costo) < 0.01
+        );
 
-      if (meridaIndex >= 0) {
-        updatedInventory[meridaIndex] = {
-          ...updatedInventory[meridaIndex],
-          Cantidad: updatedInventory[meridaIndex].Cantidad + quantityToTransfer,
-          Total:
-            updatedInventory[meridaIndex].Costo *
-            (updatedInventory[meridaIndex].Cantidad + quantityToTransfer),
-        };
+        if (meridaIndex >= 0) {
+          updatedInventory[meridaIndex] = {
+            ...updatedInventory[meridaIndex],
+            Cantidad:
+              updatedInventory[meridaIndex].Cantidad + quantityToTransfer,
+            Total:
+              updatedInventory[meridaIndex].Costo *
+              (updatedInventory[meridaIndex].Cantidad + quantityToTransfer),
+          };
+
+          console.log(
+            `📈 ESTADO LOCAL: Cantidad consolidada en Mérida: ${
+              updatedInventory[meridaIndex].Cantidad - quantityToTransfer
+            } -> ${updatedInventory[meridaIndex].Cantidad}`
+          );
+        }
       } else {
-        updatedInventory.push(newMeridaItem);
+        updatedInventory.push(updatePayload.newItem);
+        console.log("➕ ESTADO LOCAL: Nuevo item agregado en Mérida");
       }
 
       setInventory(updatedInventory);
 
-      // Variables para rastrear el estado de las operaciones
       let inventoryUpdateSuccess = false;
       let packingListUpdateSuccess = false;
 
       try {
-        // 1. Actualizar inventario en S3
         try {
-          console.log("📦 ACTUALIZANDO INVENTARIO EN S3...");
+          console.log(
+            "📦 ENVIANDO PAYLOAD DE CONSOLIDACIÓN AL BACKEND:",
+            updatePayload
+          );
+
           const inventoryUpdateResponse = await fetch(
             "/api/s3/inventario/update",
             {
@@ -1016,50 +1790,58 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-                oldItem,
-                newItem: newMeridaItem,
-                quantityChange: quantityToTransfer,
-              }),
+              body: JSON.stringify(updatePayload),
             }
           );
 
           const inventoryResponseData = await inventoryUpdateResponse.json();
-          console.log("📦 RESPUESTA INVENTARIO:", inventoryResponseData);
+          console.log(
+            "📦 RESPUESTA BACKEND CONSOLIDACIÓN:",
+            inventoryResponseData
+          );
 
           if (!inventoryUpdateResponse.ok) {
-            // Manejar errores específicos del inventario
-            if (inventoryUpdateResponse.status === 404) {
-              throw new Error(
-                `No se encontró el item en el inventario S3. Criterios de búsqueda: ${JSON.stringify(
-                  inventoryResponseData.searchCriteria || oldItem
-                )}`
-              );
-            } else {
-              throw new Error(
-                inventoryResponseData.error ||
-                  "Error al actualizar inventario en S3"
-              );
-            }
+            throw new Error(
+              inventoryResponseData.error ||
+                inventoryResponseData.details ||
+                "Error al procesar traslado con consolidación"
+            );
           }
 
-          console.log("✅ INVENTARIO ACTUALIZADO EN S3");
+          console.log("✅ TRASLADO CON CONSOLIDACIÓN COMPLETADO EN S3");
           inventoryUpdateSuccess = true;
+
+          if (inventoryResponseData.operation === "consolidate") {
+            toast.success(
+              `✅ Traslado consolidado: ${quantityToTransfer.toFixed(2)} ${
+                item.Unidades
+              } agregados al item existente en Mérida`
+            );
+          } else if (inventoryResponseData.operation === "create") {
+            toast.success(
+              `✅ Nuevo item creado en Mérida: ${quantityToTransfer.toFixed(
+                2
+              )} ${item.Unidades}`
+            );
+          }
         } catch (inventoryError) {
           console.error(
-            "❌ ERROR AL ACTUALIZAR INVENTARIO EN S3:",
+            "❌ ERROR AL ACTUALIZAR INVENTARIO CON CONSOLIDACIÓN:",
             inventoryError
           );
+
+          setInventory(inventory);
+
           toast.error(
-            `Error en inventario S3: ${
+            `Error en consolidación: ${
               inventoryError instanceof Error
                 ? inventoryError.message
                 : String(inventoryError)
             }`
           );
+          return;
         }
 
-        // 2. Actualizar packing list si es modo rolls
         if (transferMode === "rolls" && selectedTransferRolls.length > 0) {
           try {
             console.log("📋 ACTUALIZANDO PACKING LIST...", {
@@ -1090,7 +1872,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             console.log("📋 RESPUESTA PACKING LIST:", packingListResponseData);
 
             if (!response.ok) {
-              // Manejar errores específicos del packing list
               if (
                 response.status === 404 &&
                 packingListResponseData.nonExistentRolls
@@ -1122,61 +1903,47 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               }
             }
 
-            const result = packingListResponseData;
-            console.log("✅ PACKING LIST ACTUALIZADO:", result);
+            console.log(
+              "✅ PACKING LIST ACTUALIZADO:",
+              packingListResponseData
+            );
 
             await loadTransferPackingListData(item.Tela, item.Color);
             packingListUpdateSuccess = true;
           } catch (error) {
             console.error("❌ ERROR AL ACTUALIZAR PACKING LIST:", error);
-            toast.error(
-              `Error en packing list: ${
+            toast.warning(
+              `Traslado completado, pero error en packing list: ${
                 error instanceof Error ? error.message : String(error)
               }`
             );
+            packingListUpdateSuccess = false;
           }
         } else {
-          packingListUpdateSuccess = true; // No hay packing list que actualizar
+          packingListUpdateSuccess = true;
         }
 
-        // 3. Mostrar mensaje final basado en los estados
-        if (inventoryUpdateSuccess && packingListUpdateSuccess) {
-          if (transferMode === "rolls") {
-            toast.success(
-              "✅ Rollos trasladados correctamente. Tanto inventario como packing list fueron actualizados."
-            );
-          } else {
-            toast.success(
-              `✅ Se trasladaron ${quantityToTransfer.toFixed(2)} ${
-                item.Unidades
-              } de ${item.Tela} ${
-                item.Color
-              } de CDMX a Mérida y se guardó en S3`
-            );
-          }
-        } else if (inventoryUpdateSuccess && !packingListUpdateSuccess) {
+        if (!inventoryUpdateSuccess) {
+          toast.error("❌ Error completo: no se pudo completar el traslado");
+        } else if (transferMode === "rolls" && !packingListUpdateSuccess) {
           toast.warning(
-            "⚠️ El inventario fue actualizado correctamente, pero hubo un error al actualizar el packing list."
+            "⚠️ Traslado completado con consolidación, pero con errores en packing list."
           );
-        } else if (!inventoryUpdateSuccess && packingListUpdateSuccess) {
-          toast.warning(
-            "⚠️ El packing list fue actualizado, pero hubo un error al actualizar el inventario en S3."
-          );
-        } else {
-          toast.error(
-            "❌ Hubo errores al actualizar tanto el inventario como el packing list. Los cambios solo están en memoria."
+        } else if (transferMode === "rolls" && packingListUpdateSuccess) {
+          toast.success(
+            "✅ Traslado con consolidación y packing list actualizados correctamente."
           );
         }
 
         setOpenTransferDialog(false);
 
-        console.log("🏁 TRASLADO COMPLETADO:", {
+        console.log("🏁 TRASLADO CON CONSOLIDACIÓN COMPLETADO:", {
           inventoryUpdateSuccess,
           packingListUpdateSuccess,
           quantityTransferred: quantityToTransfer,
+          operationType: updatePayload.transferType,
         });
       } finally {
-        // Desactivar el estado de procesamiento
         setIsProcessingTransfer(false);
       }
     }
@@ -1430,7 +2197,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             }
 
             console.log("🔄 [InventoryCard] Procesando datos históricos...");
-            // Usar la nueva función de procesamiento
             const parsedData = processInventoryData(dataToProcess);
 
             console.log(
@@ -1635,7 +2401,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const uniqueTelas = useMemo(
     () =>
       Array.from(new Set(filteredInventoryForTela.map((item) => item.Tela)))
-        .filter((tela) => tela !== "")
+        .filter((tela) => tela !== "" && tela != null)
         .sort(),
     [filteredInventoryForTela]
   );
@@ -1643,7 +2409,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const uniqueColors = useMemo(
     () =>
       Array.from(new Set(filteredInventoryForColor.map((item) => item.Color)))
-        .filter((color) => color !== "")
+        .filter((color) => color !== "" && color != null)
         .sort(),
     [filteredInventoryForColor]
   );
@@ -1653,7 +2419,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       Array.from(
         new Set(filteredInventoryForUbicacion.map((item) => item.Ubicacion))
       )
-        .filter((ubicacion) => ubicacion !== "")
+        .filter((ubicacion) => ubicacion !== "" && ubicacion != null)
         .sort(),
     [filteredInventoryForUbicacion]
   );
@@ -1767,6 +2533,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Limpiar filtros</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {isAdmin && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleOpenReturnsDialog}
+                  >
+                    <UndoIcon className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Procesar Devoluciones</p>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -2235,7 +3018,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                           handleOpenSellDialog(index)
                                         }
                                       >
-                                        <MinusIcon className="h-4 w-4" />
+                                        <DollarSign className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
@@ -2441,23 +3224,25 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             </div>
 
             {sellMode === "manual" ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="quantity" className="text-right">
-                    Cantidad
-                  </Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={quantityToUpdate}
-                    onChange={(e) =>
-                      setQuantityToUpdate(Number(e.target.value))
-                    }
-                    className="col-span-3"
-                  />
-                </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="quantity" className="text-right">
+                  Cantidad
+                </Label>
+                <Input
+                  id="quantity"
+                  type="text"
+                  value={
+                    quantityToUpdate === 0
+                      ? ""
+                      : formatInputNumber(quantityToUpdate.toString())
+                  }
+                  onChange={(e) => {
+                    const numericValue = parseInputNumber(e.target.value);
+                    setQuantityToUpdate(numericValue);
+                  }}
+                  placeholder="0.00"
+                  className="col-span-3"
+                />
               </div>
             ) : (
               <div className="space-y-3">
@@ -2677,17 +3462,30 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenSellDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setOpenSellDialog(false)}
+              disabled={isProcessingSell} // Deshabilitar también el botón cancelar
+            >
               Cancelar
             </Button>
             <Button
               onClick={handleSellItem}
               disabled={
+                isProcessingSell ||
                 (sellMode === "manual" && quantityToUpdate <= 0) ||
                 (sellMode === "rolls" && selectedRolls.length === 0)
               }
+              className="flex items-center gap-2"
             >
-              Confirmar Venta
+              {isProcessingSell ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  Procesando Venta...
+                </>
+              ) : (
+                "Confirmar Venta"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2739,23 +3537,25 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             </div>
 
             {transferMode === "manual" ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="transfer-quantity" className="text-right">
-                    Cantidad
-                  </Label>
-                  <Input
-                    id="transfer-quantity"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={quantityToUpdate}
-                    onChange={(e) =>
-                      setQuantityToUpdate(Number(e.target.value))
-                    }
-                    className="col-span-3"
-                  />
-                </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="transfer-quantity" className="text-right">
+                  Cantidad
+                </Label>
+                <Input
+                  id="transfer-quantity"
+                  type="text"
+                  value={
+                    quantityToUpdate === 0
+                      ? ""
+                      : formatInputNumber(quantityToUpdate.toString())
+                  }
+                  onChange={(e) => {
+                    const numericValue = parseInputNumber(e.target.value);
+                    setQuantityToUpdate(numericValue);
+                  }}
+                  placeholder="0.00"
+                  className="col-span-3"
+                />
               </div>
             ) : (
               <div className="space-y-3">
@@ -3019,10 +3819,17 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </Label>
               <Input
                 id="add-quantity"
-                type="number"
-                min="0"
-                value={quantityToUpdate}
-                onChange={(e) => setQuantityToUpdate(Number(e.target.value))}
+                type="text"
+                value={
+                  quantityToUpdate === 0
+                    ? ""
+                    : formatInputNumber(quantityToUpdate.toString())
+                }
+                onChange={(e) => {
+                  const numericValue = parseInputNumber(e.target.value);
+                  setQuantityToUpdate(numericValue);
+                }}
+                placeholder="0.00"
                 className="col-span-3"
               />
             </div>
@@ -3227,6 +4034,389 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </>
               ) : (
                 "Guardar Cambios"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openReturnsDialog} onOpenChange={setOpenReturnsDialog}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <UndoIcon className="mr-2 h-5 w-5" />
+              Procesar Devoluciones
+            </DialogTitle>
+            <DialogDescription>
+              Seleccione los rollos que desea devolver al inventario
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {isLoadingReturns ? (
+              <div className="flex justify-center py-12">
+                <div className="flex flex-col items-center">
+                  <Loader2Icon className="h-8 w-8 animate-spin text-gray-500 mb-3" />
+                  <p className="text-gray-500">Cargando rollos vendidos...</p>
+                </div>
+              </div>
+            ) : availableSoldRolls.length > 0 ? (
+              <>
+                {/* Selectores de filtrado */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Selector de Orden de Compra */}
+                  <div className="space-y-2">
+                    <Label>Orden de Compra</Label>
+                    <Select
+                      value={selectedOCForReturns}
+                      onValueChange={handleOCChangeForReturns}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione una OC" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableOCs.map((oc) => {
+                          const totalRollsInOC = Object.values(
+                            groupedByOCAndLot[oc] || {}
+                          )
+                            .flat()
+                            .filter(
+                              (roll: any) => roll.available_for_return
+                            ).length;
+
+                          return (
+                            <SelectItem key={oc} value={oc}>
+                              {oc} ({totalRollsInOC} rollos)
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Lote (opcional)</Label>
+                    <Select
+                      value={selectedLotForReturns || "all"}
+                      onValueChange={handleLotChangeForReturns}
+                      disabled={!selectedOCForReturns}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los lotes" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los lotes</SelectItem>
+                        {availableLotsForReturns.map((lot) => {
+                          const rollsInLot =
+                            groupedByOCAndLot[selectedOCForReturns]?.[
+                              lot
+                            ]?.filter((roll: any) => roll.available_for_return)
+                              ?.length || 0;
+
+                          return (
+                            <SelectItem key={lot} value={lot.toString()}>
+                              Lote {lot} ({rollsInLot} rollos)
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {selectedOCForReturns &&
+                  getFilteredRollsForReturns().length > 0 && (
+                    <>
+                      {/* Información resumida */}
+                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-medium text-blue-900">
+                              OC: {selectedOCForReturns}
+                              {selectedLotForReturns &&
+                                ` - Lote ${selectedLotForReturns}`}
+                            </h3>
+                            <p className="text-sm text-blue-700">
+                              Rollos mostrados:{" "}
+                              <span className="font-bold">
+                                {getFilteredRollsForReturns().length}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-blue-700">
+                              Seleccionados:{" "}
+                              <span className="font-bold">
+                                {selectedReturnRolls.length}
+                              </span>
+                            </p>
+                            <p className="text-xs text-blue-600">
+                              Total:{" "}
+                              {calculateTotalReturnQuantityFiltered().toFixed(
+                                2
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botones de selección */}
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setSelectedReturnRolls(
+                              getFilteredRollsForReturns().map((_, i) => i)
+                            )
+                          }
+                        >
+                          Todos
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedReturnRolls([])}
+                        >
+                          Limpiar
+                        </Button>
+                      </div>
+
+                      <div className="border rounded-lg max-h-60 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="p-2 text-left text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    selectedReturnRolls.length ===
+                                      getFilteredRollsForReturns().length &&
+                                    getFilteredRollsForReturns().length > 0
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedReturnRolls(
+                                        getFilteredRollsForReturns().map(
+                                          (_, i) => i
+                                        )
+                                      );
+                                    } else {
+                                      setSelectedReturnRolls([]);
+                                    }
+                                  }}
+                                />
+                              </th>
+                              <th className="p-2 text-left font-medium">
+                                Rollo #
+                              </th>
+                              <th className="p-2 text-left font-medium">
+                                Lote
+                              </th>
+                              <th className="p-2 text-left font-medium">
+                                Tela
+                              </th>
+                              <th className="p-2 text-left font-medium">
+                                Color
+                              </th>
+                              <th className="p-2 text-left font-medium">
+                                Almacén
+                              </th>
+                              <th className="p-2 text-left font-medium">
+                                Cantidad
+                              </th>
+                              <th className="p-2 text-left font-medium">
+                                Fecha Venta
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {getFilteredRollsForReturns().map((roll, index) => (
+                              <tr
+                                key={`return-roll-${roll.roll_number}-${roll.lot}-${index}`}
+                                className={`border-b hover:bg-gray-50 cursor-pointer ${
+                                  selectedReturnRolls.includes(index)
+                                    ? "bg-blue-50"
+                                    : ""
+                                }`}
+                                onClick={() =>
+                                  handleReturnRollSelectionFiltered(index)
+                                }
+                              >
+                                <td
+                                  className="p-2 text-sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedReturnRolls.includes(
+                                      index
+                                    )}
+                                    onChange={() =>
+                                      handleReturnRollSelectionFiltered(index)
+                                    }
+                                  />
+                                </td>
+                                <td className="p-2 font-medium">
+                                  {roll.sale_type === "manual" ? (
+                                    <span className="flex items-center">
+                                      #{roll.roll_number}
+                                    </span>
+                                  ) : (
+                                    `#${roll.roll_number}`
+                                  )}
+                                </td>
+                                <td className="p-2">
+                                  {roll.lot === 0 ? (
+                                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                                      Manual
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+                                      {roll.lot}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-2">{roll.fabric_type}</td>
+                                <td className="p-2">{roll.color}</td>
+                                <td className="p-2">
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-xs ${
+                                      roll.almacen === "CDMX"
+                                        ? "bg-blue-100 text-blue-800"
+                                        : "bg-green-100 text-green-800"
+                                    }`}
+                                  >
+                                    {roll.almacen}
+                                  </span>
+                                </td>
+                                <td className="p-2 font-medium">
+                                  {formatNumber(roll.sold_quantity)}{" "}
+                                  {roll.units}
+                                </td>
+                                <td className="p-2 text-gray-600">
+                                  {new Date(roll.sold_date).toLocaleDateString(
+                                    "es-MX",
+                                    {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    }
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-50 sticky bottom-0">
+                            <tr>
+                              <td
+                                colSpan={6}
+                                className="p-2 text-right font-medium text-sm"
+                              >
+                                Total a devolver:
+                              </td>
+                              <td className="p-2 font-bold text-sm">
+                                {formatNumber(
+                                  calculateTotalReturnQuantityFiltered()
+                                )}{" "}
+                                {getFilteredRollsForReturns()[0]?.units || ""}
+                              </td>
+                              <td className="p-2"></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                      {/* Resumen de devolución */}
+                      {selectedReturnRolls.length > 0 && (
+                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm text-yellow-800">
+                              Resumen de devolución:
+                            </span>
+                            <span className="text-lg font-bold text-yellow-900">
+                              {formatNumber(
+                                calculateTotalReturnQuantityFiltered()
+                              )}{" "}
+                              {getFilteredRollsForReturns()[0]?.units || ""}
+                            </span>
+                          </div>
+                          <div className="text-sm text-yellow-700 mt-1">
+                            {selectedReturnRolls.length} rollo(s) de la OC{" "}
+                            {selectedOCForReturns}
+                            {selectedLotForReturns &&
+                              ` (Lote ${selectedLotForReturns})`}
+                          </div>
+                          <div className="text-sm text-yellow-700">
+                            Los rollos se agregarán de vuelta al inventario y
+                            packing list
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <UndoIcon className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                <p>No hay rollos vendidos disponibles para devolución</p>
+                <p className="text-sm mt-2">
+                  Los rollos vendidos recientemente aparecerán aquí
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOpenReturnsDialog(false)}
+              disabled={isProcessingReturns}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                // Actualizar la función de proceso para usar los rollos filtrados
+                const currentRolls = getFilteredRollsForReturns();
+                const rollsToReturn = selectedReturnRolls.map((index) => {
+                  const roll = currentRolls[index];
+                  return {
+                    roll_number: roll.roll_number,
+                    fabric_type: roll.fabric_type,
+                    color: roll.color,
+                    lot: roll.lot,
+                    oc: roll.oc,
+                    almacen: roll.almacen,
+                    return_quantity: roll.sold_quantity,
+                    units: roll.units,
+                    costo: roll.costo || 0,
+                    return_reason: "Devolución procesada desde interfaz",
+                    sale_id: roll.sale_id,
+                    original_sold_date: roll.sold_date,
+                  };
+                });
+
+                // Llamar a la función de procesamiento existente pero con los datos filtrados
+                handleProcessReturnsWithData(rollsToReturn);
+              }}
+              disabled={
+                isProcessingReturns ||
+                selectedReturnRolls.length === 0 ||
+                !selectedOCForReturns
+              }
+              className="flex items-center gap-2"
+            >
+              {isProcessingReturns ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <UndoIcon className="h-4 w-4" />
+                  Procesar Devolución
+                </>
               )}
             </Button>
           </DialogFooter>

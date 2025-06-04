@@ -5,7 +5,14 @@ import { signOut, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import { LogOutIcon, HistoryIcon, BarChart, XCircleIcon } from "lucide-react";
+import {
+  LogOutIcon,
+  HistoryIcon,
+  BarChart,
+  XCircleIcon,
+  Plus,
+  Loader2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -15,6 +22,23 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { InventoryCard } from "@/components/inventory-dashboard/InventoryCard";
 import { VisualizationsCard } from "@/components/inventory-dashboard/VisualizationsCard";
@@ -33,7 +57,6 @@ import {
   ParsedCSVData,
   FilterOptions,
 } from "../../../types/types";
-import { getInventarioCsv } from "@/lib/s3";
 import { parseNumericValue, mapCsvFields, normalizeCsvData } from "@/lib/utils";
 
 function useIsMobile() {
@@ -64,6 +87,386 @@ interface DashboardProps {
   onLogout?: () => void;
 }
 
+// === COMPONENTE NUEVO ROW DIALOG INTEGRADO ===
+interface NewRowDialogProps {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  onSuccess?: () => void;
+}
+
+interface FormData {
+  OC: string;
+  Tela: string;
+  Color: string;
+  Ubicacion: string;
+  Cantidad: string;
+  Costo: string;
+  Unidades: "KGS" | "MTS";
+  Importacion: string;
+  FacturaDragonAzteca: string;
+}
+
+const NewRowDialog: React.FC<NewRowDialogProps> = ({
+  open,
+  setOpen,
+  onSuccess,
+}) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState<FormData>({
+    OC: "",
+    Tela: "",
+    Color: "",
+    Ubicacion: "",
+    Cantidad: "",
+    Costo: "",
+    Unidades: "KGS",
+    Importacion: "DA",
+    FacturaDragonAzteca: "",
+  });
+
+  const handleInputChange = (field: keyof FormData, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const validateForm = (): boolean => {
+    const requiredFields = [
+      "OC",
+      "Tela",
+      "Color",
+      "Ubicacion",
+      "Cantidad",
+      "Costo",
+    ];
+
+    for (const field of requiredFields) {
+      if (!formData[field as keyof FormData]?.trim()) {
+        toast.error(`El campo ${field} es requerido`);
+        return false;
+      }
+    }
+
+    const cantidad = parseFloat(formData.Cantidad);
+    const costo = parseFloat(formData.Costo);
+
+    if (isNaN(cantidad) || cantidad <= 0) {
+      toast.error("La cantidad debe ser un número mayor a 0");
+      return false;
+    }
+
+    if (isNaN(costo) || costo < 0) {
+      toast.error("El costo debe ser un número mayor o igual a 0");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+    const submitStartTime = Date.now();
+
+    try {
+      console.log("🚀 [NEW-ROW] === CREANDO NUEVA ROW ===");
+      console.log("📋 [NEW-ROW] Datos a enviar:", formData);
+      console.log("⏰ [NEW-ROW] Timestamp inicio:", new Date().toISOString());
+
+      const requestBody = {
+        ...formData,
+        Cantidad: parseFloat(formData.Cantidad),
+        Costo: parseFloat(formData.Costo),
+      };
+
+      console.log("📦 [NEW-ROW] Body de la request:", requestBody);
+
+      const response = await fetch("/api/s3/inventario/create-row", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const submitDuration = Date.now() - submitStartTime;
+      console.log(`⏱️ [NEW-ROW] Request completada en ${submitDuration}ms`);
+
+      const result = await response.json();
+      console.log("📊 [NEW-ROW] Respuesta completa:", result);
+
+      if (!response.ok) {
+        console.error(
+          "❌ [NEW-ROW] Error en respuesta:",
+          response.status,
+          response.statusText
+        );
+        throw new Error(result.error || "Error al crear la nueva row");
+      }
+
+      // Log del resultado exitoso
+      console.log("✅ [NEW-ROW] Row creada exitosamente:");
+      console.log("📄 [NEW-ROW] Archivo creado:", result.data.fileKey);
+      console.log("📊 [NEW-ROW] Item creado:", result.data.item);
+
+      // Mostrar detalles del éxito
+      toast.success(`🎉 Nueva row creada exitosamente`, {
+        description: `${result.data.fileName} - ${result.data.item.OC} ${result.data.item.Tela} ${result.data.item.Color}`,
+      });
+
+      // Resetear formulario
+      setFormData({
+        OC: "",
+        Tela: "",
+        Color: "",
+        Ubicacion: "",
+        Cantidad: "",
+        Costo: "",
+        Unidades: "KGS",
+        Importacion: "DA",
+        FacturaDragonAzteca: "",
+      });
+
+      // Cerrar diálogo
+      setOpen(false);
+
+      // 🔧 IMPORTANTE: Solo llamar callback DESPUÉS de crear la row exitosamente
+      console.log("🔄 [NEW-ROW] Llamando callback de éxito...");
+      if (onSuccess) {
+        onSuccess();
+      }
+    } catch (error) {
+      const submitDuration = Date.now() - submitStartTime;
+      console.error(
+        `❌ [NEW-ROW] Error después de ${submitDuration}ms:`,
+        error
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Error al crear la nueva row"
+      );
+    } finally {
+      setIsLoading(false);
+      console.log("🏁 [NEW-ROW] === PROCESO COMPLETADO ===");
+    }
+  };
+
+  const handleCancel = () => {
+    console.log("❌ [NEW-ROW] Usuario canceló la creación");
+    setOpen(false);
+    // Resetear formulario al cancelar
+    setFormData({
+      OC: "",
+      Tela: "",
+      Color: "",
+      Ubicacion: "",
+      Cantidad: "",
+      Costo: "",
+      Unidades: "KGS",
+      Importacion: "DA",
+      FacturaDragonAzteca: "",
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Agregar Nueva Row de Inventario
+          </DialogTitle>
+          <DialogDescription>
+            Crea una nueva entrada de inventario con status "success". Todos los
+            campos marcados con * son obligatorios.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          {/* OC */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="oc" className="text-right">
+              OC *
+            </Label>
+            <Input
+              id="oc"
+              placeholder="Ej: Dsma-03-23-Slm1-Pqp1"
+              value={formData.OC}
+              onChange={(e) => handleInputChange("OC", e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+
+          {/* Tela */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="tela" className="text-right">
+              Tela *
+            </Label>
+            <Input
+              id="tela"
+              placeholder="Ej: Slim, Maiky Plus, etc."
+              value={formData.Tela}
+              onChange={(e) => handleInputChange("Tela", e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+
+          {/* Color */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="color" className="text-right">
+              Color *
+            </Label>
+            <Input
+              id="color"
+              placeholder="Ej: Rojo, Negro, Azul, etc."
+              value={formData.Color}
+              onChange={(e) => handleInputChange("Color", e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+
+          {/* Ubicación */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="ubicacion" className="text-right">
+              Ubicación *
+            </Label>
+            <Select
+              value={formData.Ubicacion}
+              onValueChange={(value) => handleInputChange("Ubicacion", value)}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Selecciona ubicación" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CDMX">CDMX</SelectItem>
+                <SelectItem value="Mérida">Mérida</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Cantidad */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="cantidad" className="text-right">
+              Cantidad *
+            </Label>
+            <Input
+              id="cantidad"
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="Ej: 100.5"
+              value={formData.Cantidad}
+              onChange={(e) => handleInputChange("Cantidad", e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+
+          {/* Costo */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="costo" className="text-right">
+              Costo *
+            </Label>
+            <Input
+              id="costo"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Ej: 77.50"
+              value={formData.Costo}
+              onChange={(e) => handleInputChange("Costo", e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+
+          {/* Unidades */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="unidades" className="text-right">
+              Unidades *
+            </Label>
+            <Select
+              value={formData.Unidades}
+              onValueChange={(value: "KGS" | "MTS") =>
+                handleInputChange("Unidades", value)
+              }
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="KGS">KGS</SelectItem>
+                <SelectItem value="MTS">MTS</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Importación */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="importacion" className="text-right">
+              Importación
+            </Label>
+            <Select
+              value={formData.Importacion}
+              onValueChange={(value) => handleInputChange("Importacion", value)}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DA">DA</SelectItem>
+                <SelectItem value="HOY">HOY</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Factura Dragón Azteca */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="factura" className="text-right">
+              Factura D.A.
+            </Label>
+            <Input
+              id="factura"
+              placeholder="Número de factura (opcional)"
+              value={formData.FacturaDragonAzteca}
+              onChange={(e) =>
+                handleInputChange("FacturaDragonAzteca", e.target.value)
+              }
+              className="col-span-3"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCancel}
+            disabled={isLoading}
+          >
+            Cancelar
+          </Button>
+          <Button type="button" onClick={handleSubmit} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creando...
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                Crear Row
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// === FUNCIÓN PARA PROCESAR DATOS ===
 function processInventoryData(data: any[]): InventoryItem[] {
   const processedItems: InventoryItem[] = [];
 
@@ -175,6 +578,7 @@ function processInventoryData(data: any[]): InventoryItem[] {
   return processedItems;
 }
 
+// === COMPONENTE PRINCIPAL DASHBOARD ===
 const Dashboard: React.FC<DashboardProps> = () => {
   const isMobile = useIsMobile();
 
@@ -193,6 +597,9 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [showPedidosDashboard, setShowPedidosDashboard] = useState(false);
+
+  // 🆕 NUEVO ESTADO PARA EL DIÁLOGO DE NUEVA ROW
+  const [openNewRow, setOpenNewRow] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -247,6 +654,88 @@ const Dashboard: React.FC<DashboardProps> = () => {
         toastsShown[type] = false;
       }, 10000);
     }
+  };
+
+  const handleNewRowSuccess = () => {
+    console.log(
+      "🔄 [RELOAD-INVENTORY] === RECARGANDO INVENTARIO POST-CREACIÓN ==="
+    );
+
+    if (!session?.user) {
+      console.error("❌ [RELOAD-INVENTORY] No hay sesión de usuario");
+      return;
+    }
+
+    inventoryLoadedRef.current = false;
+    const now = new Date();
+    const currentYear = now.getFullYear().toString();
+    const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
+    const apiUrl = `/api/s3/inventario?year=${currentYear}&month=${currentMonth}`;
+
+    console.log(`📞 [RELOAD-INVENTORY] Llamando a: ${apiUrl}`);
+    console.log(`⏰ [RELOAD-INVENTORY] Timestamp: ${new Date().toISOString()}`);
+
+    const reloadStartTime = Date.now();
+
+    fetch(apiUrl)
+      .then((response) => {
+        const reloadDuration = Date.now() - reloadStartTime;
+        console.log(
+          `📨 [RELOAD-INVENTORY] Respuesta recibida en ${reloadDuration}ms:`,
+          {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+          }
+        );
+        return response.json();
+      })
+      .then((jsonData) => {
+        const totalDuration = Date.now() - reloadStartTime;
+        console.log(
+          `📊 [RELOAD-INVENTORY] Datos procesados en ${totalDuration}ms:`,
+          {
+            hasData: !!jsonData.data,
+            isArray: Array.isArray(jsonData.data),
+            itemCount: jsonData.data?.length || 0,
+            error: jsonData.error,
+          }
+        );
+
+        if (jsonData.data && Array.isArray(jsonData.data)) {
+          console.log(
+            "🔄 [RELOAD-INVENTORY] Procesando datos con processInventoryData..."
+          );
+          const parsedData = processInventoryData(jsonData.data);
+
+          console.log(
+            `✅ [RELOAD-INVENTORY] Inventario actualizado: ${parsedData.length} items`
+          );
+          setInventory(parsedData);
+          toast.success("✅ Inventario actualizado con nueva row");
+        } else {
+          console.error(
+            "❌ [RELOAD-INVENTORY] Formato de datos inválido:",
+            jsonData
+          );
+          toast.error(
+            "Error: Formato de datos inválido al recargar inventario"
+          );
+        }
+      })
+      .catch((error) => {
+        const totalDuration = Date.now() - reloadStartTime;
+        console.error(
+          `❌ [RELOAD-INVENTORY] Error después de ${totalDuration}ms:`,
+          error
+        );
+        toast.error("Error recargando inventario después de crear row");
+      })
+      .finally(() => {
+        console.log(
+          "🏁 [RELOAD-INVENTORY] === PROCESO DE RECARGA COMPLETADO ==="
+        );
+      });
   };
 
   useEffect(() => {
@@ -480,6 +969,27 @@ const Dashboard: React.FC<DashboardProps> = () => {
               </TooltipProvider>
             )}
 
+            {/* 🆕 BOTÓN PARA AGREGAR NUEVA ROW */}
+            {isAdmin && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setOpenNewRow(true)}
+                      className="mr-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Agregar nueva row de inventario</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
             {isMajorAdmin && (
               <TooltipProvider>
                 <Tooltip>
@@ -593,6 +1103,15 @@ const Dashboard: React.FC<DashboardProps> = () => {
             open={openHistoryDialog}
             setOpen={setOpenHistoryDialog}
             onLoadInventory={handleLoadHistoricalInventory}
+          />
+        )}
+
+        {/* 🆕 DIÁLOGO PARA NUEVA ROW */}
+        {isAdmin && (
+          <NewRowDialog
+            open={openNewRow}
+            setOpen={setOpenNewRow}
+            onSuccess={handleNewRowSuccess}
           />
         )}
       </div>
