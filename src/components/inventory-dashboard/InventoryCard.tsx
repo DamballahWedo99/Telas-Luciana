@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { newRowSchema, type NewRowFormValues } from "@/lib/zod";
+import { z } from "zod";
 import Papa from "papaparse";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -21,6 +23,7 @@ import {
   CheckCircle,
   PencilIcon,
   UndoIcon,
+  HistoryIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -60,8 +63,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { getInventarioCsv } from "@/lib/s3";
 import {
   parseNumericValue,
   mapCsvFields,
@@ -114,6 +117,18 @@ interface UploadResult {
   originalName: string;
   fileSize: number;
   fileUrl: string;
+}
+
+interface FormData {
+  OC: string;
+  Tela: string;
+  Color: string;
+  Ubicacion: string;
+  Cantidad: string;
+  Costo: string;
+  Unidades: "KGS" | "MTS";
+  Importacion: string;
+  FacturaDragonAzteca: string;
 }
 
 function processInventoryData(data: any[]): InventoryItem[] {
@@ -341,6 +356,18 @@ function processInventoryData(data: any[]): InventoryItem[] {
   return processedItems;
 }
 
+const getAvailableYears = (): string[] => {
+  const currentYear = new Date().getFullYear();
+  const years: string[] = [];
+
+  // Comenzar desde 2025 y solo mostrar años hasta el año actual
+  for (let year = 2025; year <= currentYear; year++) {
+    years.push(year.toString());
+  }
+
+  return years;
+};
+
 export const InventoryCard: React.FC<InventoryCardProps> = ({
   inventory,
   setInventory,
@@ -368,7 +395,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     null
   );
   const [quantityToUpdate, setQuantityToUpdate] = useState<number>(0);
-  const [openPackingListDialog, setOpenPackingListDialog] = useState(false);
+  const [openInventoryDialog, setOpenInventoryDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState("packing-list");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -418,6 +446,49 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [groupedByOCAndLot, setGroupedByOCAndLot] = useState<
     Record<string, Record<number, any[]>>
   >({});
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [isLoadingHistorical, setIsLoadingHistorical] = useState(false);
+  const [isCreatingRow, setIsCreatingRow] = useState(false);
+  const [formErrors, setFormErrors] = useState<
+    Partial<Record<keyof NewRowFormValues, string>>
+  >({});
+  const [touchedFields, setTouchedFields] = useState<
+    Partial<Record<keyof NewRowFormValues, boolean>>
+  >({});
+  const [formData, setFormData] = useState<FormData>({
+    OC: "",
+    Tela: "",
+    Color: "",
+    Ubicacion: "",
+    Cantidad: "",
+    Costo: "",
+    Unidades: "KGS",
+    Importacion: "DA",
+    FacturaDragonAzteca: "",
+  });
+  const [selectedHistoryYear, setSelectedHistoryYear] = useState<string>(
+    new Date().getFullYear().toString()
+  );
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState<string>(
+    (new Date().getMonth() + 1).toString().padStart(2, "0")
+  );
+  const [currentViewingYear, setCurrentViewingYear] = useState<string>(
+    new Date().getFullYear().toString()
+  );
+  const [currentViewingMonth, setCurrentViewingMonth] = useState<string>(
+    (new Date().getMonth() + 1).toString().padStart(2, "0")
+  );
+
+  const isCurrentMonthAndYear = (): boolean => {
+    const now = new Date();
+    const actualCurrentYear = now.getFullYear().toString();
+    const actualCurrentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
+
+    return (
+      currentViewingYear === actualCurrentYear &&
+      currentViewingMonth === actualCurrentMonth
+    );
+  };
 
   const handleOpenReturnsDialog = async () => {
     setOpenReturnsDialog(true);
@@ -465,7 +536,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return;
       }
 
-      // Agrupar por OC y Lote
       const groupedByOCAndLot: Record<string, Record<number, any[]>> = {};
       const ocsSet = new Set<string>();
 
@@ -490,12 +560,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       setAvailableOCs(ocs);
       setGroupedByOCAndLot(groupedByOCAndLot);
 
-      // Seleccionar la primera OC por defecto
       if (ocs.length > 0) {
         const firstOC = ocs[0];
         setSelectedOCForReturns(firstOC);
 
-        // Obtener lotes disponibles para la primera OC
         const lotsForFirstOC = Object.keys(groupedByOCAndLot[firstOC] || {})
           .map(Number)
           .sort((a, b) => a - b);
@@ -518,20 +586,75 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
-  // Función para formatear números mientras se escriben
-  const formatInputNumber = (value: string): string => {
-    // Remover todo excepto números y punto decimal
-    const cleanValue = value.replace(/[^\d.]/g, "");
+  const handleCloseInventoryDialog = () => {
+    setOpenInventoryDialog(false);
+    setFormData({
+      OC: "",
+      Tela: "",
+      Color: "",
+      Ubicacion: "",
+      Cantidad: "",
+      Costo: "",
+      Unidades: "KGS",
+      Importacion: "DA",
+      FacturaDragonAzteca: "",
+    });
+    setFormErrors({});
+    setTouchedFields({});
+    setUploadResult(null);
+    setActiveTab("packing-list");
+  };
 
-    // Dividir en parte entera y decimal
+  const validateField = (
+    field: keyof NewRowFormValues,
+    value: any,
+    currentFormData: FormData,
+    setFormErrors: React.Dispatch<
+      React.SetStateAction<Partial<Record<keyof NewRowFormValues, string>>>
+    >
+  ) => {
+    try {
+      const dataToValidate: any = { ...currentFormData };
+
+      if (field === "Cantidad" || field === "Costo") {
+        const validationObject = {
+          ...currentFormData,
+          [field]: parseFloat(value as string) || 0,
+        };
+
+        newRowSchema
+          .pick({ [field]: true } as any)
+          .parse({ [field]: validationObject[field] });
+      } else {
+        dataToValidate[field] = value;
+        newRowSchema
+          .pick({ [field]: true } as any)
+          .parse({ [field]: dataToValidate[field] });
+      }
+
+      setFormErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldError = error.errors[0];
+        setFormErrors((prev) => ({
+          ...prev,
+          [field]: fieldError.message,
+        }));
+      }
+    }
+  };
+
+  const formatInputNumber = (value: string): string => {
+    const cleanValue = value.replace(/[^\d.]/g, "");
     const parts = cleanValue.split(".");
     const integerPart = parts[0];
     const decimalPart = parts[1];
-
-    // Formatear parte entera con comas
     const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
-    // Reconstruir el número
     if (decimalPart !== undefined) {
       return `${formattedInteger}.${decimalPart}`;
     }
@@ -539,7 +662,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     return formattedInteger;
   };
 
-  // Función para obtener el valor numérico limpio
   const parseInputNumber = (value: string): number => {
     const cleanValue = value.replace(/,/g, "");
     return parseFloat(cleanValue) || 0;
@@ -547,10 +669,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
   const handleOCChangeForReturns = (newOC: string) => {
     setSelectedOCForReturns(newOC);
-    setSelectedLotForReturns(""); // Limpiar selección de lote
-    setSelectedReturnRolls([]); // Limpiar selección de rollos
+    setSelectedLotForReturns("");
+    setSelectedReturnRolls([]);
 
-    // Actualizar lotes disponibles para la OC seleccionada
     const lotsForOC = Object.keys(groupedByOCAndLot[newOC] || {})
       .map(Number)
       .sort((a, b) => a - b);
@@ -559,7 +680,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
   const handleLotChangeForReturns = (newLot: string) => {
     setSelectedLotForReturns(newLot === "all" ? "" : newLot);
-    setSelectedReturnRolls([]); // Limpiar selección de rollos
+    setSelectedReturnRolls([]);
   };
 
   const getFilteredRollsForReturns = () => {
@@ -570,11 +691,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     let rolls: any[] = [];
 
     if (selectedLotForReturns) {
-      // Si hay lote seleccionado, mostrar solo ese lote
       const lotNumber = parseInt(selectedLotForReturns);
       rolls = groupedByOCAndLot[selectedOCForReturns][lotNumber] || [];
     } else {
-      // Si no hay lote seleccionado, mostrar todos los lotes de la OC
       Object.values(groupedByOCAndLot[selectedOCForReturns]).forEach(
         (lotRolls) => {
           rolls.push(...lotRolls);
@@ -786,7 +905,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           `✅ Devolución exitosa: ${result.summary.successful} rollos procesados`
         );
 
-        // Actualizar inventario local si es necesario
         if (result.results.successful.length > 0) {
           const updatedInventory = [...inventory];
 
@@ -988,9 +1106,21 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  const handleOpenPackingListDialog = () => {
-    setOpenPackingListDialog(true);
+  const handleOpenInventoryDialog = () => {
+    setOpenInventoryDialog(true);
     setUploadResult(null);
+    setActiveTab("packing-list");
+    setFormData({
+      OC: "",
+      Tela: "",
+      Color: "",
+      Ubicacion: "",
+      Cantidad: "",
+      Costo: "",
+      Unidades: "KGS",
+      Importacion: "DA",
+      FacturaDragonAzteca: "",
+    });
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1065,6 +1195,146 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleInputChange = (field: keyof FormData, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+
+    setTouchedFields((prev) => ({
+      ...prev,
+      [field]: true,
+    }));
+
+    validateField(
+      field as keyof NewRowFormValues,
+      value,
+      {
+        ...formData,
+        [field]: value,
+      },
+      setFormErrors
+    );
+  };
+
+  const validateForm = (): boolean => {
+    try {
+      const dataToValidate = {
+        ...formData,
+        Cantidad: parseFloat(formData.Cantidad) || 0,
+        Costo: parseFloat(formData.Costo) || 0,
+      };
+
+      newRowSchema.parse(dataToValidate);
+      setFormErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Partial<Record<keyof NewRowFormValues, string>> = {};
+
+        error.errors.forEach((err: any) => {
+          const field = err.path[0] as keyof NewRowFormValues;
+          newErrors[field] = err.message;
+        });
+
+        setFormErrors(newErrors);
+
+        // Marcar todos los campos como tocados
+        const allFields: Partial<Record<keyof NewRowFormValues, boolean>> = {};
+        Object.keys(formData).forEach((key) => {
+          allFields[key as keyof NewRowFormValues] = true;
+        });
+        setTouchedFields(allFields);
+      }
+      return false;
+    }
+  };
+
+  const handleCreateRow = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsCreatingRow(true);
+
+    try {
+      console.log("🚀 [NEW-ROW] === CREANDO NUEVA ROW ===");
+      console.log("📋 [NEW-ROW] Datos a enviar:", formData);
+
+      const requestBody = {
+        ...formData,
+        Cantidad: parseFloat(formData.Cantidad),
+        Costo: parseFloat(formData.Costo),
+      };
+
+      const response = await fetch("/api/s3/inventario/create-row", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Error al crear la nueva row");
+      }
+
+      toast.success(`🎉 Nueva row creada exitosamente`, {
+        description: `${result.data.fileName} - ${result.data.item.OC} ${result.data.item.Tela} ${result.data.item.Color}`,
+      });
+
+      setFormData({
+        OC: "",
+        Tela: "",
+        Color: "",
+        Ubicacion: "",
+        Cantidad: "",
+        Costo: "",
+        Unidades: "KGS",
+        Importacion: "DA",
+        FacturaDragonAzteca: "",
+      });
+
+      handleCloseInventoryDialog();
+      handleReloadInventory();
+    } catch (error) {
+      console.error("❌ [NEW-ROW] Error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Error al crear la nueva row"
+      );
+    } finally {
+      setIsCreatingRow(false);
+    }
+  };
+
+  const handleReloadInventory = async () => {
+    try {
+      const now = new Date();
+      const currentYear = now.getFullYear().toString();
+      const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
+      const apiUrl = `/api/s3/inventario?year=${currentYear}&month=${currentMonth}`;
+
+      const response = await fetch(apiUrl);
+      const jsonData = await response.json();
+
+      if (jsonData.data && Array.isArray(jsonData.data)) {
+        const parsedData = processInventoryData(jsonData.data);
+        setInventory(parsedData);
+
+        // ✅ AGREGAR ESTAS LÍNEAS:
+        setCurrentViewingYear(currentYear);
+        setCurrentViewingMonth(currentMonth);
+
+        toast.success("✅ Inventario actualizado");
+      }
+    } catch (error) {
+      console.error("Error recargando inventario:", error);
+      toast.error("Error recargando inventario");
+    }
   };
 
   const loadPackingListData = async (
@@ -1370,7 +1640,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           Modo: sellMode,
         });
 
-        // 1. PRIMERO: Actualizar inventario en S3
         const inventoryUpdatePayload = {
           oldItem: {
             OC: item.OC || "",
@@ -1409,21 +1678,16 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         const inventoryResult = await inventoryUpdateResponse.json();
         console.log("✅ [SELL] Inventario actualizado en S3:", inventoryResult);
 
-        // 2. SEGUNDO: Actualizar estado local solo después del éxito en S3
-        // NOTA: Solo actualizar si el backend fue exitoso, porque el backend ya manejó la resta
         const updatedInventory = [...inventory];
 
-        // Verificar si el item aún existe después de la venta
         const newQuantity = item.Cantidad - quantityToSell;
         if (newQuantity > 0) {
-          // Item todavía tiene inventario
           updatedInventory[selectedItemIndex] = {
             ...item,
             Cantidad: newQuantity,
             Total: item.Costo * newQuantity,
           };
         } else {
-          // Item sin inventario - remover del array local
           updatedInventory.splice(selectedItemIndex, 1);
           console.log(
             `🗑️ [SELL] Item removido del inventario local (cantidad = 0)`
@@ -1432,14 +1696,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
         setInventory(updatedInventory);
 
-        // 3. TERCERO: Guardar historial de ventas (TANTO para rollos como manual)
         try {
           console.log("💾 [SELL] Guardando venta en historial...");
 
           let soldRollsData: any[] = [];
 
           if (sellMode === "rolls" && selectedRolls.length > 0) {
-            // Venta por rollos específicos
             soldRollsData = selectedRolls.map((rollIndex) => {
               const roll = availableRolls[rollIndex];
               return {
@@ -1459,7 +1721,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               };
             });
           } else if (sellMode === "manual") {
-            // Venta manual - crear un registro ficticio
             const currentDate = new Date();
             const timestamp = currentDate.getTime();
             const manualRollNumber = `MANUAL-${timestamp.toString().slice(-6)}`;
@@ -1469,7 +1730,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 roll_number: manualRollNumber,
                 fabric_type: item.Tela,
                 color: item.Color,
-                lot: 0, // Lote 0 para ventas manuales
+                lot: 0,
                 oc: item.OC,
                 almacen: item.Ubicacion,
                 sold_quantity: quantityToSell,
@@ -1513,7 +1774,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             console.log("✅ [SELL] Historial guardado:", salesResult);
           }
 
-          // 4. CUARTO: Actualizar packing list (solo para ventas por rollos)
           if (sellMode === "rolls" && selectedRolls.length > 0) {
             const packingResponse = await fetch(
               "/api/packing-list/update-rolls",
@@ -1572,8 +1832,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             error instanceof Error ? error.message : "Error desconocido"
           }`
         );
-
-        // NO actualizar estado local si hay error en S3
       } finally {
         setIsProcessingSell(false);
       }
@@ -2152,77 +2410,50 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
   const handleLoadHistoricalInventory = async (year: string, month: string) => {
     try {
-      toast.info(`Cargando inventario de ${getMonthName(month)}/${year}...`);
+      setIsLoadingHistorical(true);
+      toast.info(`Cargando inventario de ${getMonthName(month)} ${year}...`);
 
-      const csvData = await getInventarioCsv(year, month);
+      const response = await fetch(
+        `/api/s3/inventario?year=${year}&month=${month}`
+      );
 
-      Papa.parse<ParsedCSVData>(csvData, {
-        header: true,
-        skipEmptyLines: true,
-        dynamicTyping: false,
-        delimiter: ",",
-        delimitersToGuess: [",", ";", "\t", "|"],
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
 
-        transform: (value, field) => {
-          if (field === "Costo" || field === "Cantidad") {
-            return value
-              .replace(/\s/g, "")
-              .replace(/\$/g, "")
-              .replace(/,/g, ".");
-          }
-          return value;
-        },
+      const jsonData = await response.json();
 
-        complete: (results: Papa.ParseResult<ParsedCSVData>) => {
-          try {
-            console.log(
-              `📊 [InventoryCard] Columnas en CSV de ${month}/${year}:`,
-              results.meta.fields
-            );
-            console.log(
-              "📊 [InventoryCard] Ejemplo de datos:",
-              results.data.slice(0, 3)
-            );
+      if (jsonData.error) {
+        throw new Error(jsonData.error);
+      }
 
-            const fieldMap = mapCsvFields(results.meta.fields || []);
-            console.log("📊 [InventoryCard] Mapeo de campos:", fieldMap);
+      if (!jsonData.data || !Array.isArray(jsonData.data)) {
+        throw new Error("Formato de datos inválido");
+      }
 
-            let dataToProcess = results.data;
-            if (
-              Object.keys(fieldMap).length > 0 &&
-              Object.keys(fieldMap).length !== results.meta.fields?.length
-            ) {
-              console.log("🔄 [InventoryCard] Normalizando datos CSV...");
-              dataToProcess = normalizeCsvData(results.data, fieldMap);
-            }
+      const parsedData = processInventoryData(jsonData.data);
+      setInventory(parsedData);
 
-            console.log("🔄 [InventoryCard] Procesando datos históricos...");
-            const parsedData = processInventoryData(dataToProcess);
+      // ✅ ESTE ES EL CAMBIO CLAVE: actualizar las fechas cuando es exitoso
+      setCurrentViewingYear(year);
+      setCurrentViewingMonth(month);
 
-            console.log(
-              "✅ [InventoryCard] Datos históricos procesados, estableciendo inventario..."
-            );
-            setInventory(parsedData);
-            toast.success(
-              `Inventario de ${getMonthName(
-                month
-              )}/${year} cargado exitosamente`
-            );
-          } catch (err) {
-            console.error("Error parsing CSV from S3:", err);
-            toast.error(
-              "Error al procesar el archivo CSV de S3. Verifique el formato."
-            );
-          }
-        },
-        error: (error: Error) => {
-          console.error("CSV parsing error:", error);
-          toast.error("Error al leer el archivo CSV de S3");
-        },
-      });
+      toast.success(
+        `Inventario de ${getMonthName(month)} ${year} cargado exitosamente`
+      );
     } catch (error) {
       console.error("Error loading historical inventory:", error);
-      toast.error("Error al cargar el inventario histórico");
+      toast.error(
+        `Error al cargar el inventario de ${getMonthName(
+          month
+        )} ${year}. Es posible que no exista.`
+      );
+
+      // ❌ REMOVER ESTAS LÍNEAS que están en el catch actual:
+      // setCurrentViewingYear(year);
+      // setCurrentViewingMonth(month);
+    } finally {
+      setIsLoadingHistorical(false);
     }
   };
 
@@ -2451,6 +2682,16 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   }, [uniqueUbicaciones, ubicacionFilter, setUbicacionFilter]);
 
+  useEffect(() => {
+    // Establecer las fechas de visualización inicial al mes/año actual
+    const now = new Date();
+    const currentYear = now.getFullYear().toString();
+    const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
+
+    setCurrentViewingYear(currentYear);
+    setCurrentViewingMonth(currentMonth);
+  }, []);
+
   const filteredInventory = useMemo(
     () =>
       inventory.filter((item) => {
@@ -2511,19 +2752,44 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const hasUbicacionOptions = uniqueUbicaciones.length > 0;
 
   return (
-    <Card className="mb-6">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="flex items-center mb-1">
-            <BoxIcon className="mr-2 h-5 w-5" />
-            Inventario
-          </CardTitle>
-          <CardDescription>
-            {inventory.length} productos en el sistema
-          </CardDescription>
-        </div>
-        <div className="flex items-center space-x-2">
-          <TooltipProvider>
+    <TooltipProvider>
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center justify-between mb-1">
+              <div className="flex items-center">
+                <BoxIcon className="mr-2 h-5 w-5" />
+                <div className="flex flex-col">
+                  <span>Inventario</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {getMonthName(currentViewingMonth)} {currentViewingYear}
+                    </span>
+                    {!isCurrentMonthAndYear() && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs text-amber-600 font-medium">
+                          Vista Histórica
+                        </span>
+                      </div>
+                    )}
+                    {isCurrentMonthAndYear() && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-xs text-green-600 font-medium">
+                          Actual
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardTitle>
+            <CardDescription>
+              {inventory.length} productos en el sistema
+            </CardDescription>
+          </div>
+          <div className="flex items-center space-x-2">
             {isFilterActive && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2533,6 +2799,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Limpiar filtros</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {isAdmin && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setOpenHistoryDialog(true)}
+                  >
+                    <HistoryIcon className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cargar datos históricos</p>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -2580,17 +2863,26 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             {isAdmin && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="default"
-                    size="icon"
-                    className="bg-black hover:bg-gray-800 rounded-full"
-                    onClick={handleOpenPackingListDialog}
-                  >
-                    <PlusIcon className="h-5 w-5" />
-                  </Button>
+                  <div className="inline-block">
+                    <Button
+                      variant="default"
+                      size="icon"
+                      className="bg-black hover:bg-gray-800 rounded-full"
+                      onClick={handleOpenInventoryDialog}
+                      disabled={!isCurrentMonthAndYear()}
+                    >
+                      <PlusIcon className="h-5 w-5" />
+                    </Button>
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Subir Packing List</p>
+                  <p>
+                    {isCurrentMonthAndYear()
+                      ? "Agregar Rollos"
+                      : `Bloqueado - Solo disponible en el mes actual. Actualmente viendo: ${getMonthName(
+                          currentViewingMonth
+                        )} ${currentViewingYear}`}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -2613,71 +2905,72 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 <p>{inventoryCollapsed ? "Expandir" : "Colapsar"}</p>
               </TooltipContent>
             </Tooltip>
-          </TooltipProvider>
-        </div>
-      </CardHeader>
+          </div>
+        </CardHeader>
 
-      {!inventoryCollapsed && (
-        <>
-          <CardContent className="pt-0 pb-4">
-            <div className="flex flex-wrap gap-4 mb-4">
-              <div className="flex-1 min-w-[200px]">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="search">Buscar</Label>
-                  </div>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Search size={16} className="text-gray-400" />
+        {!inventoryCollapsed && (
+          <>
+            <CardContent className="pt-0 pb-4">
+              <div className="flex flex-wrap gap-4 mb-4">
+                <div className="flex-1 min-w-[200px]">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="search">Buscar</Label>
                     </div>
-                    <Input
-                      id="search"
-                      type="text"
-                      placeholder={
-                        isAdmin
-                          ? "Buscar por OC, Tela, o Color"
-                          : "Buscar por Tela o Color"
-                      }
-                      value={searchTerm}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setSearchTerm(e.target.value)
-                      }
-                      className="pl-10 w-full h-9"
-                    />
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search size={16} className="text-gray-400" />
+                      </div>
+                      <Input
+                        id="search"
+                        type="text"
+                        placeholder={
+                          isAdmin
+                            ? "Buscar por OC, Tela, o Color"
+                            : "Buscar por Tela o Color"
+                        }
+                        value={searchTerm}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setSearchTerm(e.target.value)
+                        }
+                        className="pl-10 w-full h-9"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="min-w-[150px] max-w-[150px]">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="unitFilter">Unidades</Label>
-                  </div>
-                  <Select
-                    value={unitFilter}
-                    onValueChange={(value) =>
-                      setUnitFilter(value as UnitType | "all")
-                    }
-                  >
-                    <SelectTrigger id="unitFilter" className="w-full truncate">
-                      <SelectValue placeholder="Todas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="MTS">MTS</SelectItem>
-                      <SelectItem value="KGS">KGS</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {isAdmin && (
                 <div className="min-w-[150px] max-w-[150px]">
                   <div className="space-y-2">
                     <div className="flex items-center gap-1">
-                      <Label htmlFor="ocFilter">OC</Label>
-                      {!hasOCOptions && ocFilter !== "all" && (
-                        <TooltipProvider>
+                      <Label htmlFor="unitFilter">Unidades</Label>
+                    </div>
+                    <Select
+                      value={unitFilter}
+                      onValueChange={(value) =>
+                        setUnitFilter(value as UnitType | "all")
+                      }
+                    >
+                      <SelectTrigger
+                        id="unitFilter"
+                        className="w-full truncate"
+                      >
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        <SelectItem value="MTS">MTS</SelectItem>
+                        <SelectItem value="KGS">KGS</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {isAdmin && (
+                  <div className="min-w-[150px] max-w-[150px]">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1">
+                        <Label htmlFor="ocFilter">OC</Label>
+                        {!hasOCOptions && ocFilter !== "all" && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div>
@@ -2693,32 +2986,33 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                               </p>
                             </TooltipContent>
                           </Tooltip>
-                        </TooltipProvider>
-                      )}
+                        )}
+                      </div>
+                      <Select value={ocFilter} onValueChange={setOcFilter}>
+                        <SelectTrigger
+                          id="ocFilter"
+                          className="w-full truncate"
+                        >
+                          <SelectValue placeholder="Todas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas</SelectItem>
+                          {uniqueOCs.map((oc) => (
+                            <SelectItem key={oc} value={oc}>
+                              {oc}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Select value={ocFilter} onValueChange={setOcFilter}>
-                      <SelectTrigger id="ocFilter" className="w-full truncate">
-                        <SelectValue placeholder="Todas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {uniqueOCs.map((oc) => (
-                          <SelectItem key={oc} value={oc}>
-                            {oc}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="min-w-[150px] max-w-[150px]">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="telaFilter">Tela</Label>
-                    {!hasTelaOptions && telaFilter !== "all" && (
-                      <TooltipProvider>
+                <div className="min-w-[150px] max-w-[150px]">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="telaFilter">Tela</Label>
+                      {!hasTelaOptions && telaFilter !== "all" && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div>
@@ -2734,31 +3028,32 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                             </p>
                           </TooltipContent>
                         </Tooltip>
-                      </TooltipProvider>
-                    )}
+                      )}
+                    </div>
+                    <Select value={telaFilter} onValueChange={setTelaFilter}>
+                      <SelectTrigger
+                        id="telaFilter"
+                        className="w-full truncate"
+                      >
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {uniqueTelas.map((tela) => (
+                          <SelectItem key={tela} value={tela}>
+                            {tela}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Select value={telaFilter} onValueChange={setTelaFilter}>
-                    <SelectTrigger id="telaFilter" className="w-full truncate">
-                      <SelectValue placeholder="Todas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      {uniqueTelas.map((tela) => (
-                        <SelectItem key={tela} value={tela}>
-                          {tela}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
-              </div>
 
-              <div className="min-w-[150px] max-w-[150px]">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="colorFilter">Color</Label>
-                    {!hasColorOptions && colorFilter !== "all" && (
-                      <TooltipProvider>
+                <div className="min-w-[150px] max-w-[150px]">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="colorFilter">Color</Label>
+                      {!hasColorOptions && colorFilter !== "all" && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div>
@@ -2775,31 +3070,32 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                             </p>
                           </TooltipContent>
                         </Tooltip>
-                      </TooltipProvider>
-                    )}
+                      )}
+                    </div>
+                    <Select value={colorFilter} onValueChange={setColorFilter}>
+                      <SelectTrigger
+                        id="colorFilter"
+                        className="w-full truncate"
+                      >
+                        <SelectValue placeholder="Todos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        {uniqueColors.map((color) => (
+                          <SelectItem key={color} value={color}>
+                            {color}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Select value={colorFilter} onValueChange={setColorFilter}>
-                    <SelectTrigger id="colorFilter" className="w-full truncate">
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {uniqueColors.map((color) => (
-                        <SelectItem key={color} value={color}>
-                          {color}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
-              </div>
 
-              <div className="min-w-[150px] max-w-[150px]">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="ubicacionFilter">Ubicación</Label>
-                    {!hasUbicacionOptions && ubicacionFilter !== "all" && (
-                      <TooltipProvider>
+                <div className="min-w-[150px] max-w-[150px]">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="ubicacionFilter">Ubicación</Label>
+                      {!hasUbicacionOptions && ubicacionFilter !== "all" && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div>
@@ -2816,1359 +3112,959 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                             </p>
                           </TooltipContent>
                         </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                  <Select
-                    value={ubicacionFilter}
-                    onValueChange={setUbicacionFilter}
-                  >
-                    <SelectTrigger
-                      id="ubicacionFilter"
-                      className="w-full truncate"
+                      )}
+                    </div>
+                    <Select
+                      value={ubicacionFilter}
+                      onValueChange={setUbicacionFilter}
                     >
-                      <SelectValue placeholder="Todas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="CDMX">CDMX</SelectItem>
-                      <SelectItem value="Mérida">Mérida</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm">
-              <Filter size={16} className="text-gray-500" />
-              <span className="text-gray-500">Filtros activos:</span>
-              <div className="flex flex-wrap gap-2">
-                {ocFilter && ocFilter !== "all" && (
-                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                    OC: {ocFilter}
-                  </span>
-                )}
-                {telaFilter && telaFilter !== "all" && (
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                    Tela: {telaFilter}
-                  </span>
-                )}
-                {colorFilter && colorFilter !== "all" && (
-                  <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
-                    Color: {colorFilter}
-                  </span>
-                )}
-                {ubicacionFilter && ubicacionFilter !== "all" && (
-                  <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
-                    Ubicación: {ubicacionFilter}
-                  </span>
-                )}
-                {unitFilter && unitFilter !== "all" && (
-                  <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
-                    Unidades: {unitFilter}
-                  </span>
-                )}
-                {searchTerm && (
-                  <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
-                    Búsqueda: {searchTerm}
-                  </span>
-                )}
-                {(!ocFilter || ocFilter === "all") &&
-                  (!telaFilter || telaFilter === "all") &&
-                  (!colorFilter || colorFilter === "all") &&
-                  (!ubicacionFilter || ubicacionFilter === "all") &&
-                  (!unitFilter || unitFilter === "all") &&
-                  !searchTerm && <span className="text-gray-500">Ninguno</span>}
-              </div>
-            </div>
-          </CardContent>
-
-          <CardContent>
-            <div className="border rounded-md overflow-hidden">
-              <div className="h-[500px] overflow-auto relative">
-                <table className="w-full text-sm border-collapse">
-                  <thead className="bg-white sticky top-0 z-10 shadow-sm">
-                    <tr>
-                      {isAdmin && (
-                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                          OC
-                        </th>
-                      )}
-                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                        Tela
-                      </th>
-                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                        Color
-                      </th>
-                      {isAdmin && (
-                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                          Costo
-                        </th>
-                      )}
-                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                        Cantidad
-                      </th>
-                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                        Unidades
-                      </th>
-                      {isAdmin && (
-                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                          Total
-                        </th>
-                      )}
-                      <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                        Ubicación
-                      </th>
-                      {isAdmin && (
-                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                          Importación
-                        </th>
-                      )}
-                      {isAdmin && (
-                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
-                          Acciones
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoading ? (
-                      <tr className="h-[500px]">
-                        <td
-                          colSpan={isAdmin ? 10 : 5}
-                          className="p-2 align-middle text-center"
-                        >
-                          <div className="flex justify-center items-center">
-                            <Loader2Icon className="h-8 w-8 animate-spin text-gray-500" />
-                            <span className="ml-2">Cargando inventario...</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : filteredInventory.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={isAdmin ? 10 : 5}
-                          className="p-2 align-middle text-center h-24"
-                        >
-                          No hay datos disponibles
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredInventory.map((item, index) => (
-                        <tr
-                          key={index}
-                          className="border-b transition-colors hover:bg-muted/50"
-                        >
-                          {isAdmin && (
-                            <td className="p-2 align-middle">{item.OC}</td>
-                          )}
-                          <td className="p-2 align-middle">{item.Tela}</td>
-                          <td className="p-2 align-middle">{item.Color}</td>
-                          {isAdmin && (
-                            <td className="p-2 align-middle">
-                              ${formatNumber(item.Costo)}
-                            </td>
-                          )}
-                          <td className="p-2 align-middle">
-                            {formatNumber(item.Cantidad)}
-                          </td>
-                          <td className="p-2 align-middle">{item.Unidades}</td>
-                          {isAdmin && (
-                            <td className="p-2 align-middle">
-                              ${formatNumber(item.Total)}
-                            </td>
-                          )}
-                          <td className="p-2 align-middle">
-                            {item.Ubicacion || "-"}
-                          </td>
-                          {isAdmin && (
-                            <td className="p-2 align-middle">
-                              {item.Importacion}
-                            </td>
-                          )}
-                          {isAdmin && (
-                            <td className="p-2 align-middle">
-                              <div className="flex space-x-2">
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          handleOpenEditDialog(index)
-                                        }
-                                      >
-                                        <PencilIcon className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Editar</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          handleOpenSellDialog(index)
-                                        }
-                                      >
-                                        <DollarSign className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Vender</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          handleOpenTransferDialog(index)
-                                        }
-                                        disabled={item.Ubicacion !== "CDMX"}
-                                      >
-                                        <svg
-                                          className="h-4 w-4"
-                                          fill="none"
-                                          viewBox="0 0 24 24"
-                                          stroke="currentColor"
-                                        >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                                          />
-                                        </svg>
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Trasladar a Mérida</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {!isLoading && filteredInventory.length > 0 && (
-                    <tfoot className="bg-muted sticky bottom-0 z-10">
-                      <tr>
-                        {isAdmin && (
-                          <td
-                            colSpan={3}
-                            className="p-2 align-middle font-bold"
-                          >
-                            Total
-                          </td>
-                        )}
-                        {!isAdmin && (
-                          <td
-                            colSpan={2}
-                            className="p-2 align-middle font-bold"
-                          >
-                            Total
-                          </td>
-                        )}
-                        {isAdmin && <td className="p-2 align-middle"></td>}
-                        <td className="p-2 align-middle font-bold">
-                          {formatNumber(totalCantidad)}
-                        </td>
-                        <td className="p-2 align-middle"></td>
-                        {isAdmin && (
-                          <td className="p-2 align-middle font-bold">
-                            ${formatNumber(totalCosto)}
-                          </td>
-                        )}
-                        <td className="p-2 align-middle"></td>
-                        {isAdmin && <td className="p-2 align-middle"></td>}
-                        {isAdmin && <td className="p-2 align-middle"></td>}
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            </div>
-          </CardContent>
-        </>
-      )}
-
-      <Dialog
-        open={openPackingListDialog}
-        onOpenChange={setOpenPackingListDialog}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <UploadIcon className="mr-2 h-5 w-5" />
-              Subir Packing List
-            </DialogTitle>
-            <DialogDescription>
-              Sube un archivo PACKING LIST para procesar automáticamente las
-              telas y agregarlas al inventario.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-              <FolderOpenIcon className="h-12 w-12 text-gray-400 mb-4" />
-              <p className="mb-4 text-sm text-gray-500 text-center">
-                Selecciona un archivo Excel con la información del Packing List
-              </p>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                className="hidden"
-                accept=".xlsx,.xls"
-              />
-              <Button
-                onClick={handleUploadClick}
-                disabled={isUploading}
-                className="flex items-center mb-4"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                    Subiendo...
-                  </>
-                ) : (
-                  <>
-                    <UploadIcon className="mr-2 h-4 w-4" />
-                    Seleccionar Archivo
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-gray-400">
-                Formatos soportados: .xlsx, .xls (máximo 10MB)
-              </p>
-            </div>
-
-            {uploadResult && (
-              <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
-                <div className="flex items-center mb-2">
-                  <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                  <h3 className="text-sm font-medium text-green-800">
-                    Archivo cargado exitosamente
-                  </h3>
-                </div>
-                <div className="text-sm text-green-700 space-y-1">
-                  <p>
-                    <strong>Archivo:</strong> {uploadResult.originalName}
-                  </p>
-                  <p>
-                    <strong>Tamaño:</strong>{" "}
-                    {formatFileSize(uploadResult.fileSize)}
-                  </p>
-                  <p>
-                    <strong>ID de carga:</strong> {uploadResult.uploadId}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpenPackingListDialog(false)}
-            >
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openSellDialog} onOpenChange={setOpenSellDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Vender Producto</DialogTitle>
-            <DialogDescription>
-              {selectedItemIndex !== null &&
-                `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color}`}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="flex gap-4">
-              <Button
-                variant={sellMode === "manual" ? "default" : "outline"}
-                onClick={() => setSellMode("manual")}
-                className="flex-1"
-              >
-                <Input className="mr-2 h-4 w-4" />
-                Cantidad Manual
-              </Button>
-              <Button
-                variant={sellMode === "rolls" ? "default" : "outline"}
-                onClick={() => setSellMode("rolls")}
-                className="flex-1"
-              >
-                <BoxIcon className="mr-2 h-4 w-4" />
-                Por Rollos Específicos
-              </Button>
-            </div>
-
-            {sellMode === "manual" ? (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="quantity" className="text-right">
-                  Cantidad
-                </Label>
-                <Input
-                  id="quantity"
-                  type="text"
-                  value={
-                    quantityToUpdate === 0
-                      ? ""
-                      : formatInputNumber(quantityToUpdate.toString())
-                  }
-                  onChange={(e) => {
-                    const numericValue = parseInputNumber(e.target.value);
-                    setQuantityToUpdate(numericValue);
-                  }}
-                  placeholder="0.00"
-                  className="col-span-3"
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {isLoadingPackingList ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2Icon className="h-8 w-8 animate-spin" />
+                      <SelectTrigger
+                        id="ubicacionFilter"
+                        className="w-full truncate"
+                      >
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        <SelectItem value="CDMX">CDMX</SelectItem>
+                        <SelectItem value="Mérida">Mérida</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                ) : availableRolls.length > 0 ? (
-                  <>
-                    {availableLots.length > 1 && (
-                      <div className="space-y-2">
-                        <Label>Seleccionar Lote</Label>
-                        <Select
-                          value={selectedLot?.toString()}
-                          onValueChange={(value) =>
-                            handleLotChange(Number(value))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccione un lote" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableLots.map((lot) => (
-                              <SelectItem key={lot} value={lot.toString()}>
-                                Lote {lot} (
-                                {rollsGroupedByLot.get(lot)?.length || 0}{" "}
-                                rollos)
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm">
+                <Filter size={16} className="text-gray-500" />
+                <span className="text-gray-500">Filtros activos:</span>
+                <div className="flex flex-wrap gap-2">
+                  {ocFilter && ocFilter !== "all" && (
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                      OC: {ocFilter}
+                    </span>
+                  )}
+                  {telaFilter && telaFilter !== "all" && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                      Tela: {telaFilter}
+                    </span>
+                  )}
+                  {colorFilter && colorFilter !== "all" && (
+                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                      Color: {colorFilter}
+                    </span>
+                  )}
+                  {ubicacionFilter && ubicacionFilter !== "all" && (
+                    <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
+                      Ubicación: {ubicacionFilter}
+                    </span>
+                  )}
+                  {unitFilter && unitFilter !== "all" && (
+                    <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                      Unidades: {unitFilter}
+                    </span>
+                  )}
+                  {searchTerm && (
+                    <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
+                      Búsqueda: {searchTerm}
+                    </span>
+                  )}
+                  {(!ocFilter || ocFilter === "all") &&
+                    (!telaFilter || telaFilter === "all") &&
+                    (!colorFilter || colorFilter === "all") &&
+                    (!ubicacionFilter || ubicacionFilter === "all") &&
+                    (!unitFilter || unitFilter === "all") &&
+                    !searchTerm && (
+                      <span className="text-gray-500">Ninguno</span>
                     )}
+                </div>
+              </div>
+            </CardContent>
 
-                    <div className="text-sm text-gray-600">
-                      Lote: {selectedLot} - {availableRolls.length} rollos
-                      disponibles
-                    </div>
+            <CardContent>
+              <div className="border rounded-md overflow-hidden">
+                <div className="h-[500px] overflow-auto relative">
+                  <table className="w-full text-sm border-collapse">
+                    <thead className="bg-white sticky top-0 z-10 shadow-sm">
+                      <tr>
+                        {isAdmin && (
+                          <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                            OC
+                          </th>
+                        )}
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Tela
+                        </th>
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Color
+                        </th>
+                        {isAdmin && (
+                          <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                            Costo
+                          </th>
+                        )}
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Cantidad
+                        </th>
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Unidades
+                        </th>
+                        {isAdmin && (
+                          <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                            Total
+                          </th>
+                        )}
+                        <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                          Ubicación
+                        </th>
+                        {isAdmin && (
+                          <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                            Importación
+                          </th>
+                        )}
+                        {isAdmin && (
+                          <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b">
+                            Acciones
+                          </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoading ? (
+                        <tr className="h-[500px]">
+                          <td
+                            colSpan={isAdmin ? 10 : 5}
+                            className="p-2 align-middle text-center"
+                          >
+                            <div className="flex justify-center items-center">
+                              <Loader2Icon className="h-8 w-8 animate-spin text-gray-500" />
+                              <span className="ml-2">
+                                Cargando inventario...
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : filteredInventory.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={isAdmin ? 10 : 5}
+                            className="p-2 align-middle text-center h-24"
+                          >
+                            No hay datos disponibles
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredInventory.map((item, index) => (
+                          <tr
+                            key={index}
+                            className="border-b transition-colors hover:bg-muted/50"
+                          >
+                            {isAdmin && (
+                              <td className="p-2 align-middle">{item.OC}</td>
+                            )}
+                            <td className="p-2 align-middle">{item.Tela}</td>
+                            <td className="p-2 align-middle">{item.Color}</td>
+                            {isAdmin && (
+                              <td className="p-2 align-middle">
+                                ${formatNumber(item.Costo)}
+                              </td>
+                            )}
+                            <td className="p-2 align-middle">
+                              {formatNumber(item.Cantidad)}
+                            </td>
+                            <td className="p-2 align-middle">
+                              {item.Unidades}
+                            </td>
+                            {isAdmin && (
+                              <td className="p-2 align-middle">
+                                ${formatNumber(item.Total)}
+                              </td>
+                            )}
+                            <td className="p-2 align-middle">
+                              {item.Ubicacion || "-"}
+                            </td>
+                            {isAdmin && (
+                              <td className="p-2 align-middle">
+                                {item.Importacion}
+                              </td>
+                            )}
+                            {isAdmin && (
+                              <td className="p-2 align-middle">
+                                <div className="flex space-x-2">
+                                  {/* Botón Editar */}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="inline-block">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleOpenEditDialog(index)
+                                          }
+                                          disabled={!isCurrentMonthAndYear()}
+                                          className={
+                                            !isCurrentMonthAndYear()
+                                              ? "pointer-events-none"
+                                              : ""
+                                          }
+                                        >
+                                          <PencilIcon className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>
+                                        {isCurrentMonthAndYear()
+                                          ? "Editar"
+                                          : `Bloqueado - Solo disponible en el mes actual. Actualmente viendo: ${getMonthName(
+                                              currentViewingMonth
+                                            )} ${currentViewingYear}`}
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
 
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setSelectedRolls(availableRolls.map((_, i) => i))
-                        }
-                      >
-                        Todos
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedRolls([])}
-                      >
-                        Limpiar
-                      </Button>
-                    </div>
+                                  {/* Botón Vender */}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="inline-block">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleOpenSellDialog(index)
+                                          }
+                                          disabled={!isCurrentMonthAndYear()}
+                                          className={
+                                            !isCurrentMonthAndYear()
+                                              ? "pointer-events-none"
+                                              : ""
+                                          }
+                                        >
+                                          <DollarSign className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>
+                                        {isCurrentMonthAndYear()
+                                          ? "Vender"
+                                          : `Bloqueado - Solo disponible en el mes actual. Actualmente viendo: ${getMonthName(
+                                              currentViewingMonth
+                                            )} ${currentViewingYear}`}
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
 
-                    <div className="border rounded-lg max-h-60 overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 sticky top-0">
-                          <tr>
-                            <th className="p-1 text-left text-sm">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  selectedRolls.length ===
-                                    availableRolls.length &&
-                                  availableRolls.length > 0
-                                }
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedRolls(
-                                      availableRolls.map((_, i) => i)
-                                    );
-                                  } else {
-                                    setSelectedRolls([]);
-                                  }
-                                }}
-                              />
-                            </th>
-                            <th className="p-1 text-left text-sm">Rollo #</th>
-                            <th className="p-1 text-left text-sm">Almacén</th>
-                            <th className="p-1 text-left text-sm">
-                              {availableRolls[0]?.kg !== undefined
-                                ? "Peso (kg)"
-                                : "Metros"}
-                            </th>
+                                  {/* Botón Trasladar */}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="inline-block">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleOpenTransferDialog(index)
+                                          }
+                                          disabled={
+                                            item.Ubicacion !== "CDMX" ||
+                                            !isCurrentMonthAndYear()
+                                          }
+                                          className={
+                                            item.Ubicacion !== "CDMX" ||
+                                            !isCurrentMonthAndYear()
+                                              ? "pointer-events-none"
+                                              : ""
+                                          }
+                                        >
+                                          <svg
+                                            className="h-4 w-4"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                                            />
+                                          </svg>
+                                        </Button>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>
+                                        {!isCurrentMonthAndYear()
+                                          ? `Bloqueado - Solo disponible en el mes actual. Actualmente viendo: ${getMonthName(
+                                              currentViewingMonth
+                                            )} ${currentViewingYear}`
+                                          : item.Ubicacion !== "CDMX"
+                                          ? "Solo desde CDMX"
+                                          : "Trasladar a Mérida"}
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </td>
+                            )}
                           </tr>
-                        </thead>
-                        <tbody>
-                          {availableRolls.map((roll, index) => (
-                            <tr
-                              key={`${selectedLot}-${roll.roll_number}-${index}`}
-                              className={`border-b hover:bg-gray-50 cursor-pointer ${
-                                selectedRolls.includes(index)
-                                  ? "bg-blue-50"
-                                  : ""
-                              }`}
-                              onClick={() => handleRollSelection(index)}
-                            >
-                              <td
-                                className="p-1 text-sm"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedRolls.includes(index)}
-                                  onChange={() => handleRollSelection(index)}
-                                />
-                              </td>
-                              <td className="p-1 text-sm">
-                                {roll.roll_number}
-                              </td>
-                              <td className="p-1 text-sm">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-xs ${
-                                    roll.almacen === "CDMX"
-                                      ? "bg-blue-100 text-blue-800"
-                                      : "bg-green-100 text-green-800"
-                                  }`}
-                                >
-                                  {roll.almacen}
-                                </span>
-                              </td>
-                              <td className="p-1 text-sm font-medium">
-                                {roll.kg !== undefined
-                                  ? `${roll.kg} kg`
-                                  : `${roll.mts} mts`}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-gray-50 sticky bottom-0">
-                          <tr>
+                        ))
+                      )}
+                    </tbody>
+                    {!isLoading && filteredInventory.length > 0 && (
+                      <tfoot className="bg-muted sticky bottom-0 z-10">
+                        <tr>
+                          {isAdmin && (
                             <td
                               colSpan={3}
-                              className="p-1 text-right font-medium text-sm"
+                              className="p-2 align-middle font-bold"
                             >
-                              Total seleccionado:
+                              Total
                             </td>
-                            <td className="p-1 font-bold text-sm">
-                              {calculateTotalFromRolls().toFixed(2)}{" "}
-                              {availableRolls[0]?.kg !== undefined
-                                ? "kg"
-                                : "mts"}
+                          )}
+                          {!isAdmin && (
+                            <td
+                              colSpan={2}
+                              className="p-2 align-middle font-bold"
+                            >
+                              Total
                             </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                          )}
+                          {isAdmin && <td className="p-2 align-middle"></td>}
+                          <td className="p-2 align-middle font-bold">
+                            {formatNumber(totalCantidad)}
+                          </td>
+                          <td className="p-2 align-middle"></td>
+                          {isAdmin && (
+                            <td className="p-2 align-middle font-bold">
+                              ${formatNumber(totalCosto)}
+                            </td>
+                          )}
+                          <td className="p-2 align-middle"></td>
+                          {isAdmin && <td className="p-2 align-middle"></td>}
+                          {isAdmin && <td className="p-2 align-middle"></td>}
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            </CardContent>
+          </>
+        )}
 
-                    <div className="bg-blue-50 p-2 rounded-lg">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-sm">
-                          Resumen de venta:
-                        </span>
-                        <span className="text-lg font-bold">
-                          {calculateTotalFromRolls().toFixed(2)}{" "}
-                          {selectedItemIndex !== null &&
-                            inventory[selectedItemIndex]?.Unidades}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        {selectedRolls.length} rollo(s) seleccionado(s) del lote{" "}
-                        {selectedLot}
-                      </div>
-                      {selectedItemIndex !== null && (
-                        <div className="text-sm mt-2">
-                          <span className="text-gray-600">
-                            Quedará en inventario:{" "}
-                          </span>
-                          <span className="font-medium">
-                            {(
-                              inventory[selectedItemIndex].Cantidad -
-                              calculateTotalFromRolls()
-                            ).toFixed(2)}{" "}
-                            {inventory[selectedItemIndex].Unidades}
-                          </span>
-                        </div>
-                      )}
+        <Dialog
+          open={openInventoryDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCloseInventoryDialog();
+            } else {
+              setOpenInventoryDialog(true);
+            }
+          }}
+        >
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <PlusIcon className="mr-2 h-5 w-5" />
+                Agregar Inventario
+              </DialogTitle>
+              <DialogDescription>
+                Sube un archivo packing list o crea una nueva entrada de
+                inventario manualmente.
+              </DialogDescription>
+            </DialogHeader>
+
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="packing-list">
+                  Subir Packing List
+                </TabsTrigger>
+                <TabsTrigger value="manual-row">Nueva Row Manual</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="packing-list" className="space-y-4">
+                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                  <FolderOpenIcon className="h-12 w-12 text-gray-400 mb-4" />
+                  <p className="mb-4 text-sm text-gray-500 text-center">
+                    Selecciona un archivo Excel con la información del Packing
+                    List
+                  </p>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    accept=".xlsx,.xls"
+                  />
+                  <Button
+                    onClick={handleUploadClick}
+                    disabled={isUploading}
+                    className="flex items-center mb-4"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                        Subiendo...
+                      </>
+                    ) : (
+                      <>
+                        <UploadIcon className="mr-2 h-4 w-4" />
+                        Seleccionar Archivo
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-gray-400">
+                    Formatos soportados: .xlsx, .xls (máximo 10MB)
+                  </p>
+                </div>
+
+                {uploadResult && (
+                  <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
+                    <div className="flex items-center mb-2">
+                      <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                      <h3 className="text-sm font-medium text-green-800">
+                        Archivo cargado exitosamente
+                      </h3>
                     </div>
-                  </>
-                ) : packingListData.length > 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                    <p>
-                      No se encontraron rollos disponibles para esta tela y
-                      color.
-                    </p>
-                    <p className="text-sm mt-2">
-                      Es posible que todos los rollos hayan sido vendidos.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <FolderOpenIcon className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                    <p>
-                      No se encontró información de rollos para este producto.
-                    </p>
-                    <p className="text-sm mt-2">
-                      Verifique que exista un packing list cargado para esta
-                      tela.
-                    </p>
+                    <div className="text-sm text-green-700 space-y-1">
+                      <p>
+                        <strong>Archivo:</strong> {uploadResult.originalName}
+                      </p>
+                      <p>
+                        <strong>Tamaño:</strong>{" "}
+                        {formatFileSize(uploadResult.fileSize)}
+                      </p>
+                      <p>
+                        <strong>ID de carga:</strong> {uploadResult.uploadId}
+                      </p>
+                    </div>
                   </div>
                 )}
-              </div>
-            )}
+              </TabsContent>
 
-            {selectedItemIndex !== null && (
-              <div className="text-sm text-gray-500">
-                Inventario disponible:{" "}
-                {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
-                {inventory[selectedItemIndex]?.Unidades}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpenSellDialog(false)}
-              disabled={isProcessingSell} // Deshabilitar también el botón cancelar
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSellItem}
-              disabled={
-                isProcessingSell ||
-                (sellMode === "manual" && quantityToUpdate <= 0) ||
-                (sellMode === "rolls" && selectedRolls.length === 0)
-              }
-              className="flex items-center gap-2"
-            >
-              {isProcessingSell ? (
-                <>
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
-                  Procesando Venta...
-                </>
-              ) : (
-                "Confirmar Venta"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openTransferDialog} onOpenChange={setOpenTransferDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <svg
-                className="mr-2 h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                />
-              </svg>
-              Trasladar a Mérida
-            </DialogTitle>
-            <DialogDescription>
-              {selectedItemIndex !== null &&
-                `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} (Desde CDMX)`}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="flex gap-4">
-              <Button
-                variant={transferMode === "manual" ? "default" : "outline"}
-                onClick={() => setTransferMode("manual")}
-                className="flex-1"
-              >
-                <Input className="mr-2 h-4 w-4" />
-                Cantidad Manual
-              </Button>
-              <Button
-                variant={transferMode === "rolls" ? "default" : "outline"}
-                onClick={() => setTransferMode("rolls")}
-                className="flex-1"
-              >
-                <BoxIcon className="mr-2 h-4 w-4" />
-                Por Rollos Específicos
-              </Button>
-            </div>
-
-            {transferMode === "manual" ? (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="transfer-quantity" className="text-right">
-                  Cantidad
-                </Label>
-                <Input
-                  id="transfer-quantity"
-                  type="text"
-                  value={
-                    quantityToUpdate === 0
-                      ? ""
-                      : formatInputNumber(quantityToUpdate.toString())
-                  }
-                  onChange={(e) => {
-                    const numericValue = parseInputNumber(e.target.value);
-                    setQuantityToUpdate(numericValue);
-                  }}
-                  placeholder="0.00"
-                  className="col-span-3"
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {isLoadingTransferList ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2Icon className="h-8 w-8 animate-spin" />
+              <TabsContent value="manual-row" className="space-y-4">
+                <div className="grid gap-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="oc" className="text-right">
+                      OC *
+                    </Label>
+                    <div className="col-span-3">
+                      <Input
+                        id="oc"
+                        placeholder="Ej: Dsma-03-23-Slm1-Pqp1"
+                        value={formData.OC}
+                        onChange={(e) =>
+                          handleInputChange("OC", e.target.value)
+                        }
+                        className={
+                          formErrors.OC && touchedFields.OC
+                            ? "border-red-500"
+                            : ""
+                        }
+                      />
+                      {formErrors.OC && touchedFields.OC && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.OC}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                ) : availableTransferRolls.length > 0 ? (
-                  <>
-                    {availableLots.length > 1 && (
-                      <div className="space-y-2">
-                        <Label>Seleccionar Lote</Label>
-                        <Select
-                          value={selectedLot?.toString()}
-                          onValueChange={(value) =>
-                            handleLotChangeForTransfer(Number(value))
+
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="tela" className="text-right">
+                      Tela *
+                    </Label>
+                    <div className="col-span-3">
+                      <Input
+                        id="tela"
+                        placeholder="Ej: Slim, Maiky Plus, etc."
+                        value={formData.Tela}
+                        onChange={(e) =>
+                          handleInputChange("Tela", e.target.value)
+                        }
+                        className={
+                          formErrors.Tela && touchedFields.Tela
+                            ? "border-red-500"
+                            : ""
+                        }
+                      />
+                      {formErrors.Tela && touchedFields.Tela && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.Tela}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="color" className="text-right">
+                      Color *
+                    </Label>
+                    <div className="col-span-3">
+                      <Input
+                        id="color"
+                        placeholder="Ej: Rojo, Negro, Azul, etc."
+                        value={formData.Color}
+                        onChange={(e) =>
+                          handleInputChange("Color", e.target.value)
+                        }
+                        className={
+                          formErrors.Color && touchedFields.Color
+                            ? "border-red-500"
+                            : ""
+                        }
+                      />
+                      {formErrors.Color && touchedFields.Color && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.Color}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="ubicacion" className="text-right">
+                      Ubicación *
+                    </Label>
+                    <div className="col-span-3">
+                      <Select
+                        value={formData.Ubicacion}
+                        onValueChange={(value) =>
+                          handleInputChange("Ubicacion", value)
+                        }
+                      >
+                        <SelectTrigger
+                          className={
+                            formErrors.Ubicacion && touchedFields.Ubicacion
+                              ? "border-red-500"
+                              : ""
                           }
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccione un lote" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableLots.map((lot) => {
-                              const cdmxRolls =
-                                rollsGroupedByLot
-                                  .get(lot)
-                                  ?.filter((roll) => roll.almacen === "CDMX") ||
-                                [];
-                              return cdmxRolls.length > 0 ? (
-                                <SelectItem key={lot} value={lot.toString()}>
-                                  Lote {lot} ({cdmxRolls.length} rollos en CDMX)
-                                </SelectItem>
-                              ) : null;
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    <div className="text-sm text-gray-600">
-                      Lote: {selectedLot} - {availableTransferRolls.length}{" "}
-                      rollos disponibles en CDMX
+                          <SelectValue placeholder="Selecciona ubicación" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CDMX">CDMX</SelectItem>
+                          <SelectItem value="Mérida">Mérida</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {formErrors.Ubicacion && touchedFields.Ubicacion && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.Ubicacion}
+                        </p>
+                      )}
                     </div>
+                  </div>
 
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setSelectedTransferRolls(
-                            availableTransferRolls.map((_, i) => i)
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="cantidad" className="text-right">
+                      Cantidad *
+                    </Label>
+                    <div className="col-span-3">
+                      <Input
+                        id="cantidad"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="Ej: 100.5"
+                        value={formData.Cantidad}
+                        onChange={(e) =>
+                          handleInputChange("Cantidad", e.target.value)
+                        }
+                        className={
+                          formErrors.Cantidad && touchedFields.Cantidad
+                            ? "border-red-500"
+                            : ""
+                        }
+                      />
+                      {formErrors.Cantidad && touchedFields.Cantidad && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.Cantidad}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="costo" className="text-right">
+                      Costo *
+                    </Label>
+                    <div className="col-span-3">
+                      <Input
+                        id="costo"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="Ej: 77.50"
+                        value={formData.Costo}
+                        onChange={(e) =>
+                          handleInputChange("Costo", e.target.value)
+                        }
+                        className={
+                          formErrors.Costo && touchedFields.Costo
+                            ? "border-red-500"
+                            : ""
+                        }
+                      />
+                      {formErrors.Costo && touchedFields.Costo && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.Costo}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="unidades" className="text-right">
+                      Unidades *
+                    </Label>
+                    <div className="col-span-3">
+                      <Select
+                        value={formData.Unidades}
+                        onValueChange={(value: "KGS" | "MTS") =>
+                          handleInputChange("Unidades", value)
+                        }
+                      >
+                        <SelectTrigger
+                          className={
+                            formErrors.Unidades && touchedFields.Unidades
+                              ? "border-red-500"
+                              : ""
+                          }
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="KGS">KGS</SelectItem>
+                          <SelectItem value="MTS">MTS</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {formErrors.Unidades && touchedFields.Unidades && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.Unidades}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="importacion" className="text-right">
+                      Importación
+                    </Label>
+                    <div className="col-span-3">
+                      <Select
+                        value={formData.Importacion}
+                        onValueChange={(value) =>
+                          handleInputChange("Importacion", value)
+                        }
+                      >
+                        <SelectTrigger
+                          className={
+                            formErrors.Importacion && touchedFields.Importacion
+                              ? "border-red-500"
+                              : ""
+                          }
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="DA">DA</SelectItem>
+                          <SelectItem value="HOY">HOY</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {formErrors.Importacion && touchedFields.Importacion && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {formErrors.Importacion}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="factura" className="text-right">
+                      Factura D.A.
+                    </Label>
+                    <div className="col-span-3">
+                      <Input
+                        id="factura"
+                        placeholder="Número de factura (opcional)"
+                        value={formData.FacturaDragonAzteca}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "FacturaDragonAzteca",
+                            e.target.value
                           )
                         }
-                      >
-                        Todos
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedTransferRolls([])}
-                      >
-                        Limpiar
-                      </Button>
+                        className={
+                          formErrors.FacturaDragonAzteca &&
+                          touchedFields.FacturaDragonAzteca
+                            ? "border-red-500"
+                            : ""
+                        }
+                      />
+                      {formErrors.FacturaDragonAzteca &&
+                        touchedFields.FacturaDragonAzteca && (
+                          <p className="text-red-500 text-sm mt-1">
+                            {formErrors.FacturaDragonAzteca}
+                          </p>
+                        )}
                     </div>
-
-                    <div className="border rounded-lg max-h-60 overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 sticky top-0">
-                          <tr>
-                            <th className="p-1 text-left text-sm">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  selectedTransferRolls.length ===
-                                    availableTransferRolls.length &&
-                                  availableTransferRolls.length > 0
-                                }
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedTransferRolls(
-                                      availableTransferRolls.map((_, i) => i)
-                                    );
-                                  } else {
-                                    setSelectedTransferRolls([]);
-                                  }
-                                }}
-                              />
-                            </th>
-                            <th className="p-1 text-left text-sm">Rollo #</th>
-                            <th className="p-1 text-left text-sm">Almacén</th>
-                            <th className="p-1 text-left text-sm">
-                              {availableTransferRolls[0]?.kg !== undefined
-                                ? "Peso (kg)"
-                                : "Metros"}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {availableTransferRolls.map((roll, index) => (
-                            <tr
-                              key={`transfer-${selectedLot}-${roll.roll_number}-${index}`}
-                              className={`border-b hover:bg-gray-50 cursor-pointer ${
-                                selectedTransferRolls.includes(index)
-                                  ? "bg-blue-50"
-                                  : ""
-                              }`}
-                              onClick={() => handleTransferRollSelection(index)}
-                            >
-                              <td
-                                className="p-1 text-sm"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedTransferRolls.includes(
-                                    index
-                                  )}
-                                  onChange={() =>
-                                    handleTransferRollSelection(index)
-                                  }
-                                />
-                              </td>
-                              <td className="p-1 text-sm">
-                                {roll.roll_number}
-                              </td>
-                              <td className="p-1 text-sm">
-                                <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                                  {roll.almacen}
-                                </span>
-                              </td>
-                              <td className="p-1 text-sm font-medium">
-                                {roll.kg !== undefined
-                                  ? `${roll.kg} kg`
-                                  : `${roll.mts} mts`}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-gray-50 sticky bottom-0">
-                          <tr>
-                            <td
-                              colSpan={3}
-                              className="p-1 text-right font-medium text-sm"
-                            >
-                              Total a trasladar:
-                            </td>
-                            <td className="p-1 font-bold text-sm">
-                              {calculateTotalFromTransferRolls().toFixed(2)}{" "}
-                              {availableTransferRolls[0]?.kg !== undefined
-                                ? "kg"
-                                : "mts"}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-
-                    <div className="bg-green-50 p-2 rounded-lg">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-sm">
-                          Resumen de traslado:
-                        </span>
-                        <span className="text-lg font-bold">
-                          {calculateTotalFromTransferRolls().toFixed(2)}{" "}
-                          {selectedItemIndex !== null &&
-                            inventory[selectedItemIndex]?.Unidades}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        {selectedTransferRolls.length} rollo(s) seleccionado(s)
-                        del lote {selectedLot}
-                      </div>
-                      <div className="text-sm mt-2">
-                        <span className="text-gray-600">De CDMX → Mérida</span>
-                      </div>
-                      {selectedItemIndex !== null && (
-                        <div className="text-sm mt-1">
-                          <span className="text-gray-600">
-                            Quedará en CDMX:{" "}
-                          </span>
-                          <span className="font-medium">
-                            {(
-                              inventory[selectedItemIndex].Cantidad -
-                              calculateTotalFromTransferRolls()
-                            ).toFixed(2)}{" "}
-                            {inventory[selectedItemIndex].Unidades}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                    <p>
-                      No se encontraron rollos disponibles en CDMX para esta
-                      tela y color.
-                    </p>
-                    <p className="text-sm mt-2">
-                      Verifique que existan rollos en CDMX para trasladar a
-                      Mérida.
-                    </p>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              </TabsContent>
+            </Tabs>
 
-            {selectedItemIndex !== null && (
-              <div className="text-sm text-gray-500">
-                Inventario disponible en CDMX:{" "}
-                {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
-                {inventory[selectedItemIndex]?.Unidades}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpenTransferDialog(false)}
-              disabled={isProcessingTransfer}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleTransferItem}
-              disabled={
-                isProcessingTransfer ||
-                (transferMode === "manual" && quantityToUpdate <= 0) ||
-                (transferMode === "rolls" && selectedTransferRolls.length === 0)
-              }
-              className="flex items-center gap-2"
-            >
-              {isProcessingTransfer ? (
-                <>
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                "Confirmar Traslado"
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setOpenInventoryDialog(false)}
+                disabled={isUploading || isCreatingRow}
+              >
+                Cerrar
+              </Button>
+              {activeTab === "manual-row" && (
+                <Button
+                  onClick={handleCreateRow}
+                  disabled={isCreatingRow}
+                  className="flex items-center gap-2"
+                >
+                  {isCreatingRow ? (
+                    <>
+                      <Loader2Icon className="h-4 w-4 animate-spin" />
+                      Creando...
+                    </>
+                  ) : (
+                    <>
+                      <PlusIcon className="h-4 w-4" />
+                      Crear Row
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Agregar Inventario</DialogTitle>
-            <DialogDescription>
-              {selectedItemIndex !== null &&
-                `Ingrese la cantidad de ${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} que desea agregar al inventario.`}
-            </DialogDescription>
-          </DialogHeader>
+        <Dialog open={openHistoryDialog} onOpenChange={setOpenHistoryDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <HistoryIcon className="mr-2 h-5 w-5" />
+                Cargar Inventario Histórico
+              </DialogTitle>
+              <DialogDescription>
+                Selecciona el año y mes del inventario que deseas cargar desde
+                S3.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-quantity" className="text-right">
-                Cantidad
-              </Label>
-              <Input
-                id="add-quantity"
-                type="text"
-                value={
-                  quantityToUpdate === 0
-                    ? ""
-                    : formatInputNumber(quantityToUpdate.toString())
-                }
-                onChange={(e) => {
-                  const numericValue = parseInputNumber(e.target.value);
-                  setQuantityToUpdate(numericValue);
-                }}
-                placeholder="0.00"
-                className="col-span-3"
-              />
-            </div>
-            {selectedItemIndex !== null && (
-              <div className="text-sm text-gray-500">
-                Inventario actual:{" "}
-                {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
-                {inventory[selectedItemIndex]?.Unidades}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenAddDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleAddItem}>Confirmar Adición</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Editar Producto</DialogTitle>
-          </DialogHeader>
-
-          {editingItem && (
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-oc" className="text-right">
-                  OC
-                </Label>
-                <Input
-                  id="edit-oc"
-                  value={editingItem.OC}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, OC: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-tela" className="text-right">
-                  Tela
-                </Label>
-                <Input
-                  id="edit-tela"
-                  value={editingItem.Tela}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, Tela: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-color" className="text-right">
-                  Color
-                </Label>
-                <Input
-                  id="edit-color"
-                  value={editingItem.Color}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, Color: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-costo" className="text-right">
-                  Costo
-                </Label>
-                <Input
-                  id="edit-costo"
-                  type="number"
-                  step="0.01"
-                  value={editingItem.Costo}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      Costo: Number(e.target.value),
-                    })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-cantidad" className="text-right">
-                  Cantidad
-                </Label>
-                <Input
-                  id="edit-cantidad"
-                  type="number"
-                  step="0.01"
-                  value={editingItem.Cantidad}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      Cantidad: Number(e.target.value),
-                    })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-unidades" className="text-right">
-                  Unidades
+                <Label htmlFor="year" className="text-right">
+                  Año
                 </Label>
                 <Select
-                  value={editingItem.Unidades}
-                  onValueChange={(value) =>
-                    setEditingItem({
-                      ...editingItem,
-                      Unidades: value as UnitType,
-                    })
-                  }
+                  value={selectedHistoryYear}
+                  onValueChange={setSelectedHistoryYear}
                 >
                   <SelectTrigger className="col-span-3">
-                    <SelectValue />
+                    <SelectValue placeholder="Selecciona año" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MTS">MTS</SelectItem>
-                    <SelectItem value="KGS">KGS</SelectItem>
+                    {getAvailableYears().map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-ubicacion" className="text-right">
-                  Ubicación
+                <Label htmlFor="month" className="text-right">
+                  Mes
                 </Label>
                 <Select
-                  value={editingItem.Ubicacion}
-                  onValueChange={(value) =>
-                    setEditingItem({ ...editingItem, Ubicacion: value })
-                  }
+                  value={selectedHistoryMonth}
+                  onValueChange={setSelectedHistoryMonth}
                 >
                   <SelectTrigger className="col-span-3">
-                    <SelectValue />
+                    <SelectValue placeholder="Selecciona mes" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CDMX">CDMX</SelectItem>
-                    <SelectItem value="Mérida">Mérida</SelectItem>
+                    {[
+                      { value: "01", label: "Enero" },
+                      { value: "02", label: "Febrero" },
+                      { value: "03", label: "Marzo" },
+                      { value: "04", label: "Abril" },
+                      { value: "05", label: "Mayo" },
+                      { value: "06", label: "Junio" },
+                      { value: "07", label: "Julio" },
+                      { value: "08", label: "Agosto" },
+                      { value: "09", label: "Septiembre" },
+                      { value: "10", label: "Octubre" },
+                      { value: "11", label: "Noviembre" },
+                      { value: "12", label: "Diciembre" },
+                    ].map((month) => {
+                      const now = new Date();
+                      const currentYear = now.getFullYear();
+                      const currentMonth = now.getMonth() + 1;
+                      const selectedYear = parseInt(selectedHistoryYear);
+                      const monthNum = parseInt(month.value);
+
+                      // Deshabilitar meses futuros
+                      const isFuture =
+                        selectedYear > currentYear ||
+                        (selectedYear === currentYear &&
+                          monthNum > currentMonth);
+
+                      return (
+                        <SelectItem
+                          key={month.value}
+                          value={month.value}
+                          disabled={isFuture}
+                        >
+                          {month.label}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-importacion" className="text-right">
-                  Importación
-                </Label>
-                <Select
-                  value={editingItem.Importacion}
-                  onValueChange={(value) =>
-                    setEditingItem({
-                      ...editingItem,
-                      Importacion: value as "DA" | "HOY",
-                    })
-                  }
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DA">DA</SelectItem>
-                    <SelectItem value="HOY">HOY</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Total</Label>
-                <div className="col-span-3 p-2 bg-gray-50 rounded">
-                  ${formatNumber(editingItem.Costo * editingItem.Cantidad)}
-                </div>
               </div>
             </div>
-          )}
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpenEditDialog(false)}
-              disabled={isEditingInProgress}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleEditItem}
-              disabled={isEditingInProgress}
-              className="flex items-center gap-2"
-            >
-              {isEditingInProgress ? (
-                <>
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                "Guardar Cambios"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setOpenHistoryDialog(false)}
+                disabled={isLoadingHistorical}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  handleLoadHistoricalInventory(
+                    selectedHistoryYear,
+                    selectedHistoryMonth
+                  );
+                  setOpenHistoryDialog(false);
+                }}
+                disabled={isLoadingHistorical}
+                className="flex items-center gap-2"
+              >
+                {isLoadingHistorical ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                    Cargando...
+                  </>
+                ) : (
+                  <>
+                    <HistoryIcon className="h-4 w-4" />
+                    Cargar Inventario
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      <Dialog open={openReturnsDialog} onOpenChange={setOpenReturnsDialog}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <UndoIcon className="mr-2 h-5 w-5" />
-              Procesar Devoluciones
-            </DialogTitle>
-            <DialogDescription>
-              Seleccione los rollos que desea devolver al inventario
-            </DialogDescription>
-          </DialogHeader>
+        <Dialog open={openSellDialog} onOpenChange={setOpenSellDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Vender Producto</DialogTitle>
+              <DialogDescription>
+                {selectedItemIndex !== null &&
+                  `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color}`}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4">
-            {isLoadingReturns ? (
-              <div className="flex justify-center py-12">
-                <div className="flex flex-col items-center">
-                  <Loader2Icon className="h-8 w-8 animate-spin text-gray-500 mb-3" />
-                  <p className="text-gray-500">Cargando rollos vendidos...</p>
-                </div>
+            <div className="space-y-3">
+              <div className="flex gap-4">
+                <Button
+                  variant={sellMode === "manual" ? "default" : "outline"}
+                  onClick={() => setSellMode("manual")}
+                  className="flex-1"
+                >
+                  <Input className="mr-2 h-4 w-4" />
+                  Cantidad Manual
+                </Button>
+                <Button
+                  variant={sellMode === "rolls" ? "default" : "outline"}
+                  onClick={() => setSellMode("rolls")}
+                  className="flex-1"
+                >
+                  <BoxIcon className="mr-2 h-4 w-4" />
+                  Por Rollos Específicos
+                </Button>
               </div>
-            ) : availableSoldRolls.length > 0 ? (
-              <>
-                {/* Selectores de filtrado */}
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Selector de Orden de Compra */}
-                  <div className="space-y-2">
-                    <Label>Orden de Compra</Label>
-                    <Select
-                      value={selectedOCForReturns}
-                      onValueChange={handleOCChangeForReturns}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione una OC" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableOCs.map((oc) => {
-                          const totalRollsInOC = Object.values(
-                            groupedByOCAndLot[oc] || {}
-                          )
-                            .flat()
-                            .filter(
-                              (roll: any) => roll.available_for_return
-                            ).length;
 
-                          return (
-                            <SelectItem key={oc} value={oc}>
-                              {oc} ({totalRollsInOC} rollos)
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Lote (opcional)</Label>
-                    <Select
-                      value={selectedLotForReturns || "all"}
-                      onValueChange={handleLotChangeForReturns}
-                      disabled={!selectedOCForReturns}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todos los lotes" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los lotes</SelectItem>
-                        {availableLotsForReturns.map((lot) => {
-                          const rollsInLot =
-                            groupedByOCAndLot[selectedOCForReturns]?.[
-                              lot
-                            ]?.filter((roll: any) => roll.available_for_return)
-                              ?.length || 0;
-
-                          return (
-                            <SelectItem key={lot} value={lot.toString()}>
-                              Lote {lot} ({rollsInLot} rollos)
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {sellMode === "manual" ? (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="quantity" className="text-right">
+                    Cantidad
+                  </Label>
+                  <Input
+                    id="quantity"
+                    type="text"
+                    value={
+                      quantityToUpdate === 0
+                        ? ""
+                        : formatInputNumber(quantityToUpdate.toString())
+                    }
+                    onChange={(e) => {
+                      const numericValue = parseInputNumber(e.target.value);
+                      setQuantityToUpdate(numericValue);
+                    }}
+                    placeholder="0.00"
+                    className="col-span-3"
+                  />
                 </div>
-
-                {selectedOCForReturns &&
-                  getFilteredRollsForReturns().length > 0 && (
+              ) : (
+                <div className="space-y-3">
+                  {isLoadingPackingList ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2Icon className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : availableRolls.length > 0 ? (
                     <>
-                      {/* Información resumida */}
-                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-medium text-blue-900">
-                              OC: {selectedOCForReturns}
-                              {selectedLotForReturns &&
-                                ` - Lote ${selectedLotForReturns}`}
-                            </h3>
-                            <p className="text-sm text-blue-700">
-                              Rollos mostrados:{" "}
-                              <span className="font-bold">
-                                {getFilteredRollsForReturns().length}
-                              </span>
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-blue-700">
-                              Seleccionados:{" "}
-                              <span className="font-bold">
-                                {selectedReturnRolls.length}
-                              </span>
-                            </p>
-                            <p className="text-xs text-blue-600">
-                              Total:{" "}
-                              {calculateTotalReturnQuantityFiltered().toFixed(
-                                2
-                              )}
-                            </p>
-                          </div>
+                      {availableLots.length > 1 && (
+                        <div className="space-y-2">
+                          <Label>Seleccionar Lote</Label>
+                          <Select
+                            value={selectedLot?.toString()}
+                            onValueChange={(value) =>
+                              handleLotChange(Number(value))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccione un lote" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableLots.map((lot) => (
+                                <SelectItem key={lot} value={lot.toString()}>
+                                  Lote {lot} (
+                                  {rollsGroupedByLot.get(lot)?.length || 0}{" "}
+                                  rollos)
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
+                      )}
+
+                      <div className="text-sm text-gray-600">
+                        Lote: {selectedLot} - {availableRolls.length} rollos
+                        disponibles
                       </div>
 
-                      {/* Botones de selección */}
                       <div className="flex gap-1">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            setSelectedReturnRolls(
-                              getFilteredRollsForReturns().map((_, i) => i)
-                            )
+                            setSelectedRolls(availableRolls.map((_, i) => i))
                           }
                         >
                           Todos
@@ -4176,7 +4072,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setSelectedReturnRolls([])}
+                          onClick={() => setSelectedRolls([])}
                         >
                           Limpiar
                         </Button>
@@ -4186,100 +4082,59 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         <table className="w-full text-sm">
                           <thead className="bg-gray-50 sticky top-0">
                             <tr>
-                              <th className="p-2 text-left text-sm">
+                              <th className="p-1 text-left text-sm">
                                 <input
                                   type="checkbox"
                                   checked={
-                                    selectedReturnRolls.length ===
-                                      getFilteredRollsForReturns().length &&
-                                    getFilteredRollsForReturns().length > 0
+                                    selectedRolls.length ===
+                                      availableRolls.length &&
+                                    availableRolls.length > 0
                                   }
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setSelectedReturnRolls(
-                                        getFilteredRollsForReturns().map(
-                                          (_, i) => i
-                                        )
+                                      setSelectedRolls(
+                                        availableRolls.map((_, i) => i)
                                       );
                                     } else {
-                                      setSelectedReturnRolls([]);
+                                      setSelectedRolls([]);
                                     }
                                   }}
                                 />
                               </th>
-                              <th className="p-2 text-left font-medium">
-                                Rollo #
-                              </th>
-                              <th className="p-2 text-left font-medium">
-                                Lote
-                              </th>
-                              <th className="p-2 text-left font-medium">
-                                Tela
-                              </th>
-                              <th className="p-2 text-left font-medium">
-                                Color
-                              </th>
-                              <th className="p-2 text-left font-medium">
-                                Almacén
-                              </th>
-                              <th className="p-2 text-left font-medium">
-                                Cantidad
-                              </th>
-                              <th className="p-2 text-left font-medium">
-                                Fecha Venta
+                              <th className="p-1 text-left text-sm">Rollo #</th>
+                              <th className="p-1 text-left text-sm">Almacén</th>
+                              <th className="p-1 text-left text-sm">
+                                {availableRolls[0]?.kg !== undefined
+                                  ? "Peso (kg)"
+                                  : "Metros"}
                               </th>
                             </tr>
                           </thead>
                           <tbody>
-                            {getFilteredRollsForReturns().map((roll, index) => (
+                            {availableRolls.map((roll, index) => (
                               <tr
-                                key={`return-roll-${roll.roll_number}-${roll.lot}-${index}`}
+                                key={`${selectedLot}-${roll.roll_number}-${index}`}
                                 className={`border-b hover:bg-gray-50 cursor-pointer ${
-                                  selectedReturnRolls.includes(index)
+                                  selectedRolls.includes(index)
                                     ? "bg-blue-50"
                                     : ""
                                 }`}
-                                onClick={() =>
-                                  handleReturnRollSelectionFiltered(index)
-                                }
+                                onClick={() => handleRollSelection(index)}
                               >
                                 <td
-                                  className="p-2 text-sm"
+                                  className="p-1 text-sm"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <input
                                     type="checkbox"
-                                    checked={selectedReturnRolls.includes(
-                                      index
-                                    )}
-                                    onChange={() =>
-                                      handleReturnRollSelectionFiltered(index)
-                                    }
+                                    checked={selectedRolls.includes(index)}
+                                    onChange={() => handleRollSelection(index)}
                                   />
                                 </td>
-                                <td className="p-2 font-medium">
-                                  {roll.sale_type === "manual" ? (
-                                    <span className="flex items-center">
-                                      #{roll.roll_number}
-                                    </span>
-                                  ) : (
-                                    `#${roll.roll_number}`
-                                  )}
+                                <td className="p-1 text-sm">
+                                  {roll.roll_number}
                                 </td>
-                                <td className="p-2">
-                                  {roll.lot === 0 ? (
-                                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                                      Manual
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
-                                      {roll.lot}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="p-2">{roll.fabric_type}</td>
-                                <td className="p-2">{roll.color}</td>
-                                <td className="p-2">
+                                <td className="p-1 text-sm">
                                   <span
                                     className={`px-2 py-1 rounded-full text-xs ${
                                       roll.almacen === "CDMX"
@@ -4290,19 +4145,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                     {roll.almacen}
                                   </span>
                                 </td>
-                                <td className="p-2 font-medium">
-                                  {formatNumber(roll.sold_quantity)}{" "}
-                                  {roll.units}
-                                </td>
-                                <td className="p-2 text-gray-600">
-                                  {new Date(roll.sold_date).toLocaleDateString(
-                                    "es-MX",
-                                    {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric",
-                                    }
-                                  )}
+                                <td className="p-1 text-sm font-medium">
+                                  {roll.kg !== undefined
+                                    ? `${roll.kg} kg`
+                                    : `${roll.mts} mts`}
                                 </td>
                               </tr>
                             ))}
@@ -4310,118 +4156,1054 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                           <tfoot className="bg-gray-50 sticky bottom-0">
                             <tr>
                               <td
-                                colSpan={6}
-                                className="p-2 text-right font-medium text-sm"
+                                colSpan={3}
+                                className="p-1 text-right font-medium text-sm"
                               >
-                                Total a devolver:
+                                Total seleccionado:
                               </td>
-                              <td className="p-2 font-bold text-sm">
-                                {formatNumber(
-                                  calculateTotalReturnQuantityFiltered()
-                                )}{" "}
-                                {getFilteredRollsForReturns()[0]?.units || ""}
+                              <td className="p-1 font-bold text-sm">
+                                {calculateTotalFromRolls().toFixed(2)}{" "}
+                                {availableRolls[0]?.kg !== undefined
+                                  ? "kg"
+                                  : "mts"}
                               </td>
-                              <td className="p-2"></td>
                             </tr>
                           </tfoot>
                         </table>
                       </div>
 
-                      {/* Resumen de devolución */}
-                      {selectedReturnRolls.length > 0 && (
-                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-sm text-yellow-800">
-                              Resumen de devolución:
+                      <div className="bg-blue-50 p-2 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-sm">
+                            Resumen de venta:
+                          </span>
+                          <span className="text-lg font-bold">
+                            {calculateTotalFromRolls().toFixed(2)}{" "}
+                            {selectedItemIndex !== null &&
+                              inventory[selectedItemIndex]?.Unidades}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {selectedRolls.length} rollo(s) seleccionado(s) del
+                          lote {selectedLot}
+                        </div>
+                        {selectedItemIndex !== null && (
+                          <div className="text-sm mt-2">
+                            <span className="text-gray-600">
+                              Quedará en inventario:{" "}
                             </span>
-                            <span className="text-lg font-bold text-yellow-900">
-                              {formatNumber(
-                                calculateTotalReturnQuantityFiltered()
-                              )}{" "}
-                              {getFilteredRollsForReturns()[0]?.units || ""}
+                            <span className="font-medium">
+                              {(
+                                inventory[selectedItemIndex].Cantidad -
+                                calculateTotalFromRolls()
+                              ).toFixed(2)}{" "}
+                              {inventory[selectedItemIndex].Unidades}
                             </span>
                           </div>
-                          <div className="text-sm text-yellow-700 mt-1">
-                            {selectedReturnRolls.length} rollo(s) de la OC{" "}
-                            {selectedOCForReturns}
-                            {selectedLotForReturns &&
-                              ` (Lote ${selectedLotForReturns})`}
-                          </div>
-                          <div className="text-sm text-yellow-700">
-                            Los rollos se agregarán de vuelta al inventario y
-                            packing list
-                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : packingListData.length > 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                      <p>
+                        No se encontraron rollos disponibles para esta tela y
+                        color.
+                      </p>
+                      <p className="text-sm mt-2">
+                        Es posible que todos los rollos hayan sido vendidos.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <FolderOpenIcon className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                      <p>
+                        No se encontró información de rollos para este producto.
+                      </p>
+                      <p className="text-sm mt-2">
+                        Verifique que exista un packing list cargado para esta
+                        tela.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedItemIndex !== null && (
+                <div className="text-sm text-gray-500">
+                  Inventario disponible:{" "}
+                  {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
+                  {inventory[selectedItemIndex]?.Unidades}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setOpenSellDialog(false)}
+                disabled={isProcessingSell}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSellItem}
+                disabled={
+                  isProcessingSell ||
+                  (sellMode === "manual" && quantityToUpdate <= 0) ||
+                  (sellMode === "rolls" && selectedRolls.length === 0)
+                }
+                className="flex items-center gap-2"
+              >
+                {isProcessingSell ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                    Procesando Venta...
+                  </>
+                ) : (
+                  "Confirmar Venta"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={openTransferDialog} onOpenChange={setOpenTransferDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <svg
+                  className="mr-2 h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                  />
+                </svg>
+                Trasladar a Mérida
+              </DialogTitle>
+              <DialogDescription>
+                {selectedItemIndex !== null &&
+                  `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} (Desde CDMX)`}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="flex gap-4">
+                <Button
+                  variant={transferMode === "manual" ? "default" : "outline"}
+                  onClick={() => setTransferMode("manual")}
+                  className="flex-1"
+                >
+                  <Input className="mr-2 h-4 w-4" />
+                  Cantidad Manual
+                </Button>
+                <Button
+                  variant={transferMode === "rolls" ? "default" : "outline"}
+                  onClick={() => setTransferMode("rolls")}
+                  className="flex-1"
+                >
+                  <BoxIcon className="mr-2 h-4 w-4" />
+                  Por Rollos Específicos
+                </Button>
+              </div>
+
+              {transferMode === "manual" ? (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="transfer-quantity" className="text-right">
+                    Cantidad
+                  </Label>
+                  <Input
+                    id="transfer-quantity"
+                    type="text"
+                    value={
+                      quantityToUpdate === 0
+                        ? ""
+                        : formatInputNumber(quantityToUpdate.toString())
+                    }
+                    onChange={(e) => {
+                      const numericValue = parseInputNumber(e.target.value);
+                      setQuantityToUpdate(numericValue);
+                    }}
+                    placeholder="0.00"
+                    className="col-span-3"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {isLoadingTransferList ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2Icon className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : availableTransferRolls.length > 0 ? (
+                    <>
+                      {availableLots.length > 1 && (
+                        <div className="space-y-2">
+                          <Label>Seleccionar Lote</Label>
+                          <Select
+                            value={selectedLot?.toString()}
+                            onValueChange={(value) =>
+                              handleLotChangeForTransfer(Number(value))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccione un lote" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableLots.map((lot) => {
+                                const cdmxRolls =
+                                  rollsGroupedByLot
+                                    .get(lot)
+                                    ?.filter(
+                                      (roll) => roll.almacen === "CDMX"
+                                    ) || [];
+                                return cdmxRolls.length > 0 ? (
+                                  <SelectItem key={lot} value={lot.toString()}>
+                                    Lote {lot} ({cdmxRolls.length} rollos en
+                                    CDMX)
+                                  </SelectItem>
+                                ) : null;
+                              })}
+                            </SelectContent>
+                          </Select>
                         </div>
                       )}
+
+                      <div className="text-sm text-gray-600">
+                        Lote: {selectedLot} - {availableTransferRolls.length}{" "}
+                        rollos disponibles en CDMX
+                      </div>
+
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setSelectedTransferRolls(
+                              availableTransferRolls.map((_, i) => i)
+                            )
+                          }
+                        >
+                          Todos
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedTransferRolls([])}
+                        >
+                          Limpiar
+                        </Button>
+                      </div>
+
+                      <div className="border rounded-lg max-h-60 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="p-1 text-left text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    selectedTransferRolls.length ===
+                                      availableTransferRolls.length &&
+                                    availableTransferRolls.length > 0
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedTransferRolls(
+                                        availableTransferRolls.map((_, i) => i)
+                                      );
+                                    } else {
+                                      setSelectedTransferRolls([]);
+                                    }
+                                  }}
+                                />
+                              </th>
+                              <th className="p-1 text-left text-sm">Rollo #</th>
+                              <th className="p-1 text-left text-sm">Almacén</th>
+                              <th className="p-1 text-left text-sm">
+                                {availableTransferRolls[0]?.kg !== undefined
+                                  ? "Peso (kg)"
+                                  : "Metros"}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {availableTransferRolls.map((roll, index) => (
+                              <tr
+                                key={`transfer-${selectedLot}-${roll.roll_number}-${index}`}
+                                className={`border-b hover:bg-gray-50 cursor-pointer ${
+                                  selectedTransferRolls.includes(index)
+                                    ? "bg-blue-50"
+                                    : ""
+                                }`}
+                                onClick={() =>
+                                  handleTransferRollSelection(index)
+                                }
+                              >
+                                <td
+                                  className="p-1 text-sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTransferRolls.includes(
+                                      index
+                                    )}
+                                    onChange={() =>
+                                      handleTransferRollSelection(index)
+                                    }
+                                  />
+                                </td>
+                                <td className="p-1 text-sm">
+                                  {roll.roll_number}
+                                </td>
+                                <td className="p-1 text-sm">
+                                  <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                    {roll.almacen}
+                                  </span>
+                                </td>
+                                <td className="p-1 text-sm font-medium">
+                                  {roll.kg !== undefined
+                                    ? `${roll.kg} kg`
+                                    : `${roll.mts} mts`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-50 sticky bottom-0">
+                            <tr>
+                              <td
+                                colSpan={3}
+                                className="p-1 text-right font-medium text-sm"
+                              >
+                                Total a trasladar:
+                              </td>
+                              <td className="p-1 font-bold text-sm">
+                                {calculateTotalFromTransferRolls().toFixed(2)}{" "}
+                                {availableTransferRolls[0]?.kg !== undefined
+                                  ? "kg"
+                                  : "mts"}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                      <div className="bg-green-50 p-2 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-sm">
+                            Resumen de traslado:
+                          </span>
+                          <span className="text-lg font-bold">
+                            {calculateTotalFromTransferRolls().toFixed(2)}{" "}
+                            {selectedItemIndex !== null &&
+                              inventory[selectedItemIndex]?.Unidades}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {selectedTransferRolls.length} rollo(s)
+                          seleccionado(s) del lote {selectedLot}
+                        </div>
+                        <div className="text-sm mt-2">
+                          <span className="text-gray-600">
+                            De CDMX → Mérida
+                          </span>
+                        </div>
+                        {selectedItemIndex !== null && (
+                          <div className="text-sm mt-1">
+                            <span className="text-gray-600">
+                              Quedará en CDMX:{" "}
+                            </span>
+                            <span className="font-medium">
+                              {(
+                                inventory[selectedItemIndex].Cantidad -
+                                calculateTotalFromTransferRolls()
+                              ).toFixed(2)}{" "}
+                              {inventory[selectedItemIndex].Unidades}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                      <p>
+                        No se encontraron rollos disponibles en CDMX para esta
+                        tela y color.
+                      </p>
+                      <p className="text-sm mt-2">
+                        Verifique que existan rollos en CDMX para trasladar a
+                        Mérida.
+                      </p>
+                    </div>
                   )}
-              </>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <UndoIcon className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                <p>No hay rollos vendidos disponibles para devolución</p>
-                <p className="text-sm mt-2">
-                  Los rollos vendidos recientemente aparecerán aquí
-                </p>
+                </div>
+              )}
+
+              {selectedItemIndex !== null && (
+                <div className="text-sm text-gray-500">
+                  Inventario disponible en CDMX:{" "}
+                  {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
+                  {inventory[selectedItemIndex]?.Unidades}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setOpenTransferDialog(false)}
+                disabled={isProcessingTransfer}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleTransferItem}
+                disabled={
+                  isProcessingTransfer ||
+                  (transferMode === "manual" && quantityToUpdate <= 0) ||
+                  (transferMode === "rolls" &&
+                    selectedTransferRolls.length === 0)
+                }
+                className="flex items-center gap-2"
+              >
+                {isProcessingTransfer ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  "Confirmar Traslado"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Agregar Inventario</DialogTitle>
+              <DialogDescription>
+                {selectedItemIndex !== null &&
+                  `Ingrese la cantidad de ${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} que desea agregar al inventario.`}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="add-quantity" className="text-right">
+                  Cantidad
+                </Label>
+                <Input
+                  id="add-quantity"
+                  type="text"
+                  value={
+                    quantityToUpdate === 0
+                      ? ""
+                      : formatInputNumber(quantityToUpdate.toString())
+                  }
+                  onChange={(e) => {
+                    const numericValue = parseInputNumber(e.target.value);
+                    setQuantityToUpdate(numericValue);
+                  }}
+                  placeholder="0.00"
+                  className="col-span-3"
+                />
+              </div>
+              {selectedItemIndex !== null && (
+                <div className="text-sm text-gray-500">
+                  Inventario actual:{" "}
+                  {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
+                  {inventory[selectedItemIndex]?.Unidades}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpenAddDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleAddItem}>Confirmar Adición</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Editar Producto</DialogTitle>
+            </DialogHeader>
+
+            {editingItem && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-oc" className="text-right">
+                    OC
+                  </Label>
+                  <Input
+                    id="edit-oc"
+                    value={editingItem.OC}
+                    onChange={(e) =>
+                      setEditingItem({ ...editingItem, OC: e.target.value })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-tela" className="text-right">
+                    Tela
+                  </Label>
+                  <Input
+                    id="edit-tela"
+                    value={editingItem.Tela}
+                    onChange={(e) =>
+                      setEditingItem({ ...editingItem, Tela: e.target.value })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-color" className="text-right">
+                    Color
+                  </Label>
+                  <Input
+                    id="edit-color"
+                    value={editingItem.Color}
+                    onChange={(e) =>
+                      setEditingItem({ ...editingItem, Color: e.target.value })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-costo" className="text-right">
+                    Costo
+                  </Label>
+                  <Input
+                    id="edit-costo"
+                    type="number"
+                    step="0.01"
+                    value={editingItem.Costo}
+                    onChange={(e) =>
+                      setEditingItem({
+                        ...editingItem,
+                        Costo: Number(e.target.value),
+                      })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-cantidad" className="text-right">
+                    Cantidad
+                  </Label>
+                  <Input
+                    id="edit-cantidad"
+                    type="number"
+                    step="0.01"
+                    value={editingItem.Cantidad}
+                    onChange={(e) =>
+                      setEditingItem({
+                        ...editingItem,
+                        Cantidad: Number(e.target.value),
+                      })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-unidades" className="text-right">
+                    Unidades
+                  </Label>
+                  <Select
+                    value={editingItem.Unidades}
+                    onValueChange={(value) =>
+                      setEditingItem({
+                        ...editingItem,
+                        Unidades: value as UnitType,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MTS">MTS</SelectItem>
+                      <SelectItem value="KGS">KGS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-ubicacion" className="text-right">
+                    Ubicación
+                  </Label>
+                  <Select
+                    value={editingItem.Ubicacion}
+                    onValueChange={(value) =>
+                      setEditingItem({ ...editingItem, Ubicacion: value })
+                    }
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CDMX">CDMX</SelectItem>
+                      <SelectItem value="Mérida">Mérida</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-importacion" className="text-right">
+                    Importación
+                  </Label>
+                  <Select
+                    value={editingItem.Importacion}
+                    onValueChange={(value) =>
+                      setEditingItem({
+                        ...editingItem,
+                        Importacion: value as "DA" | "HOY",
+                      })
+                    }
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DA">DA</SelectItem>
+                      <SelectItem value="HOY">HOY</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">Total</Label>
+                  <div className="col-span-3 p-2 bg-gray-50 rounded">
+                    ${formatNumber(editingItem.Costo * editingItem.Cantidad)}
+                  </div>
+                </div>
               </div>
             )}
-          </div>
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpenReturnsDialog(false)}
-              disabled={isProcessingReturns}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                // Actualizar la función de proceso para usar los rollos filtrados
-                const currentRolls = getFilteredRollsForReturns();
-                const rollsToReturn = selectedReturnRolls.map((index) => {
-                  const roll = currentRolls[index];
-                  return {
-                    roll_number: roll.roll_number,
-                    fabric_type: roll.fabric_type,
-                    color: roll.color,
-                    lot: roll.lot,
-                    oc: roll.oc,
-                    almacen: roll.almacen,
-                    return_quantity: roll.sold_quantity,
-                    units: roll.units,
-                    costo: roll.costo || 0,
-                    return_reason: "Devolución procesada desde interfaz",
-                    sale_id: roll.sale_id,
-                    original_sold_date: roll.sold_date,
-                  };
-                });
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setOpenEditDialog(false)}
+                disabled={isEditingInProgress}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleEditItem}
+                disabled={isEditingInProgress}
+                className="flex items-center gap-2"
+              >
+                {isEditingInProgress ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Guardar Cambios"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-                // Llamar a la función de procesamiento existente pero con los datos filtrados
-                handleProcessReturnsWithData(rollsToReturn);
-              }}
-              disabled={
-                isProcessingReturns ||
-                selectedReturnRolls.length === 0 ||
-                !selectedOCForReturns
-              }
-              className="flex items-center gap-2"
-            >
-              {isProcessingReturns ? (
+        <Dialog open={openReturnsDialog} onOpenChange={setOpenReturnsDialog}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <UndoIcon className="mr-2 h-5 w-5" />
+                Procesar Devoluciones
+              </DialogTitle>
+              <DialogDescription>
+                Seleccione los rollos que desea devolver al inventario
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {isLoadingReturns ? (
+                <div className="flex justify-center py-12">
+                  <div className="flex flex-col items-center">
+                    <Loader2Icon className="h-8 w-8 animate-spin text-gray-500 mb-3" />
+                    <p className="text-gray-500">Cargando rollos vendidos...</p>
+                  </div>
+                </div>
+              ) : availableSoldRolls.length > 0 ? (
                 <>
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
-                  Procesando...
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Orden de Compra</Label>
+                      <Select
+                        value={selectedOCForReturns}
+                        onValueChange={handleOCChangeForReturns}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione una OC" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableOCs.map((oc) => {
+                            const totalRollsInOC = Object.values(
+                              groupedByOCAndLot[oc] || {}
+                            )
+                              .flat()
+                              .filter(
+                                (roll: any) => roll.available_for_return
+                              ).length;
+
+                            return (
+                              <SelectItem key={oc} value={oc}>
+                                {oc} ({totalRollsInOC} rollos)
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Lote (opcional)</Label>
+                      <Select
+                        value={selectedLotForReturns || "all"}
+                        onValueChange={handleLotChangeForReturns}
+                        disabled={!selectedOCForReturns}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Todos los lotes" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los lotes</SelectItem>
+                          {availableLotsForReturns.map((lot) => {
+                            const rollsInLot =
+                              groupedByOCAndLot[selectedOCForReturns]?.[
+                                lot
+                              ]?.filter(
+                                (roll: any) => roll.available_for_return
+                              )?.length || 0;
+
+                            return (
+                              <SelectItem key={lot} value={lot.toString()}>
+                                Lote {lot} ({rollsInLot} rollos)
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {selectedOCForReturns &&
+                    getFilteredRollsForReturns().length > 0 && (
+                      <>
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-medium text-blue-900">
+                                OC: {selectedOCForReturns}
+                                {selectedLotForReturns &&
+                                  ` - Lote ${selectedLotForReturns}`}
+                              </h3>
+                              <p className="text-sm text-blue-700">
+                                Rollos mostrados:{" "}
+                                <span className="font-bold">
+                                  {getFilteredRollsForReturns().length}
+                                </span>
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-blue-700">
+                                Seleccionados:{" "}
+                                <span className="font-bold">
+                                  {selectedReturnRolls.length}
+                                </span>
+                              </p>
+                              <p className="text-xs text-blue-600">
+                                Total:{" "}
+                                {calculateTotalReturnQuantityFiltered().toFixed(
+                                  2
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setSelectedReturnRolls(
+                                getFilteredRollsForReturns().map((_, i) => i)
+                              )
+                            }
+                          >
+                            Todos
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedReturnRolls([])}
+                          >
+                            Limpiar
+                          </Button>
+                        </div>
+
+                        <div className="border rounded-lg max-h-60 overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 sticky top-0">
+                              <tr>
+                                <th className="p-2 text-left text-sm">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      selectedReturnRolls.length ===
+                                        getFilteredRollsForReturns().length &&
+                                      getFilteredRollsForReturns().length > 0
+                                    }
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedReturnRolls(
+                                          getFilteredRollsForReturns().map(
+                                            (_, i) => i
+                                          )
+                                        );
+                                      } else {
+                                        setSelectedReturnRolls([]);
+                                      }
+                                    }}
+                                  />
+                                </th>
+                                <th className="p-2 text-left font-medium">
+                                  Rollo #
+                                </th>
+                                <th className="p-2 text-left font-medium">
+                                  Lote
+                                </th>
+                                <th className="p-2 text-left font-medium">
+                                  Tela
+                                </th>
+                                <th className="p-2 text-left font-medium">
+                                  Color
+                                </th>
+                                <th className="p-2 text-left font-medium">
+                                  Almacén
+                                </th>
+                                <th className="p-2 text-left font-medium">
+                                  Cantidad
+                                </th>
+                                <th className="p-2 text-left font-medium">
+                                  Fecha Venta
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {getFilteredRollsForReturns().map(
+                                (roll, index) => (
+                                  <tr
+                                    key={`return-roll-${roll.roll_number}-${roll.lot}-${index}`}
+                                    className={`border-b hover:bg-gray-50 cursor-pointer ${
+                                      selectedReturnRolls.includes(index)
+                                        ? "bg-blue-50"
+                                        : ""
+                                    }`}
+                                    onClick={() =>
+                                      handleReturnRollSelectionFiltered(index)
+                                    }
+                                  >
+                                    <td
+                                      className="p-2 text-sm"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedReturnRolls.includes(
+                                          index
+                                        )}
+                                        onChange={() =>
+                                          handleReturnRollSelectionFiltered(
+                                            index
+                                          )
+                                        }
+                                      />
+                                    </td>
+                                    <td className="p-2 font-medium">
+                                      {roll.sale_type === "manual" ? (
+                                        <span className="flex items-center">
+                                          #{roll.roll_number}
+                                        </span>
+                                      ) : (
+                                        `#${roll.roll_number}`
+                                      )}
+                                    </td>
+                                    <td className="p-2">
+                                      {roll.lot === 0 ? (
+                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                                          Manual
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+                                          {roll.lot}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="p-2">{roll.fabric_type}</td>
+                                    <td className="p-2">{roll.color}</td>
+                                    <td className="p-2">
+                                      <span
+                                        className={`px-2 py-1 rounded-full text-xs ${
+                                          roll.almacen === "CDMX"
+                                            ? "bg-blue-100 text-blue-800"
+                                            : "bg-green-100 text-green-800"
+                                        }`}
+                                      >
+                                        {roll.almacen}
+                                      </span>
+                                    </td>
+                                    <td className="p-2 font-medium">
+                                      {formatNumber(roll.sold_quantity)}{" "}
+                                      {roll.units}
+                                    </td>
+                                    <td className="p-2 text-gray-600">
+                                      {new Date(
+                                        roll.sold_date
+                                      ).toLocaleDateString("es-MX", {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      })}
+                                    </td>
+                                  </tr>
+                                )
+                              )}
+                            </tbody>
+                            <tfoot className="bg-gray-50 sticky bottom-0">
+                              <tr>
+                                <td
+                                  colSpan={6}
+                                  className="p-2 text-right font-medium text-sm"
+                                >
+                                  Total a devolver:
+                                </td>
+                                <td className="p-2 font-bold text-sm">
+                                  {formatNumber(
+                                    calculateTotalReturnQuantityFiltered()
+                                  )}{" "}
+                                  {getFilteredRollsForReturns()[0]?.units || ""}
+                                </td>
+                                <td className="p-2"></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+
+                        {selectedReturnRolls.length > 0 && (
+                          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm text-yellow-800">
+                                Resumen de devolución:
+                              </span>
+                              <span className="text-lg font-bold text-yellow-900">
+                                {formatNumber(
+                                  calculateTotalReturnQuantityFiltered()
+                                )}{" "}
+                                {getFilteredRollsForReturns()[0]?.units || ""}
+                              </span>
+                            </div>
+                            <div className="text-sm text-yellow-700 mt-1">
+                              {selectedReturnRolls.length} rollo(s) de la OC{" "}
+                              {selectedOCForReturns}
+                              {selectedLotForReturns &&
+                                ` (Lote ${selectedLotForReturns})`}
+                            </div>
+                            <div className="text-sm text-yellow-700">
+                              Los rollos se agregarán de vuelta al inventario y
+                              packing list
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                 </>
               ) : (
-                <>
-                  <UndoIcon className="h-4 w-4" />
-                  Procesar Devolución
-                </>
+                <div className="text-center py-8 text-gray-500">
+                  <UndoIcon className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                  <p>No hay rollos vendidos disponibles para devolución</p>
+                  <p className="text-sm mt-2">
+                    Los rollos vendidos recientemente aparecerán aquí
+                  </p>
+                </div>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setOpenReturnsDialog(false)}
+                disabled={isProcessingReturns}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  const currentRolls = getFilteredRollsForReturns();
+                  const rollsToReturn = selectedReturnRolls.map((index) => {
+                    const roll = currentRolls[index];
+                    return {
+                      roll_number: roll.roll_number,
+                      fabric_type: roll.fabric_type,
+                      color: roll.color,
+                      lot: roll.lot,
+                      oc: roll.oc,
+                      almacen: roll.almacen,
+                      return_quantity: roll.sold_quantity,
+                      units: roll.units,
+                      costo: roll.costo || 0,
+                      return_reason: "Devolución procesada desde interfaz",
+                      sale_id: roll.sale_id,
+                      original_sold_date: roll.sold_date,
+                    };
+                  });
+
+                  handleProcessReturnsWithData(rollsToReturn);
+                }}
+                disabled={
+                  isProcessingReturns ||
+                  selectedReturnRolls.length === 0 ||
+                  !selectedOCForReturns
+                }
+                className="flex items-center gap-2"
+              >
+                {isProcessingReturns ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <UndoIcon className="h-4 w-4" />
+                    Procesar Devolución
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </Card>
+    </TooltipProvider>
   );
 };
