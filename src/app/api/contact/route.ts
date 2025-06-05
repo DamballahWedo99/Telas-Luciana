@@ -10,14 +10,12 @@ interface ContactRequest {
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
-  // Aplicar rate limiting para contacto
   const rateLimitResult = await rateLimit(request, {
     type: "contact",
     message:
       "Demasiados mensajes enviados. Por favor, inténtalo de nuevo más tarde.",
   });
 
-  // Si se alcanzó el límite de tasa, devolver la respuesta de error
   if (rateLimitResult) {
     return rateLimitResult;
   }
@@ -28,6 +26,19 @@ export async function POST(request: NextRequest): Promise<Response> {
   if (!name || !email || !subject || !message) {
     return new Response(
       JSON.stringify({ message: "Todos los campos son obligatorios" }),
+      { status: 400 }
+    );
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return new Response(JSON.stringify({ message: "Email inválido" }), {
+      status: 400,
+    });
+  }
+
+  if (message.length > 2000) {
+    return new Response(
+      JSON.stringify({ message: "Mensaje demasiado largo" }),
       { status: 400 }
     );
   }
@@ -49,7 +60,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
   } catch (error) {
-    console.error("Error al enviar el correo:", error);
+    console.error("Error enviando correo de contacto:", error);
     return new Response(
       JSON.stringify({ message: "Error al enviar el correo" }),
       { status: 500 }

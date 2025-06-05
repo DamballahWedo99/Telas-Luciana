@@ -4,6 +4,8 @@ import {
   GetObjectCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
+import { auth } from "@/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION!,
@@ -34,24 +36,20 @@ async function getAllPackingListFiles(): Promise<string[]> {
       continuationToken = listResponse.NextContinuationToken;
     } while (continuationToken);
 
-    const packingListFiles = allFiles
+    return allFiles
       .filter((item) => {
         const key = item.Key || "";
-        const isJson = key.endsWith(".json");
-        const hasPackingLists = key.includes("packing_lists_con_unidades");
-        const isNotBackup = !key.includes("backup");
-        const isNotRowFile = !key.includes("_row");
-        const isMainFile = key.includes("Catalogo_Rollos/");
-
         return (
-          isJson && hasPackingLists && isNotBackup && isNotRowFile && isMainFile
+          key.endsWith(".json") &&
+          key.includes("packing_lists_con_unidades") &&
+          !key.includes("backup") &&
+          !key.includes("_row") &&
+          key.includes("Catalogo_Rollos/")
         );
       })
       .map((item) => item.Key!);
-
-    return packingListFiles;
   } catch (error) {
-    console.error("Error al buscar archivos de packing list:", error);
+    console.error("Error buscando archivos packing list:", error);
     return [];
   }
 }
@@ -66,19 +64,29 @@ async function readPackingListFile(fileKey: string): Promise<any[]> {
     const response = await s3Client.send(command);
     const bodyString = await response.Body?.transformToString();
 
-    if (!bodyString) {
-      return [];
-    }
-
-    return JSON.parse(bodyString);
+    return bodyString ? JSON.parse(bodyString) : [];
   } catch (error) {
-    console.error(`Error al leer archivo ${fileKey}:`, error);
+    console.error(`Error leyendo archivo ${fileKey}:`, error);
     return [];
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const rateLimitResult = await rateLimit(request, {
+      type: "api",
+      message: "Demasiadas consultas de rollos. Espera un momento.",
+    });
+
+    if (rateLimitResult) {
+      return rateLimitResult;
+    }
+
+    const session = await auth();
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const tela = searchParams.get("tela");
     const color = searchParams.get("color");
@@ -123,16 +131,13 @@ export async function GET(request: NextRequest) {
 
       if (existingIndex >= 0) {
         const existingEntry = acc[existingIndex];
-        const existingRolls = existingEntry.rolls || [];
-        const currentRolls = current.rolls || [];
-
         const rollsMap = new Map();
 
-        existingRolls.forEach((roll: any) => {
+        (existingEntry.rolls || []).forEach((roll: any) => {
           rollsMap.set(roll.roll_number, roll);
         });
 
-        currentRolls.forEach((roll: any) => {
+        (current.rolls || []).forEach((roll: any) => {
           rollsMap.set(roll.roll_number, roll);
         });
 
@@ -141,9 +146,7 @@ export async function GET(request: NextRequest) {
         );
       } else {
         const rollsMap = new Map();
-        const rolls = current.rolls || [];
-
-        rolls.forEach((roll: any) => {
+        (current.rolls || []).forEach((roll: any) => {
           rollsMap.set(roll.roll_number, roll);
         });
 
@@ -160,7 +163,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(consolidatedData);
   } catch (error) {
-    console.error("Error al obtener packing list:", error);
+    console.error("Error obteniendo packing list:", error);
     return NextResponse.json(
       { error: "Error al obtener los datos del packing list" },
       { status: 500 }

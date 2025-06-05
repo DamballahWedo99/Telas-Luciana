@@ -1,4 +1,3 @@
-// /api/returns/process-returns/route.ts (ACTUALIZADO)
 import { NextRequest, NextResponse } from "next/server";
 import {
   S3Client,
@@ -41,13 +40,10 @@ interface ReturnRequest {
   notes?: string;
 }
 
-// Función para detectar si es una venta manual
 function isManualSale(rollNumber: number | string): boolean {
   return String(rollNumber).startsWith("MANUAL-");
 }
 
-// Función para buscar archivo de inventario correspondiente
-// Función para buscar archivo de inventario correspondiente (MEJORADA)
 async function findInventoryFile(
   oc: string,
   tela: string,
@@ -74,8 +70,6 @@ async function findInventoryFile(
     const monthName = monthNames[now.getMonth()];
     const folderPrefix = `Inventario/${year}/${monthName}/`;
 
-    console.log(`🔍 [FIND INVENTORY] Buscando en: ${folderPrefix}`);
-
     const listCommand = new ListObjectsV2Command({
       Bucket: BUCKET_NAME,
       Prefix: folderPrefix,
@@ -86,9 +80,6 @@ async function findInventoryFile(
       .filter((item) => item.Key && item.Key.endsWith(".json"))
       .map((item) => item.Key!);
 
-    console.log(`📁 [FIND INVENTORY] ${jsonFiles.length} archivos encontrados`);
-
-    // PRIMERA BÚSQUEDA: Coincidencia exacta
     for (const fileKey of jsonFiles) {
       try {
         const getCommand = new GetObjectCommand({
@@ -107,7 +98,6 @@ async function findInventoryFile(
           jsonData = [jsonData];
         }
 
-        // Buscar coincidencia exacta
         const foundItem = jsonData.find((item: any) => {
           const matchOC = item.OC?.toLowerCase() === oc.toLowerCase();
           const matchTela = item.Tela?.toLowerCase() === tela.toLowerCase();
@@ -119,28 +109,16 @@ async function findInventoryFile(
         });
 
         if (foundItem) {
-          console.log(
-            `✅ [FIND INVENTORY] Coincidencia exacta encontrada en: ${fileKey}`
-          );
           return fileKey;
         }
       } catch (fileError) {
-        console.error(
-          `❌ [FIND INVENTORY] Error leyendo ${fileKey}:`,
-          fileError
-        );
         continue;
       }
     }
 
-    // SEGUNDA BÚSQUEDA: Buscar archivo de la misma OC (para consolidar)
     const cleanOC = oc.replace(/[^a-zA-Z0-9]/g, "_");
     const relatedFiles = jsonFiles.filter(
       (file) => file.includes(cleanOC) && file.includes("inventario_")
-    );
-
-    console.log(
-      `🔍 [FIND INVENTORY] Buscando archivos relacionados a OC ${oc}: encontrados ${relatedFiles.length}`
     );
 
     for (const fileKey of relatedFiles) {
@@ -161,37 +139,25 @@ async function findInventoryFile(
           jsonData = [jsonData];
         }
 
-        // Buscar cualquier item de la misma OC
         const foundItem = jsonData.find((item: any) => {
           return item.OC?.toLowerCase() === oc.toLowerCase();
         });
 
         if (foundItem) {
-          console.log(
-            `✅ [FIND INVENTORY] Archivo relacionado encontrado para consolidar: ${fileKey}`
-          );
           return fileKey;
         }
       } catch (fileError) {
-        console.error(
-          `❌ [FIND INVENTORY] Error leyendo archivo relacionado ${fileKey}:`,
-          fileError
-        );
         continue;
       }
     }
 
-    console.log(
-      `❌ [FIND INVENTORY] No encontrado para: ${oc} - ${tela} - ${color} - ${ubicacion}`
-    );
     return null;
   } catch (error) {
-    console.error("❌ [FIND INVENTORY] Error general:", error);
+    console.error("Error buscando archivo inventario:", error);
     return null;
   }
 }
 
-// Función para encontrar el archivo de packing list correspondiente
 async function findPackingListFile(
   oc: string,
   tela: string,
@@ -218,10 +184,6 @@ async function findPackingListFile(
       );
     }).map((item) => item.Key!);
 
-    console.log(
-      `🔍 [FIND PACKING LIST] Buscando en ${packingListFiles.length} archivos`
-    );
-
     for (const fileKey of packingListFiles) {
       try {
         const getCommand = new GetObjectCommand({
@@ -244,33 +206,25 @@ async function findPackingListFile(
         );
 
         if (foundEntry) {
-          console.log(`✅ [FIND PACKING LIST] Encontrado en: ${fileKey}`);
           return fileKey;
         }
       } catch (fileError) {
-        console.error(
-          `❌ [FIND PACKING LIST] Error leyendo ${fileKey}:`,
-          fileError
-        );
         continue;
       }
     }
 
     return null;
   } catch (error) {
-    console.error("❌ [FIND PACKING LIST] Error general:", error);
+    console.error("Error buscando archivo packing list:", error);
     return null;
   }
 }
 
-// Función para actualizar inventario agregando cantidad devuelta
 async function updateInventory(
   fileKey: string,
   roll: ReturnRoll
 ): Promise<boolean> {
   try {
-    console.log(`📝 [UPDATE INVENTORY] Actualizando: ${fileKey}`);
-
     const getCommand = new GetObjectCommand({
       Bucket: BUCKET_NAME,
       Key: fileKey,
@@ -310,17 +264,12 @@ async function updateInventory(
         jsonData[i].Cantidad = newQuantity;
         jsonData[i].Total = (parseFloat(item.Costo) || 0) * newQuantity;
 
-        console.log(
-          `📊 [UPDATE INVENTORY] Cantidad: ${currentQuantity} + ${roll.return_quantity} = ${newQuantity}`
-        );
         itemFound = true;
         break;
       }
     }
 
     if (!itemFound) {
-      console.log(`🆕 [UPDATE INVENTORY] Creando nuevo item en inventario`);
-
       const newItem = {
         OC: roll.oc,
         Tela: roll.fabric_type,
@@ -337,7 +286,6 @@ async function updateInventory(
       };
 
       jsonData.push(newItem);
-      console.log(`✅ [UPDATE INVENTORY] Nuevo item creado`);
     }
 
     const putCommand = new PutObjectCommand({
@@ -353,15 +301,13 @@ async function updateInventory(
     });
 
     await s3Client.send(putCommand);
-    console.log(`✅ [UPDATE INVENTORY] Inventario actualizado exitosamente`);
     return true;
   } catch (error) {
-    console.error(`❌ [UPDATE INVENTORY] Error:`, error);
+    console.error("Error actualizando inventario:", error);
     return false;
   }
 }
 
-// Función para crear un archivo de inventario si no existe
 async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
   try {
     const now = new Date();
@@ -382,7 +328,6 @@ async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
     ];
     const monthName = monthNames[now.getMonth()];
 
-    // Crear nombre de archivo basado en la OC
     const fileName = `inventario_${roll.oc.replace(
       /[^a-zA-Z0-9]/g,
       "_"
@@ -418,24 +363,18 @@ async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
     });
 
     await s3Client.send(putCommand);
-    console.log(
-      `✅ [CREATE INVENTORY] Nuevo archivo de inventario creado: ${fileKey}`
-    );
     return fileKey;
   } catch (error) {
-    console.error(`❌ [CREATE INVENTORY] Error:`, error);
+    console.error("Error creando archivo inventario:", error);
     return null;
   }
 }
 
-// Función para actualizar packing list agregando rollo devuelto
 async function updatePackingList(
   fileKey: string,
   roll: ReturnRoll
 ): Promise<boolean> {
   try {
-    console.log(`📝 [UPDATE PACKING LIST] Actualizando: ${fileKey}`);
-
     const getCommand = new GetObjectCommand({
       Bucket: BUCKET_NAME,
       Key: fileKey,
@@ -448,7 +387,6 @@ async function updatePackingList(
     const data = JSON.parse(bodyString);
     if (!Array.isArray(data)) return false;
 
-    // Encontrar la entrada correspondiente
     let entryFound = false;
     for (let i = 0; i < data.length; i++) {
       const entry = data[i];
@@ -457,24 +395,18 @@ async function updatePackingList(
         entry.color?.toLowerCase() === roll.color.toLowerCase() &&
         entry.lot === roll.lot
       ) {
-        // Verificar si el rollo ya existe
         const existingRollIndex = entry.rolls?.findIndex(
           (r: any) => r.roll_number === roll.roll_number
         );
 
         if (existingRollIndex >= 0) {
-          // El rollo ya existe, actualizarlo (restaurar cantidad completa)
           entry.rolls[existingRollIndex] = {
             roll_number: roll.roll_number,
             almacen: roll.almacen,
             [roll.units.toLowerCase() === "kgs" ? "kg" : "mts"]:
               roll.return_quantity,
           };
-          console.log(
-            `🔄 [UPDATE PACKING LIST] Rollo ${roll.roll_number} restaurado`
-          );
         } else {
-          // Agregar el rollo devuelto
           if (!entry.rolls) entry.rolls = [];
           entry.rolls.push({
             roll_number: roll.roll_number,
@@ -483,11 +415,7 @@ async function updatePackingList(
               roll.return_quantity,
           });
 
-          // Ordenar rollos por número
           entry.rolls.sort((a: any, b: any) => a.roll_number - b.roll_number);
-          console.log(
-            `➕ [UPDATE PACKING LIST] Rollo ${roll.roll_number} agregado de vuelta`
-          );
         }
 
         entryFound = true;
@@ -495,12 +423,8 @@ async function updatePackingList(
       }
     }
 
-    if (!entryFound) {
-      console.log(`❌ [UPDATE PACKING LIST] Entrada no encontrada`);
-      return false;
-    }
+    if (!entryFound) return false;
 
-    // Guardar archivo actualizado
     const putCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: fileKey,
@@ -509,30 +433,20 @@ async function updatePackingList(
     });
 
     await s3Client.send(putCommand);
-    console.log(
-      `✅ [UPDATE PACKING LIST] Packing list actualizado exitosamente`
-    );
     return true;
   } catch (error) {
-    console.error(`❌ [UPDATE PACKING LIST] Error:`, error);
+    console.error("Error actualizando packing list:", error);
     return false;
   }
 }
 
-// Función para marcar rollos como devueltos en el historial de ventas
 async function markRollsAsReturned(
   returnedRolls: ReturnRoll[]
 ): Promise<boolean> {
   try {
-    console.log(
-      `🔄 [MARK RETURNED] Marcando ${returnedRolls.length} rollos como devueltos`
-    );
-
-    // Obtener archivos de historial de ventas recientes
     const now = new Date();
     const monthsToSearch: string[] = [];
     for (let i = 0; i <= 6; i++) {
-      // Buscar en los últimos 6 meses
       const searchDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const year = searchDate.getFullYear();
       const month = (searchDate.getMonth() + 1).toString().padStart(2, "0");
@@ -572,7 +486,6 @@ async function markRollsAsReturned(
 
             let fileModified = false;
 
-            // Buscar y marcar rollos como devueltos
             for (const record of salesRecords) {
               if (record.rolls && Array.isArray(record.rolls)) {
                 for (const roll of record.rolls) {
@@ -589,15 +502,11 @@ async function markRollsAsReturned(
                     roll.returned_date = new Date().toISOString();
                     roll.return_reason = returnedRoll.return_reason || "";
                     fileModified = true;
-                    console.log(
-                      `🔄 [MARK RETURNED] Rollo ${roll.roll_number} marcado como devuelto`
-                    );
                   }
                 }
               }
             }
 
-            // Guardar archivo si fue modificado
             if (fileModified) {
               const putCommand = new PutObjectCommand({
                 Bucket: BUCKET_NAME,
@@ -607,27 +516,23 @@ async function markRollsAsReturned(
               });
 
               await s3Client.send(putCommand);
-              console.log(`✅ [MARK RETURNED] Archivo actualizado: ${fileKey}`);
             }
           } catch (fileError) {
-            console.error(`Error procesando archivo ${fileKey}:`, fileError);
             continue;
           }
         }
       } catch (prefixError) {
-        console.error(`Error en prefix ${prefix}:`, prefixError);
         continue;
       }
     }
 
     return true;
   } catch (error) {
-    console.error(`❌ [MARK RETURNED] Error:`, error);
+    console.error("Error marcando rollos como devueltos:", error);
     return false;
   }
 }
 
-// Función para crear registro de devolución
 async function createReturnRecord(
   returnData: ReturnRequest,
   processedBy: string
@@ -673,17 +578,13 @@ async function createReturnRecord(
     });
 
     await s3Client.send(putCommand);
-    console.log(`📋 [RETURN RECORD] Registro creado: ${recordKey}`);
   } catch (error) {
-    console.error(`❌ [RETURN RECORD] Error:`, error);
+    console.error("Error creando registro devolución:", error);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔄 [PROCESS RETURNS] === PROCESANDO DEVOLUCIONES REALES ===");
-
-    // Rate limiting
     const rateLimitResult = await rateLimit(request, {
       type: "api",
       message: "Demasiadas solicitudes de devolución. Inténtalo más tarde.",
@@ -693,13 +594,11 @@ export async function POST(request: NextRequest) {
       return rateLimitResult;
     }
 
-    // Verificar autenticación
     const session = await auth();
     if (!session || !session.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Verificar permisos de admin
     const isAdmin =
       session.user.role === "admin" || session.user.role === "major_admin";
     if (!isAdmin) {
@@ -716,14 +615,6 @@ export async function POST(request: NextRequest) {
     ).length;
     const rollSalesCount = returnData.rolls.length - manualSalesCount;
 
-    console.log("🔄 [PROCESS RETURNS] Iniciando devolución:", {
-      rollCount: returnData.rolls.length,
-      manualSales: manualSalesCount,
-      rollSales: rollSalesCount,
-      reason: returnData.return_reason,
-    });
-
-    // Validar datos
     if (
       !returnData.rolls ||
       !Array.isArray(returnData.rolls) ||
@@ -750,26 +641,13 @@ export async function POST(request: NextRequest) {
       historyUpdates: 0,
     };
 
-    // Procesar cada rollo
     for (const roll of returnData.rolls) {
       try {
         const isManual = isManualSale(roll.roll_number);
-        console.log(
-          `\n🔄 [PROCESS RETURNS] Procesando ${
-            isManual ? "venta manual" : "rollo"
-          } ${roll.roll_number}`
-        );
-
         let inventoryUpdated = false;
         let packingListUpdated = false;
 
         if (isManual) {
-          // PROCESO PARA VENTAS MANUALES - Solo inventario
-          console.log(
-            `🔧 [PROCESS RETURNS] Procesando venta manual: ${roll.roll_number}`
-          );
-
-          // 1. Buscar archivo de inventario
           let inventoryFile = await findInventoryFile(
             roll.oc,
             roll.fabric_type,
@@ -778,39 +656,18 @@ export async function POST(request: NextRequest) {
           );
 
           if (inventoryFile) {
-            // 2a. Si existe archivo de inventario, actualizarlo
             inventoryUpdated = await updateInventory(inventoryFile, roll);
             if (inventoryUpdated) results.inventoryUpdates++;
           } else {
-            // 2b. Si no existe archivo de inventario, crear uno nuevo (ya incluye el item)
-            console.log(
-              `🆕 [PROCESS RETURNS] Creando nuevo archivo de inventario para venta manual`
-            );
             const newInventoryFile = await createInventoryFile(roll);
-
             if (newInventoryFile) {
-              inventoryUpdated = true; // Archivo creado exitosamente
+              inventoryUpdated = true;
               results.inventoryUpdates++;
-              console.log(
-                `✅ [PROCESS RETURNS] Archivo de inventario creado exitosamente: ${newInventoryFile}`
-              );
-            } else {
-              console.log(
-                `❌ [PROCESS RETURNS] Error creando archivo de inventario para venta manual`
-              );
-              inventoryUpdated = false;
             }
           }
 
-          // Para ventas manuales, no intentamos actualizar packing list
-          packingListUpdated = true; // Consideramos exitoso si el inventario se actualizó
+          packingListUpdated = true;
         } else {
-          // PROCESO NORMAL PARA ROLLOS REALES - Inventario + Packing List
-          console.log(
-            `📦 [PROCESS RETURNS] Procesando rollo real: ${roll.roll_number}`
-          );
-
-          // 1. Encontrar archivo de inventario
           const inventoryFile = await findInventoryFile(
             roll.oc,
             roll.fabric_type,
@@ -818,7 +675,6 @@ export async function POST(request: NextRequest) {
             roll.almacen
           );
 
-          // 2. Encontrar archivo de packing list
           const packingListFile = await findPackingListFile(
             roll.oc,
             roll.fabric_type,
@@ -826,28 +682,17 @@ export async function POST(request: NextRequest) {
             roll.lot
           );
 
-          // 3. Actualizar inventario (crear si no existe)
           if (inventoryFile) {
             inventoryUpdated = await updateInventory(inventoryFile, roll);
             if (inventoryUpdated) results.inventoryUpdates++;
-          } else {
-            console.log(
-              `⚠️ [PROCESS RETURNS] Archivo de inventario no encontrado para rollo ${roll.roll_number}`
-            );
           }
 
-          // 4. Actualizar packing list (obligatorio para trazabilidad de rollos)
           if (packingListFile) {
             packingListUpdated = await updatePackingList(packingListFile, roll);
             if (packingListUpdated) results.packingListUpdates++;
-          } else {
-            console.log(
-              `⚠️ [PROCESS RETURNS] Archivo de packing list no encontrado para rollo ${roll.roll_number}`
-            );
           }
         }
 
-        // 5. Consideramos exitoso si al menos se actualizó el inventario
         if (inventoryUpdated || packingListUpdated) {
           results.successful.push({
             roll_number: roll.roll_number,
@@ -859,11 +704,6 @@ export async function POST(request: NextRequest) {
             packing_list_updated: packingListUpdated,
             sale_type: isManual ? "manual" : "roll",
           });
-          console.log(
-            `✅ [PROCESS RETURNS] ${isManual ? "Venta manual" : "Rollo"} ${
-              roll.roll_number
-            } procesado exitosamente`
-          );
         } else {
           results.failed.push({
             roll_number: roll.roll_number,
@@ -873,10 +713,6 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (rollError) {
-        console.error(
-          `❌ [PROCESS RETURNS] Error procesando ${roll.roll_number}:`,
-          rollError
-        );
         results.failed.push({
           roll_number: roll.roll_number,
           error:
@@ -887,7 +723,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Marcar rollos como devueltos en el historial de ventas
     if (results.successful.length > 0) {
       try {
         const returnedRollsInfo = results.successful.map((s) => {
@@ -903,18 +738,22 @@ export async function POST(request: NextRequest) {
         await markRollsAsReturned(returnedRollsInfo);
         results.historyUpdates = 1;
 
-        // 7. Crear registro de devolución
         await createReturnRecord(
           returnData,
           session.user.email || session.user.name || ""
         );
       } catch (historyError) {
-        console.error(
-          "❌ [PROCESS RETURNS] Error actualizando historial:",
-          historyError
-        );
+        console.error("Error actualizando historial:", historyError);
       }
     }
+
+    console.log(`[RETURNS] User ${session.user.email} processed return:`, {
+      totalRequested: returnData.rolls.length,
+      successful: results.successful.length,
+      failed: results.failed.length,
+      manualSales: manualSalesCount,
+      rollSales: rollSalesCount,
+    });
 
     const response = {
       success: results.successful.length > 0,
@@ -932,14 +771,9 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    console.log(
-      "🎉 [PROCESS RETURNS] Devolución completada:",
-      response.summary
-    );
-
     return NextResponse.json(response);
   } catch (error) {
-    console.error("❌ [PROCESS RETURNS] Error general:", error);
+    console.error("Error procesando devolución:", error);
     return NextResponse.json(
       {
         error: "Error al procesar la devolución",
@@ -950,7 +784,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Método OPTIONS para CORS
 export async function OPTIONS() {
   return NextResponse.json(
     {},

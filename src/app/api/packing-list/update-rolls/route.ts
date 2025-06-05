@@ -5,6 +5,8 @@ import {
   PutObjectCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
+import { auth } from "@/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION!,
@@ -35,24 +37,20 @@ async function getAllPackingListFiles(): Promise<string[]> {
       continuationToken = listResponse.NextContinuationToken;
     } while (continuationToken);
 
-    const packingListFiles = allFiles
+    return allFiles
       .filter((item) => {
         const key = item.Key || "";
-        const isJson = key.endsWith(".json");
-        const hasPackingLists = key.includes("packing_lists_con_unidades");
-        const isNotBackup = !key.includes("backup");
-        const isNotRowFile = !key.includes("_row");
-        const isMainFile = key.includes("Catalogo_Rollos/");
-
         return (
-          isJson && hasPackingLists && isNotBackup && isNotRowFile && isMainFile
+          key.endsWith(".json") &&
+          key.includes("packing_lists_con_unidades") &&
+          !key.includes("backup") &&
+          !key.includes("_row") &&
+          key.includes("Catalogo_Rollos/")
         );
       })
       .map((item) => item.Key!);
-
-    return packingListFiles;
   } catch (error) {
-    console.error("Error al buscar archivos de packing list:", error);
+    console.error("Error buscando archivos packing list:", error);
     return [];
   }
 }
@@ -67,13 +65,9 @@ async function readPackingListFile(fileKey: string): Promise<any[] | null> {
     const response = await s3Client.send(command);
     const bodyString = await response.Body?.transformToString();
 
-    if (!bodyString) {
-      return null;
-    }
-
-    return JSON.parse(bodyString);
+    return bodyString ? JSON.parse(bodyString) : null;
   } catch (error) {
-    console.error(`Error al leer archivo ${fileKey}:`, error);
+    console.error(`Error leyendo archivo ${fileKey}:`, error);
     return null;
   }
 }
@@ -115,12 +109,46 @@ async function findRollInFiles(
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResult = await rateLimit(request, {
+      type: "auth",
+      message:
+        "Demasiadas actualizaciones de rollos. Espera antes de continuar.",
+    });
+
+    if (rateLimitResult) {
+      return rateLimitResult;
+    }
+
+    const session = await auth();
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const isAdmin =
+      session.user.role === "admin" || session.user.role === "major_admin";
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: "No autorizado para actualizar rollos" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { tela, color, lot, soldRolls } = body;
 
     if (!tela || !color || !lot || !soldRolls || soldRolls.length === 0) {
       return NextResponse.json(
         { error: "Todos los campos son requeridos" },
+        { status: 400 }
+      );
+    }
+
+    const invalidRolls = soldRolls.filter(
+      (roll: any) => typeof roll !== "number"
+    );
+    if (invalidRolls.length > 0) {
+      return NextResponse.json(
+        { error: "Todos los números de rollo deben ser válidos" },
         { status: 400 }
       );
     }
@@ -198,6 +226,11 @@ export async function POST(request: NextRequest) {
       Key: fileKey,
       Body: JSON.stringify(updatedData, null, 2),
       ContentType: "application/json",
+      Metadata: {
+        "last-updated": new Date().toISOString(),
+        "updated-by": session.user.email || "",
+        operation: "update-rolls-sold",
+      },
     });
 
     await s3Client.send(putCommand);
@@ -215,6 +248,14 @@ export async function POST(request: NextRequest) {
 
     await s3Client.send(backupCommand);
 
+    console.log(`[SOLD] User ${session.user.email} marked rolls as sold:`, {
+      tela,
+      color,
+      lot,
+      soldRolls,
+      timestamp: new Date().toISOString(),
+    });
+
     return NextResponse.json({
       success: true,
       message: `Packing list actualizado correctamente`,
@@ -224,7 +265,7 @@ export async function POST(request: NextRequest) {
       remainingRolls: updatedEntry?.rolls?.length || 0,
     });
   } catch (error) {
-    console.error("Error al actualizar packing list:", error);
+    console.error("Error actualizando packing list:", error);
     return NextResponse.json(
       { error: "Error al actualizar el packing list" },
       { status: 500 }

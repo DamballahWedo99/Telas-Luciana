@@ -7,7 +7,6 @@ import {
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
 
-// Definir las credenciales de AWS
 const s3Client = new S3Client({
   region: "us-west-2",
   credentials: {
@@ -18,7 +17,6 @@ const s3Client = new S3Client({
 
 const BUCKET_NAME = "telas-luciana";
 
-// Interfaces
 interface PendingFabric {
   id: string;
   tela: string;
@@ -32,14 +30,12 @@ interface PendingFabric {
   sourceFileKey?: string;
 }
 
-// Función para preprocesar el JSON con NaN valores
 const fixInvalidJSON = (content: string): string => {
   return content.replace(/: *NaN/g, ": null");
 };
 
 export async function POST(request: NextRequest) {
   try {
-    // Aplicar rate limiting
     const rateLimitResult = await rateLimit(request, {
       type: "api",
       message:
@@ -50,13 +46,11 @@ export async function POST(request: NextRequest) {
       return rateLimitResult;
     }
 
-    // Verificar autenticación
     const session = await auth();
     if (!session || !session.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Verificar permiso de usuario
     const isAdmin =
       session.user.role === "admin" || session.user.role === "major_admin";
     if (!isAdmin) {
@@ -66,7 +60,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Obtener datos del cuerpo de la solicitud
     const { fabrics, fileName, uploadId } = (await request.json()) as {
       fabrics: PendingFabric[];
       fileName: string;
@@ -80,7 +73,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar que todas las telas tienen costos asignados
     const missingCosts = fabrics.some((fabric) => fabric.costo === null);
     if (missingCosts) {
       return NextResponse.json(
@@ -89,32 +81,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`=== PROCESANDO ${fabrics.length} TELAS ===`);
-    console.log(`Upload ID: ${uploadId}`);
-
-    // Procesar cada tela individualmente
     const updatedItems: any[] = [];
     const errors: string[] = [];
     let updatedCount = 0;
 
     for (const fabric of fabrics) {
       try {
-        // Usar sourceFileKey si está disponible
         let fileKey = fabric.sourceFileKey;
 
         if (!fileKey) {
-          console.warn(
-            `No sourceFileKey para ${fabric.tela} ${fabric.color}, saltando...`
-          );
           errors.push(
             `No se encontró la ruta del archivo para: ${fabric.tela} ${fabric.color}`
           );
           continue;
         }
 
-        console.log(`Procesando: ${fabric.tela} ${fabric.color} en ${fileKey}`);
-
-        // Obtener el archivo actual
         const getCommand = new GetObjectCommand({
           Bucket: BUCKET_NAME,
           Key: fileKey,
@@ -129,18 +110,10 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Leer y parsear el contenido actual
         let fileContent = await fileResponse.Body.transformToString();
         fileContent = fixInvalidJSON(fileContent);
         const itemData = JSON.parse(fileContent);
 
-        console.log(
-          `Item actual - Status: ${itemData.status || "NO_STATUS"}, Costo: ${
-            itemData.Costo
-          }`
-        );
-
-        // Verificar que este item puede ser actualizado
         const canUpdate =
           itemData.status !== "successful" ||
           itemData.Costo === null ||
@@ -148,14 +121,12 @@ export async function POST(request: NextRequest) {
           itemData.Costo === "";
 
         if (!canUpdate && itemData.status === "successful") {
-          console.warn(`Item ya procesado: ${fabric.tela} ${fabric.color}`);
           errors.push(
             `La tela ${fabric.tela} ${fabric.color} ya está procesada`
           );
           continue;
         }
 
-        // Actualizar el item con el costo y cambiar status a successful
         const updatedItem = {
           ...itemData,
           Costo: fabric.costo,
@@ -166,11 +137,6 @@ export async function POST(request: NextRequest) {
           processedFromUploadId: uploadId,
         };
 
-        console.log(
-          `Actualizando a - Status: successful, Costo: ${fabric.costo}, Total: ${updatedItem.Total}`
-        );
-
-        // Guardar el archivo actualizado
         await s3Client.send(
           new PutObjectCommand({
             Bucket: BUCKET_NAME,
@@ -186,7 +152,6 @@ export async function POST(request: NextRequest) {
           })
         );
 
-        // Convertir a formato de inventario para el frontend
         const inventoryItem = {
           OC: updatedItem.OC || "",
           Tela: updatedItem.Tela || "",
@@ -202,15 +167,7 @@ export async function POST(request: NextRequest) {
 
         updatedItems.push(inventoryItem);
         updatedCount++;
-
-        console.log(
-          `✅ Actualizado exitosamente: ${fabric.tela} ${fabric.color}`
-        );
       } catch (fileError) {
-        console.error(
-          `Error procesando tela ${fabric.tela} ${fabric.color}:`,
-          fileError
-        );
         errors.push(
           `Error procesando ${fabric.tela} ${fabric.color}: ${
             fileError instanceof Error ? fileError.message : "Error desconocido"
@@ -230,7 +187,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Responder al cliente
+    console.log(
+      `[COSTS] User ${session.user.email} updated costs for ${updatedCount} items`
+    );
+
     const response = {
       success: true,
       message: `${updatedCount} telas actualizadas correctamente`,
@@ -240,21 +200,14 @@ export async function POST(request: NextRequest) {
       uploadId,
     };
 
-    // Agregar información de errores si los hubo
     if (errors.length > 0) {
       response.message += ` (${errors.length} errores)`;
       (response as any).errors = errors;
     }
 
-    console.log(`=== RESULTADO FINAL ===`);
-    console.log(`Total solicitado: ${fabrics.length}`);
-    console.log(`Exitosos: ${updatedCount}`);
-    console.log(`Errores: ${errors.length}`);
-    console.log(`======================`);
-
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error al guardar los costos:", error);
+    console.error("Error guardando costos:", error);
     return NextResponse.json(
       {
         error: "Error al procesar la solicitud",

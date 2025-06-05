@@ -8,14 +8,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Aplicar rate limiting para API general
     const rateLimitResult = await rateLimit(request, {
       type: "api",
       message:
         "Demasiadas solicitudes a la API de usuarios. Por favor, inténtalo de nuevo más tarde.",
     });
 
-    // Si se alcanzó el límite de tasa, devolver la respuesta de error
     if (rateLimitResult) {
       return rateLimitResult;
     }
@@ -62,7 +60,6 @@ export async function DELETE(
       );
     }
 
-    // Nueva validación de permisos basada en roles
     if (session.user.role === "admin" && userToDelete.role !== "seller") {
       return NextResponse.json(
         { error: "Los administradores solo pueden eliminar vendedores" },
@@ -83,24 +80,20 @@ export async function DELETE(
       }
     }
 
-    try {
-    } catch (error) {
-      console.log(
-        "No se pudo registrar el usuario eliminado en lista negra:",
-        error
-      );
-    }
-
     await db.user.delete({
       where: { id: userId },
     });
+
+    console.log(
+      `[USER-DELETE] User ${session.user.email} deleted user ${userToDelete.email}`
+    );
 
     return NextResponse.json({
       success: true,
       message: "Usuario eliminado correctamente",
     });
   } catch (error) {
-    console.error("Error al eliminar usuario:", error);
+    console.error("Error eliminando usuario:", error);
     return NextResponse.json(
       { error: "Error al eliminar el usuario" },
       { status: 500 }

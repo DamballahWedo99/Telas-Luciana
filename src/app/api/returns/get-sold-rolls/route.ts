@@ -1,4 +1,3 @@
-// /api/returns/get-sold-rolls/route.ts (ACTUALIZADO)
 import { NextRequest, NextResponse } from "next/server";
 import {
   S3Client,
@@ -34,17 +33,14 @@ interface SoldRoll {
   sale_id?: string;
 }
 
-// Función para buscar archivos de historial de ventas
 async function getSoldRollsFiles(daysBack: number = 30): Promise<string[]> {
   try {
     const now = new Date();
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
-    // Buscar en los últimos meses para cubrir el período solicitado
     const monthsToSearch: string[] = [];
     for (let i = 0; i <= 3; i++) {
-      // Buscar en los últimos 3 meses
       const searchDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const year = searchDate.getFullYear();
       const month = (searchDate.getMonth() + 1).toString().padStart(2, "0");
@@ -72,7 +68,7 @@ async function getSoldRollsFiles(daysBack: number = 30): Promise<string[]> {
               item.LastModified >= cutoffDate
           )
             .map((item) => item.Key!)
-            .sort((a, b) => b.localeCompare(a)); // Más recientes primero
+            .sort((a, b) => b.localeCompare(a));
 
           allFiles.push(...monthFiles);
         }
@@ -82,17 +78,13 @@ async function getSoldRollsFiles(daysBack: number = 30): Promise<string[]> {
       }
     }
 
-    console.log(
-      `📁 [GET-SOLD-ROLLS] Encontrados ${allFiles.length} archivos de ventas`
-    );
     return allFiles;
   } catch (error) {
-    console.error("Error al buscar archivos de rollos vendidos:", error);
+    console.error("Error buscando archivos de rollos vendidos:", error);
     return [];
   }
 }
 
-// Función para leer archivo de rollos vendidos
 async function readSoldRollsFile(fileKey: string): Promise<SoldRoll[]> {
   try {
     const command = new GetObjectCommand({
@@ -110,7 +102,6 @@ async function readSoldRollsFile(fileKey: string): Promise<SoldRoll[]> {
     const data = JSON.parse(bodyString);
     const salesRecords = Array.isArray(data) ? data : [data];
 
-    // Extraer todos los rollos de todos los registros de venta
     const allRolls: SoldRoll[] = [];
 
     for (const record of salesRecords) {
@@ -121,18 +112,13 @@ async function readSoldRollsFile(fileKey: string): Promise<SoldRoll[]> {
 
     return allRolls;
   } catch (error) {
-    console.error(`Error al leer archivo ${fileKey}:`, error);
+    console.error(`Error leyendo archivo ${fileKey}:`, error);
     return [];
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(
-      "🔍 [GET-SOLD-ROLLS] === OBTENIENDO ROLLOS VENDIDOS REALES ==="
-    );
-
-    // Rate limiting
     const rateLimitResult = await rateLimit(request, {
       type: "api",
       message: "Demasiadas consultas. Por favor, inténtalo de nuevo más tarde.",
@@ -142,13 +128,11 @@ export async function GET(request: NextRequest) {
       return rateLimitResult;
     }
 
-    // Verificar autenticación
     const session = await auth();
     if (!session || !session.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Verificar permisos de admin
     const isAdmin =
       session.user.role === "admin" || session.user.role === "major_admin";
     if (!isAdmin) {
@@ -166,20 +150,23 @@ export async function GET(request: NextRequest) {
     const days = parseInt(searchParams.get("days") || "30");
     const onlyReturnable = searchParams.get("only_returnable") === "true";
 
-    console.log("🔍 [GET-SOLD-ROLLS] Parámetros:", {
-      oc,
-      tela,
-      color,
-      limit,
-      days,
-      onlyReturnable,
-    });
+    if (limit > 1000) {
+      return NextResponse.json(
+        { error: "Límite máximo de 1000 registros" },
+        { status: 400 }
+      );
+    }
 
-    // Obtener archivos de historial de ventas
+    if (days > 365) {
+      return NextResponse.json(
+        { error: "Período máximo de 365 días" },
+        { status: 400 }
+      );
+    }
+
     const salesFiles = await getSoldRollsFiles(days);
 
     if (salesFiles.length === 0) {
-      console.log("📋 [GET-SOLD-ROLLS] No se encontraron archivos de ventas");
       return NextResponse.json({
         success: true,
         rolls: [],
@@ -195,27 +182,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Leer todos los rollos vendidos
     const allSoldRolls: SoldRoll[] = [];
 
     for (const fileKey of salesFiles) {
       try {
         const rollsFromFile = await readSoldRollsFile(fileKey);
         allSoldRolls.push(...rollsFromFile);
-        console.log(
-          `📖 [GET-SOLD-ROLLS] Leídos ${rollsFromFile.length} rollos de ${fileKey}`
-        );
       } catch (fileError) {
         console.error(`Error leyendo ${fileKey}:`, fileError);
         continue;
       }
     }
 
-    console.log(
-      `📊 [GET-SOLD-ROLLS] Total rollos encontrados: ${allSoldRolls.length}`
-    );
-
-    // Aplicar filtros
     let filteredRolls = allSoldRolls;
 
     if (oc) {
@@ -240,7 +218,6 @@ export async function GET(request: NextRequest) {
       filteredRolls = filteredRolls.filter((roll) => roll.available_for_return);
     }
 
-    // Filtrar por fecha (últimos X días)
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
@@ -249,15 +226,13 @@ export async function GET(request: NextRequest) {
       return soldDate >= cutoffDate;
     });
 
-    // Limitar resultados
     filteredRolls = filteredRolls
       .sort(
         (a, b) =>
           new Date(b.sold_date).getTime() - new Date(a.sold_date).getTime()
-      ) // Más recientes primero
+      )
       .slice(0, limit);
 
-    // Agrupar por OC para mejor organización
     const groupedByOC = filteredRolls.reduce((acc, roll) => {
       if (!acc[roll.oc]) {
         acc[roll.oc] = [];
@@ -279,7 +254,13 @@ export async function GET(request: NextRequest) {
       filesProcessed: salesFiles.length,
     };
 
-    console.log("📊 [GET-SOLD-ROLLS] Resultado:", summary);
+    console.log(
+      `[GET-SOLD-ROLLS] User ${session.user.email} queried sold rolls:`,
+      {
+        filters: { oc, tela, color, limit, days, onlyReturnable },
+        resultsCount: filteredRolls.length,
+      }
+    );
 
     return NextResponse.json({
       success: true,
@@ -288,10 +269,10 @@ export async function GET(request: NextRequest) {
       summary,
       filters: { oc, tela, color, limit, days, onlyReturnable },
       source: "S3 Historial Venta",
-      filesProcessed: salesFiles.slice(0, 5), // Mostrar solo los primeros 5 archivos
+      filesProcessed: salesFiles.slice(0, 5),
     });
   } catch (error) {
-    console.error("❌ [GET-SOLD-ROLLS] Error:", error);
+    console.error("Error obteniendo rollos vendidos:", error);
     return NextResponse.json(
       {
         error: "Error al obtener rollos vendidos",
@@ -302,7 +283,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Método OPTIONS para CORS
 export async function OPTIONS() {
   return NextResponse.json(
     {},

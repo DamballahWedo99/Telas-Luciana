@@ -122,10 +122,6 @@ async function saveSoldRollsToHistory(
 
     if (existingFile) {
       try {
-        console.log(
-          `📖 [SAVE-SOLD-ROLLS] Leyendo archivo existente: ${existingFile}`
-        );
-
         const getCommand = new GetObjectCommand({
           Bucket: BUCKET_NAME,
           Key: existingFile,
@@ -167,22 +163,15 @@ async function saveSoldRollsToHistory(
 
     await s3Client.send(putCommand);
 
-    console.log(`✅ [SAVE-SOLD-ROLLS] Venta guardada en: ${fileName}`);
-    console.log(
-      `📊 [SAVE-SOLD-ROLLS] Total rollos vendidos: ${rollsWithMetadata.length}`
-    );
-
     return fileName;
   } catch (error) {
-    console.error("❌ [SAVE-SOLD-ROLLS] Error:", error);
+    console.error("Error guardando venta:", error);
     throw error;
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🛒 [SAVE-SOLD-ROLLS] === GUARDANDO ROLLOS VENDIDOS ===");
-
     const rateLimitResult = await rateLimit(request, {
       type: "api",
       message: "Demasiadas solicitudes de venta. Inténtalo más tarde.",
@@ -237,10 +226,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(
-      `📋 [SAVE-SOLD-ROLLS] Procesando venta de ${salesData.rolls.length} rollos`
-    );
-
     const salesFile = await saveSoldRollsToHistory(
       salesData,
       session.user.email || session.user.name || "unknown"
@@ -260,7 +245,10 @@ export async function POST(request: NextRequest) {
       orders: [...new Set(salesData.rolls.map((roll) => roll.oc))],
     };
 
-    console.log("🎉 [SAVE-SOLD-ROLLS] Venta completada:", summary);
+    console.log(`[SALES] User ${session.user.email} saved sale:`, {
+      totalRolls: summary.totalRolls,
+      totalValue: summary.totalValue,
+    });
 
     return NextResponse.json({
       success: true,
@@ -269,7 +257,7 @@ export async function POST(request: NextRequest) {
       salesFile,
     });
   } catch (error) {
-    console.error("❌ [SAVE-SOLD-ROLLS] Error general:", error);
+    console.error("Error guardando rollos vendidos:", error);
     return NextResponse.json(
       {
         error: "Error al guardar rollos vendidos",

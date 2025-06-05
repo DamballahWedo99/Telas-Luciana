@@ -5,14 +5,12 @@ import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
   try {
-    // Aplicar rate limiting para API general
     const rateLimitResult = await rateLimit(request, {
       type: "api",
       message:
         "Demasiadas solicitudes de verificación. Por favor, inténtalo de nuevo más tarde.",
     });
 
-    // Si se alcanzó el límite de tasa, devolver la respuesta de error
     if (rateLimitResult) {
       return rateLimitResult;
     }
@@ -28,12 +26,19 @@ export async function GET(request: NextRequest) {
 
     const user = await db.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true },
+      select: { id: true, isActive: true },
     });
 
     if (!user) {
       return NextResponse.json(
         { exists: false, message: "Usuario no encontrado" },
+        { status: 200 }
+      );
+    }
+
+    if (!user.isActive) {
+      return NextResponse.json(
+        { exists: false, message: "Usuario inactivo" },
         { status: 200 }
       );
     }

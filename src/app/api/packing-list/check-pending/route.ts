@@ -1,4 +1,3 @@
-// app/api/packing-list/check-pending/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import {
   S3Client,
@@ -6,6 +5,7 @@ import {
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -15,7 +15,6 @@ const s3Client = new S3Client({
   },
 });
 
-// Interfaces para tipar los datos
 interface InventoryItem {
   OC?: string;
   Tela?: string;
@@ -55,25 +54,26 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    console.log("🔍 [CHECK-PENDING] === VERIFICANDO ARCHIVOS PENDING ===");
+    const rateLimitResult = await rateLimit(request, {
+      type: "api",
+      message: "Demasiadas consultas de archivos pending. Espera un momento.",
+    });
 
-    // Verificar autenticación
+    if (rateLimitResult) {
+      return rateLimitResult;
+    }
+
     const session = await auth();
     if (!session || !session.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Solo admins pueden verificar archivos pending
     if (session.user.role !== "admin" && session.user.role !== "major_admin") {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
-    // 🔧 FIX: SOLO LEER, NO CREAR ARCHIVOS
-    // Buscar archivos con status "pending" en el bucket
     const now = new Date();
     const currentYear = now.getFullYear().toString();
-
-    // 🔧 FIX: Generar mes con primera letra mayúscula para coincidir con Lambda
     const monthNames = [
       "Enero",
       "Febrero",
@@ -91,8 +91,6 @@ export async function GET(request: NextRequest) {
     const currentMonth = monthNames[now.getMonth()];
     const prefix = `Inventario/${currentYear}/${currentMonth}/`;
 
-    console.log(`📁 [CHECK-PENDING] Buscando en carpeta: ${prefix}`);
-
     const listCommand = new ListObjectsV2Command({
       Bucket: "telas-luciana",
       Prefix: prefix,
@@ -104,17 +102,10 @@ export async function GET(request: NextRequest) {
       .map((item) => item.Key!)
       .filter((key) => !key.includes("_backup_"));
 
-    console.log(
-      `📄 [CHECK-PENDING] Encontrados ${jsonFiles.length} archivos JSON`
-    );
-
     const pendingFiles: PendingFileInfo[] = [];
 
-    // 🔧 FIX: SOLO LEER archivos existentes, NO crear nuevos
     for (const fileKey of jsonFiles) {
       try {
-        console.log(`🔍 [CHECK-PENDING] Procesando archivo: ${fileKey}`);
-
         const getCommand = new GetObjectCommand({
           Bucket: "telas-luciana",
           Key: fileKey,
@@ -123,83 +114,31 @@ export async function GET(request: NextRequest) {
         const getResponse = await s3Client.send(getCommand);
         const fileContent = await getResponse.Body?.transformToString();
 
-        if (!fileContent) {
-          console.log(`⚠️ [CHECK-PENDING] Archivo vacío: ${fileKey}`);
-          continue;
-        }
+        if (!fileContent) continue;
 
         const jsonData = JSON.parse(fileContent);
-        console.log(`📦 [CHECK-PENDING] Estructura de datos en ${fileKey}:`, {
-          isArray: Array.isArray(jsonData),
-          hasData: !!jsonData.data,
-          dataIsArray: Array.isArray(jsonData.data),
-          keysInRoot: Object.keys(jsonData),
-          totalItems: Array.isArray(jsonData)
-            ? jsonData.length
-            : Array.isArray(jsonData.data)
-            ? jsonData.data.length
-            : 0,
-        });
-
-        // 🔧 FIX: Manejar diferentes formatos de JSON
         let dataToProcess: InventoryItem[] = [];
 
-        // CASO 1: Array directo
         if (Array.isArray(jsonData)) {
-          console.log(
-            `📦 [CHECK-PENDING] Array directo encontrado en ${fileKey}`
-          );
           dataToProcess = jsonData;
-        }
-        // CASO 2: Objeto con propiedad 'data' que contiene array
-        else if (jsonData && jsonData.data && Array.isArray(jsonData.data)) {
-          console.log(
-            `📦 [CHECK-PENDING] Datos anidados encontrados en ${fileKey}, extrayendo array de data...`
-          );
+        } else if (jsonData && jsonData.data && Array.isArray(jsonData.data)) {
           dataToProcess = jsonData.data;
-        }
-        // CASO 3: Objeto individual (cada fila es un archivo separado)
-        else if (
+        } else if (
           jsonData &&
           typeof jsonData === "object" &&
           jsonData.Tela &&
           jsonData.Color
         ) {
-          console.log(
-            `📦 [CHECK-PENDING] Objeto individual encontrado en ${fileKey}`
-          );
-          dataToProcess = [jsonData]; // Convertir objeto individual a array
-        }
-        // CASO 4: Formato no reconocido
-        else {
-          console.log(
-            `⚠️ [CHECK-PENDING] Formato no reconocido en ${fileKey}:`,
-            typeof jsonData
-          );
-          continue; // Saltar este archivo
+          dataToProcess = [jsonData];
+        } else {
+          continue;
         }
 
-        console.log(
-          `🔍 [CHECK-PENDING] Procesando ${dataToProcess.length} items en ${fileKey}`
-        );
-
-        // Verificar si tiene items con status "pending"
-        const pendingItems = dataToProcess.filter((item: InventoryItem) => {
-          const hasPendingStatus = item.status === "pending";
-          if (hasPendingStatus) {
-            console.log(
-              `✅ [CHECK-PENDING] Item pending encontrado: ${item.Tela} ${item.Color} (Cantidad: ${item.Cantidad})`
-            );
-          }
-          return hasPendingStatus;
-        });
-
-        console.log(
-          `📊 [CHECK-PENDING] Items pending en ${fileKey}: ${pendingItems.length} de ${dataToProcess.length} totales`
+        const pendingItems = dataToProcess.filter(
+          (item: InventoryItem) => item.status === "pending"
         );
 
         if (pendingItems.length > 0) {
-          // Procesar items pending SOLO para mostrar, NO para crear archivos
           const fabrics = pendingItems
             .map((item: InventoryItem, index: number) => ({
               id: `${fileKey}-${index}`,
@@ -208,13 +147,9 @@ export async function GET(request: NextRequest) {
               cantidad: parseFloat(String(item.Cantidad)) || 0,
               unidades: item.Unidades || "",
               oc: item.OC || "",
-              costo: null, // Será asignado por el usuario
+              costo: null,
             }))
-            .filter((fabric: ProcessedFabric) => fabric.tela && fabric.color); // Solo telas válidas
-
-          console.log(
-            `✅ [CHECK-PENDING] Telas válidas procesadas: ${fabrics.length}`
-          );
+            .filter((fabric: ProcessedFabric) => fabric.tela && fabric.color);
 
           if (fabrics.length > 0) {
             pendingFiles.push({
@@ -227,18 +162,11 @@ export async function GET(request: NextRequest) {
               fabrics: fabrics,
               totalFabrics: fabrics.length,
             });
-
-            console.log(
-              `📋 [CHECK-PENDING] Archivo agregado a pending: ${fileKey} con ${fabrics.length} telas`
-            );
           }
         }
       } catch (parseError) {
-        console.warn(
-          `⚠️ [CHECK-PENDING] Error procesando archivo ${fileKey}:`,
-          parseError
-        );
-        // Continuar con el siguiente archivo, no fallar toda la operación
+        console.warn(`Error procesando archivo ${fileKey}:`, parseError);
+        continue;
       }
     }
 
@@ -251,12 +179,6 @@ export async function GET(request: NextRequest) {
 
     const duration = Date.now() - startTime;
 
-    console.log(`✅ [CHECK-PENDING] Completado en ${duration}ms`);
-    console.log(
-      `📊 [CHECK-PENDING] Resultado: ${totalPendingFiles} archivos, ${totalPendingFabrics} telas pending`
-    );
-
-    // 🚨 IMPORTANTE: SOLO RETORNAR DATOS, NO CREAR ARCHIVOS
     return NextResponse.json({
       success: true,
       hasPendingFiles,
@@ -267,7 +189,6 @@ export async function GET(request: NextRequest) {
         ? `Se encontraron ${totalPendingFiles} archivos con ${totalPendingFabrics} telas pendientes`
         : "No hay archivos pending",
       duration: `${duration}ms`,
-      // 🔧 DEBUG: Agregar info de debugging
       debug: {
         searchPath: prefix,
         totalJsonFiles: jsonFiles.length,
@@ -277,7 +198,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error(`❌ [CHECK-PENDING] Error después de ${duration}ms:`, error);
+    console.error("Error verificando archivos pending:", error);
 
     return NextResponse.json(
       {
