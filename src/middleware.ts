@@ -19,22 +19,28 @@ const publicApiRoutes = [
   "/api/auth/signout",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
-  "/api/contact", // Contacto puede ser público
+  "/api/contact",
 ];
 
 // Rutas que requieren rol admin o major_admin
-const adminRoutes = ["/dashboard/users", "/dashboard/settings"];
+const adminRoutes = ["/dashboard/admin", "/dashboard/settings"];
 
 // APIs que requieren rol admin o major_admin
 const adminApiRoutes = [
-  "/api/users", // Gestión de usuarios
-  "/api/s3/inventario", // Inventario crítico
+  "/api/s3/inventario/create-row",
+  "/api/s3/inventario/update",
 ];
 
 // APIs que requieren autenticación pero pueden acceder usuarios normales
-const protectedApiRoutes = ["/api/packing-list", "/api/returns", "/api/sales"];
+const protectedApiRoutes = [
+  "/api/packing-list",
+  "/api/returns",
+  "/api/sales",
+  "/api/users", // Mover aquí para que admins puedan acceder
+  "/api/s3/inventario", // Mover aquí para acceso general
+];
 
-// Configuración de rate limiting por ruta
+// Configuración de rate limiting por ruta - MÁS PERMISIVO
 const rateLimitConfig: Record<
   string,
   { type: "auth" | "api" | "contact"; message?: string }
@@ -53,45 +59,30 @@ const rateLimitConfig: Record<
     type: "contact",
     message: "Demasiados mensajes de contacto. Espera antes de enviar otro.",
   },
-  // APIs críticas que necesitan rate limiting
-  "/api/users": {
-    type: "api",
-    message: "Demasiadas solicitudes a la API de usuarios.",
-  },
-  "/api/s3/inventario": {
-    type: "api",
-    message: "Demasiadas solicitudes al inventario.",
-  },
-  "/api/packing-list": {
-    type: "api",
-    message: "Demasiadas solicitudes a packing list.",
-  },
-  "/api/sales": {
-    type: "api",
-    message: "Demasiadas solicitudes a ventas.",
-  },
-  "/api/returns": {
-    type: "api",
-    message: "Demasiadas solicitudes a devoluciones.",
-  },
+  // ❌ REMOVIDO: Rate limiting de APIs críticas para desarrollo
+  // "/api/users": { type: "api" },
+  // "/api/s3/inventario": { type: "api" },
+  // "/api/packing-list": { type: "api" },
 };
 
-// Control de acceso granular por rol
+// Control de acceso granular por rol - SIMPLIFICADO
 const roleBasedAccess: Record<string, string[]> = {
   // Solo admins pueden acceder a estas rutas
   admin_only: [
-    "/api/users",
     "/api/s3/inventario/create-row",
     "/api/s3/inventario/update",
-    "/dashboard/users",
+    "/dashboard/admin",
     "/dashboard/settings",
   ],
-  // Usuarios normales pueden acceder
-  user: [
+  // Usuarios normales y admins pueden acceder
+  authenticated: [
     "/api/packing-list",
     "/api/returns",
     "/api/sales",
-    "/dashboard/ventas",
+    "/api/users", // Ahora accesible para verificar usuarios
+    "/api/s3/inventario", // Lectura de inventario
+    "/api/users/verify", // Verificación de usuarios
+    "/dashboard", // Ruta principal del dashboard
   ],
 };
 
@@ -146,9 +137,14 @@ function hasRoleAccess(pathname: string, userRole: string): boolean {
     return false;
   }
 
-  // Usuarios normales pueden acceder a rutas de usuario
-  const userRoutes = roleBasedAccess["user"];
-  if (userRoutes.some((route) => pathname.startsWith(route))) {
+  // Usuarios autenticados pueden acceder a rutas básicas
+  const authenticatedRoutes = roleBasedAccess["authenticated"];
+  if (authenticatedRoutes.some((route) => pathname.startsWith(route))) {
+    return true;
+  }
+
+  // ✅ CAMBIADO: Por defecto permitir acceso a dashboard principal
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
     return true;
   }
 
@@ -159,12 +155,12 @@ function hasRoleAccess(pathname: string, userRole: string): boolean {
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 1. Aplicar rate limiting donde sea necesario
-  const rateLimitConfig = needsRateLimit(pathname);
-  if (rateLimitConfig) {
+  // 1. Aplicar rate limiting donde sea necesario (REDUCIDO)
+  const rateLimitConfigItem = needsRateLimit(pathname);
+  if (rateLimitConfigItem) {
     const rateLimitResponse = await rateLimit(req, {
-      type: rateLimitConfig.type,
-      message: rateLimitConfig.message,
+      type: rateLimitConfigItem.type,
+      message: rateLimitConfigItem.message,
     });
 
     if (rateLimitResponse) {
@@ -248,16 +244,15 @@ export default async function middleware(req: NextRequest) {
     }
   }
 
-  // 6. Redirección del dashboard según rol
-  if (pathname === "/dashboard") {
-    const defaultRoute =
-      userRole === "admin" || userRole === "major_admin"
-        ? "/dashboard/users"
-        : "/dashboard/ventas";
-    return NextResponse.redirect(new URL(defaultRoute, req.url));
-  }
+  // ❌ REMOVIDO: Redirección automática problemática del dashboard
+  // if (pathname === "/dashboard") {
+  //   const defaultRoute = userRole === "admin" || userRole === "major_admin"
+  //     ? "/dashboard/users"
+  //     : "/dashboard/ventas";
+  //   return NextResponse.redirect(new URL(defaultRoute, req.url));
+  // }
 
-  // 7. Verificar acceso a rutas web protegidas
+  // 6. Verificar acceso a rutas web protegidas
   if (
     pathname.startsWith("/dashboard/") &&
     !hasRoleAccess(pathname, userRole)

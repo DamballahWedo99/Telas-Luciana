@@ -1,18 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import {
-  LogOutIcon,
-  HistoryIcon,
-  BarChart,
-  XCircleIcon,
-  Plus,
-  Loader2,
-} from "lucide-react";
+import { XCircleIcon, Plus, Loader2, HistoryIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -49,7 +42,6 @@ import { NewOrderDialog } from "@/components/inventory-dashboard/NewOrderDialog"
 import { NewUserDialog } from "@/components/inventory-dashboard/NewUserDialog";
 import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
 import LockScreen from "@/components/inventory-dashboard/LockScreen";
-import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import {
   InventoryItem,
   UnitType,
@@ -83,11 +75,6 @@ const toastsShown = {
   success: false,
 };
 
-interface DashboardProps {
-  onLogout?: () => void;
-}
-
-// === COMPONENTE NUEVO ROW DIALOG INTEGRADO ===
 interface NewRowDialogProps {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -208,17 +195,14 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
         throw new Error(result.error || "Error al crear la nueva row");
       }
 
-      // Log del resultado exitoso
       console.log("✅ [NEW-ROW] Row creada exitosamente:");
       console.log("📄 [NEW-ROW] Archivo creado:", result.data.fileKey);
       console.log("📊 [NEW-ROW] Item creado:", result.data.item);
 
-      // Mostrar detalles del éxito
       toast.success(`🎉 Nueva row creada exitosamente`, {
         description: `${result.data.fileName} - ${result.data.item.OC} ${result.data.item.Tela} ${result.data.item.Color}`,
       });
 
-      // Resetear formulario
       setFormData({
         OC: "",
         Tela: "",
@@ -231,10 +215,8 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
         FacturaDragonAzteca: "",
       });
 
-      // Cerrar diálogo
       setOpen(false);
 
-      // 🔧 IMPORTANTE: Solo llamar callback DESPUÉS de crear la row exitosamente
       console.log("🔄 [NEW-ROW] Llamando callback de éxito...");
       if (onSuccess) {
         onSuccess();
@@ -257,7 +239,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
   const handleCancel = () => {
     console.log("❌ [NEW-ROW] Usuario canceló la creación");
     setOpen(false);
-    // Resetear formulario al cancelar
     setFormData({
       OC: "",
       Tela: "",
@@ -286,7 +267,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {/* OC */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="oc" className="text-right">
               OC *
@@ -300,7 +280,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             />
           </div>
 
-          {/* Tela */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="tela" className="text-right">
               Tela *
@@ -314,7 +293,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             />
           </div>
 
-          {/* Color */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="color" className="text-right">
               Color *
@@ -328,7 +306,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             />
           </div>
 
-          {/* Ubicación */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="ubicacion" className="text-right">
               Ubicación *
@@ -347,7 +324,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             </Select>
           </div>
 
-          {/* Cantidad */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="cantidad" className="text-right">
               Cantidad *
@@ -364,7 +340,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             />
           </div>
 
-          {/* Costo */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="costo" className="text-right">
               Costo *
@@ -381,7 +356,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             />
           </div>
 
-          {/* Unidades */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="unidades" className="text-right">
               Unidades *
@@ -402,7 +376,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             </Select>
           </div>
 
-          {/* Importación */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="importacion" className="text-right">
               Importación
@@ -421,7 +394,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             </Select>
           </div>
 
-          {/* Factura Dragón Azteca */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="factura" className="text-right">
               Factura D.A.
@@ -466,7 +438,6 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
   );
 };
 
-// === FUNCIÓN PARA PROCESAR DATOS ===
 function processInventoryData(data: any[]): InventoryItem[] {
   const processedItems: InventoryItem[] = [];
 
@@ -474,7 +445,6 @@ function processInventoryData(data: any[]): InventoryItem[] {
     const costo = parseNumericValue(item.Costo);
     const cantidad = parseNumericValue(item.Cantidad);
 
-    // Normalizar importación
     const normalizeImportacion = (value: string): "DA" | "HOY" => {
       const normalized = (value || "").toString().toLowerCase().trim();
       if (normalized === "hoy") return "HOY";
@@ -578,8 +548,7 @@ function processInventoryData(data: any[]): InventoryItem[] {
   return processedItems;
 }
 
-// === COMPONENTE PRINCIPAL DASHBOARD ===
-const Dashboard: React.FC<DashboardProps> = () => {
+const Dashboard = () => {
   const isMobile = useIsMobile();
 
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -592,14 +561,10 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [openNewOrder, setOpenNewOrder] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
-  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
-  const [showPedidosDashboard, setShowPedidosDashboard] = useState(false);
-
-  // 🆕 NUEVO ESTADO PARA EL DIÁLOGO DE NUEVA ROW
+  const [showHistory, setShowHistory] = useState(false);
   const [openNewRow, setOpenNewRow] = useState(false);
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -738,6 +703,10 @@ const Dashboard: React.FC<DashboardProps> = () => {
       });
   };
 
+  const handleViewHistory = () => {
+    setOpenHistoryDialog(true);
+  };
+
   useEffect(() => {
     async function loadInventoryFromAPI() {
       if (!session?.user || inventoryLoadedRef.current) return;
@@ -833,18 +802,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
     }
   };
 
-  const handleViewHistory = () => {
-    setOpenHistoryDialog(true);
-  };
-
-  const handleViewPedidosDashboard = () => {
-    setShowPedidosDashboard(true);
-  };
-
-  const handleBackFromPedidosDashboard = () => {
-    setShowPedidosDashboard(false);
-  };
-
   useEffect(() => {
     async function loadUsers() {
       if (!isAdmin) {
@@ -873,17 +830,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
     loadUsers();
   }, [isAdmin]);
-
-  const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true);
-      await signOut({ callbackUrl: "/login" });
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error);
-      toast.error("Error al cerrar sesión");
-      setIsLoggingOut(false);
-    }
-  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -939,182 +885,97 @@ const Dashboard: React.FC<DashboardProps> = () => {
     );
   }
 
-  if (showPedidosDashboard) {
-    return <PedidosDashboard onBack={handleBackFromPedidosDashboard} />;
-  }
-
   return (
-    <div className="container mx-auto p-4">
-      <div className="my-4">
-        <div className="flex justify-between items-center mb-3">
-          <h1 className="text-2xl font-bold">Panel de Control de Inventario</h1>
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleViewHistory}
-                      className="mr-2"
-                    >
-                      <HistoryIcon className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Cargar datos históricos</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+    <div>
+      {error && (
+        <Alert variant="destructive" className="mb-4 relative">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 h-6 w-6 p-0"
+            onClick={() => setError("")}
+          >
+            <XCircleIcon className="h-4 w-4" />
+            <span className="sr-only">Cerrar</span>
+          </Button>
+        </Alert>
+      )}
 
-            {/* 🆕 BOTÓN PARA AGREGAR NUEVA ROW */}
-            {isAdmin && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setOpenNewRow(true)}
-                      className="mr-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Agregar nueva row de inventario</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+      {isAdmin && <KeyMetricsSection inventory={inventory} filters={filters} />}
 
-            {isMajorAdmin && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleViewPedidosDashboard}
-                      className="mr-2"
-                    >
-                      <BarChart className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Ver pedidos históricos</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+      <PendingFabricsCard setInventory={setInventory} isAdmin={isAdmin} />
 
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              className="flex items-center gap-2"
-              disabled={isLoggingOut}
-            >
-              <LogOutIcon className="h-4 w-4" />
-              {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
-            </Button>
-          </div>
-        </div>
+      <InventoryCard
+        inventory={inventory}
+        setInventory={setInventory}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        unitFilter={unitFilter}
+        setUnitFilter={setUnitFilter}
+        ocFilter={ocFilter}
+        setOcFilter={setOcFilter}
+        telaFilter={telaFilter}
+        setTelaFilter={setTelaFilter}
+        colorFilter={colorFilter}
+        setColorFilter={setColorFilter}
+        ubicacionFilter={ubicacionFilter}
+        setUbicacionFilter={setUbicacionFilter}
+        setSuccess={setSuccess}
+        handleFileUpload={handleFileUpload}
+        openNewOrder={openNewOrder}
+        setOpenNewOrder={setOpenNewOrder}
+        isAdmin={isAdmin}
+        isLoading={isLoadingInventory}
+      />
 
-        {error && (
-          <Alert variant="destructive" className="mb-4 relative">
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 h-6 w-6 p-0"
-              onClick={() => setError("")}
-            >
-              <XCircleIcon className="h-4 w-4" />
-              <span className="sr-only">Cerrar</span>
-            </Button>
-          </Alert>
-        )}
+      {isAdmin && (
+        <VisualizationsCard inventory={inventory} filters={filters} />
+      )}
 
-        {isAdmin && (
-          <KeyMetricsSection inventory={inventory} filters={filters} />
-        )}
-
-        <PendingFabricsCard setInventory={setInventory} isAdmin={isAdmin} />
-
-        <InventoryCard
-          inventory={inventory}
-          setInventory={setInventory}
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          unitFilter={unitFilter}
-          setUnitFilter={setUnitFilter}
-          ocFilter={ocFilter}
-          setOcFilter={setOcFilter}
-          telaFilter={telaFilter}
-          setTelaFilter={setTelaFilter}
-          colorFilter={colorFilter}
-          setColorFilter={setColorFilter}
-          ubicacionFilter={ubicacionFilter}
-          setUbicacionFilter={setUbicacionFilter}
-          setSuccess={setSuccess}
-          handleFileUpload={handleFileUpload}
-          openNewOrder={openNewOrder}
-          setOpenNewOrder={setOpenNewOrder}
-          isAdmin={isAdmin}
-          isLoading={isLoadingInventory}
+      {isAdmin && (
+        <UserManagementCard
+          users={users}
+          setUsers={setUsers}
+          isLoadingUsers={isLoadingUsers}
+          setOpenNewUser={setOpenNewUser}
         />
+      )}
 
-        {isAdmin && (
-          <VisualizationsCard inventory={inventory} filters={filters} />
-        )}
+      <NewOrderDialog
+        open={openNewOrder}
+        setOpen={setOpenNewOrder}
+        inventory={inventory}
+        setInventory={setInventory}
+        setSuccess={setSuccess}
+      />
 
-        {isAdmin && (
-          <UserManagementCard
-            users={users}
-            setUsers={setUsers}
-            isLoadingUsers={isLoadingUsers}
-            setOpenNewUser={setOpenNewUser}
-          />
-        )}
-
-        <NewOrderDialog
-          open={openNewOrder}
-          setOpen={setOpenNewOrder}
-          inventory={inventory}
-          setInventory={setInventory}
-          setSuccess={setSuccess}
+      {isAdmin && (
+        <NewUserDialog
+          open={openNewUser}
+          setOpen={setOpenNewUser}
+          users={users}
+          setUsers={setUsers}
+          session={session}
         />
+      )}
 
-        {isAdmin && (
-          <NewUserDialog
-            open={openNewUser}
-            setOpen={setOpenNewUser}
-            users={users}
-            setUsers={setUsers}
-            session={session}
-          />
-        )}
+      {isMajorAdmin && (
+        <InventoryHistoryDialog
+          open={openHistoryDialog}
+          setOpen={setOpenHistoryDialog}
+          onLoadInventory={handleLoadHistoricalInventory}
+        />
+      )}
 
-        {isMajorAdmin && (
-          <InventoryHistoryDialog
-            open={openHistoryDialog}
-            setOpen={setOpenHistoryDialog}
-            onLoadInventory={handleLoadHistoricalInventory}
-          />
-        )}
-
-        {/* 🆕 DIÁLOGO PARA NUEVA ROW */}
-        {isAdmin && (
-          <NewRowDialog
-            open={openNewRow}
-            setOpen={setOpenNewRow}
-            onSuccess={handleNewRowSuccess}
-          />
-        )}
-      </div>
+      {isAdmin && (
+        <NewRowDialog
+          open={openNewRow}
+          setOpen={setOpenNewRow}
+          onSuccess={handleNewRowSuccess}
+        />
+      )}
     </div>
   );
 };
