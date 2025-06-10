@@ -161,7 +161,17 @@ export async function POST(request: NextRequest) {
           Unidades: updatedItem.Unidades || "MTS",
           Total: updatedItem.Total || 0,
           Ubicacion: updatedItem.Ubicacion || updatedItem.almacen || "",
-          Importacion: updatedItem.Importacion || "HOY",
+          Importacion: (() => {
+            const value = updatedItem.Importacion;
+            if (value === null || value === undefined) return "-";
+
+            const normalized = value.toString().toLowerCase().trim();
+            if (normalized === "hoy") return "HOY";
+            if (normalized === "da") return "DA";
+            if (normalized === "nan" || normalized === "") return "-";
+
+            return "";
+          })(),
           FacturaDragonAzteca: updatedItem.FacturaDragonAzteca || "",
         };
 

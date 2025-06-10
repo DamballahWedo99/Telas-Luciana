@@ -57,15 +57,6 @@ const normalizeInventoryItem = (item: any) => {
 
   normalizedItem.Total = costoValue * cantidadValue;
 
-  if (
-    normalizedItem.Importación !== undefined &&
-    normalizedItem.Importación !== null
-  ) {
-    normalizedItem.Importacion = normalizedItem.Importación;
-  } else {
-    normalizedItem.Importacion = "DA";
-  }
-
   if (!normalizedItem.Unidades) {
     normalizedItem.Unidades = "MTS";
   }

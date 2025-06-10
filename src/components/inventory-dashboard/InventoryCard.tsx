@@ -138,6 +138,17 @@ function processInventoryData(data: any[]): InventoryItem[] {
     "elementos"
   );
 
+  const normalizeImportacion = (value: any): "DA" | "HOY" | "-" | "" => {
+    if (value === null || value === undefined) return "-";
+
+    const normalized = value.toString().toLowerCase().trim();
+    if (normalized === "hoy") return "HOY";
+    if (normalized === "da") return "DA";
+    if (normalized === "nan" || normalized === "") return "-";
+
+    return "";
+  };
+
   const filteredData = data.filter((item: any) => {
     const isPending = item.status === "pending";
     if (isPending) {
@@ -221,9 +232,9 @@ function processInventoryData(data: any[]): InventoryItem[] {
           Unidades: (item.Unidades || "") as UnitType,
           Total: costo * cantidadCDMX,
           Ubicacion: "CDMX",
-          Importacion: (item.Importacion || item.Importación || "") as
-            | "DA"
-            | "HOY",
+          Importacion: normalizeImportacion(
+            item.Importacion || item.Importación || ""
+          ),
           FacturaDragonAzteca:
             item["Factura Dragón Azteca"] ||
             item["Factura Dragon Azteca"] ||
@@ -243,9 +254,9 @@ function processInventoryData(data: any[]): InventoryItem[] {
           Unidades: (item.Unidades || "") as UnitType,
           Total: costo * cantidadMID,
           Ubicacion: "Mérida",
-          Importacion: (item.Importacion || item.Importación || "") as
-            | "DA"
-            | "HOY",
+          Importacion: normalizeImportacion(
+            item.Importacion || item.Importación || ""
+          ),
           FacturaDragonAzteca:
             item["Factura Dragón Azteca"] ||
             item["Factura Dragon Azteca"] ||
@@ -319,7 +330,9 @@ function processInventoryData(data: any[]): InventoryItem[] {
       Unidades: (item.Unidades || "") as UnitType,
       Total: costo * cantidadFinal,
       Ubicacion: ubicacion,
-      Importacion: (item.Importacion || item.Importación || "") as "DA" | "HOY",
+      Importacion: normalizeImportacion(
+        item.Importacion || item.Importación || ""
+      ),
       FacturaDragonAzteca:
         item["Factura Dragón Azteca"] ||
         item["Factura Dragon Azteca"] ||
@@ -360,7 +373,6 @@ const getAvailableYears = (): string[] => {
   const currentYear = new Date().getFullYear();
   const years: string[] = [];
 
-  // Comenzar desde 2025 y solo mostrar años hasta el año actual
   for (let year = 2025; year <= currentYear; year++) {
     years.push(year.toString());
   }
@@ -463,7 +475,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     Cantidad: "",
     Costo: "",
     Unidades: "KGS",
-    Importacion: "DA",
+    Importacion: "",
     FacturaDragonAzteca: "",
   });
   const [selectedHistoryYear, setSelectedHistoryYear] = useState<string>(
@@ -596,7 +608,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       Cantidad: "",
       Costo: "",
       Unidades: "KGS",
-      Importacion: "DA",
+      Importacion: "",
       FacturaDragonAzteca: "",
     });
     setFormErrors({});
@@ -824,7 +836,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 Unidades: rollData.units as UnitType,
                 Total: rollData.costo * rollData.return_quantity,
                 Ubicacion: rollData.almacen,
-                Importacion: "DA" as "DA" | "HOY",
+                Importacion: "" as "DA" | "HOY",
                 FacturaDragonAzteca: "",
               };
               updatedInventory.push(newItem);
@@ -938,7 +950,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 Unidades: rollData.units as UnitType,
                 Total: rollData.costo * rollData.return_quantity,
                 Ubicacion: rollData.almacen,
-                Importacion: "DA" as "DA" | "HOY",
+                Importacion: "" as "DA" | "HOY",
                 FacturaDragonAzteca: "",
               };
               updatedInventory.push(newItem);
@@ -1118,7 +1130,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       Cantidad: "",
       Costo: "",
       Unidades: "KGS",
-      Importacion: "DA",
+      Importacion: "",
       FacturaDragonAzteca: "",
     });
   };
@@ -1241,7 +1253,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
         setFormErrors(newErrors);
 
-        // Marcar todos los campos como tocados
         const allFields: Partial<Record<keyof NewRowFormValues, boolean>> = {};
         Object.keys(formData).forEach((key) => {
           allFields[key as keyof NewRowFormValues] = true;
@@ -1295,7 +1306,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         Cantidad: "",
         Costo: "",
         Unidades: "KGS",
-        Importacion: "DA",
+        Importacion: "",
         FacturaDragonAzteca: "",
       });
 
@@ -1325,7 +1336,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         const parsedData = processInventoryData(jsonData.data);
         setInventory(parsedData);
 
-        // ✅ AGREGAR ESTAS LÍNEAS:
         setCurrentViewingYear(currentYear);
         setCurrentViewingMonth(currentMonth);
 
@@ -2434,7 +2444,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       const parsedData = processInventoryData(jsonData.data);
       setInventory(parsedData);
 
-      // ✅ ESTE ES EL CAMBIO CLAVE: actualizar las fechas cuando es exitoso
       setCurrentViewingYear(year);
       setCurrentViewingMonth(month);
 
@@ -2448,10 +2457,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           month
         )} ${year}. Es posible que no exista.`
       );
-
-      // ❌ REMOVER ESTAS LÍNEAS que están en el catch actual:
-      // setCurrentViewingYear(year);
-      // setCurrentViewingMonth(month);
     } finally {
       setIsLoadingHistorical(false);
     }
@@ -2683,7 +2688,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   }, [uniqueUbicaciones, ubicacionFilter, setUbicacionFilter]);
 
   useEffect(() => {
-    // Establecer las fechas de visualización inicial al mes/año actual
     const now = new Date();
     const currentYear = now.getFullYear().toString();
     const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
@@ -3920,7 +3924,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                       const selectedYear = parseInt(selectedHistoryYear);
                       const monthNum = parseInt(month.value);
 
-                      // Deshabilitar meses futuros
                       const isFuture =
                         selectedYear > currentYear ||
                         (selectedYear === currentYear &&

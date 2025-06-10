@@ -9,7 +9,7 @@ export interface InventoryItem {
   Unidades: UnitType;
   Total: number;
   Ubicacion: string;
-  Importacion: "DA" | "HOY";
+  Importacion: "DA" | "HOY" | "-" | "";
   FacturaDragonAzteca: string;
 }
 

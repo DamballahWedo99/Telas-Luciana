@@ -107,7 +107,7 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
     Cantidad: "",
     Costo: "",
     Unidades: "KGS",
-    Importacion: "DA",
+    Importacion: "",
     FacturaDragonAzteca: "",
   });
 
@@ -211,7 +211,7 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
         Cantidad: "",
         Costo: "",
         Unidades: "KGS",
-        Importacion: "DA",
+        Importacion: "",
         FacturaDragonAzteca: "",
       });
 
@@ -247,7 +247,7 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
       Cantidad: "",
       Costo: "",
       Unidades: "KGS",
-      Importacion: "DA",
+      Importacion: "",
       FacturaDragonAzteca: "",
     });
   };
@@ -445,12 +445,15 @@ function processInventoryData(data: any[]): InventoryItem[] {
     const costo = parseNumericValue(item.Costo);
     const cantidad = parseNumericValue(item.Cantidad);
 
-    const normalizeImportacion = (value: string): "DA" | "HOY" => {
-      const normalized = (value || "").toString().toLowerCase().trim();
+    const normalizeImportacion = (value: any): "DA" | "HOY" | "-" | "" => {
+      if (value === null || value === undefined) return "-";
+
+      const normalized = value.toString().toLowerCase().trim();
       if (normalized === "hoy") return "HOY";
       if (normalized === "da") return "DA";
-      if (normalized === "nan" || normalized === "") return "-" as "DA" | "HOY";
-      return (value || "").toString().toUpperCase() as "DA" | "HOY";
+      if (normalized === "nan" || normalized === "") return "-";
+
+      return "";
     };
 
     let ubicacion = "";
@@ -469,9 +472,7 @@ function processInventoryData(data: any[]): InventoryItem[] {
           Color: item.Color || "",
           Costo: costo,
           Unidades: (item.Unidades || "").toString().toUpperCase() as UnitType,
-          Importacion: normalizeImportacion(
-            item.Importacion || item.Importación || ""
-          ),
+          Importacion: normalizeImportacion(item.Importación || ""),
           FacturaDragonAzteca:
             item["Factura Dragón Azteca"] ||
             item["Factura Dragon Azteca"] ||
@@ -532,9 +533,7 @@ function processInventoryData(data: any[]): InventoryItem[] {
       Unidades: (item.Unidades || "").toString().toUpperCase() as UnitType,
       Total: costo * cantidadFinal,
       Ubicacion: ubicacion,
-      Importacion: normalizeImportacion(
-        item.Importacion || item.Importación || ""
-      ),
+      Importacion: normalizeImportacion(item.Importación || ""),
       FacturaDragonAzteca:
         item["Factura Dragón Azteca"] ||
         item["Factura Dragon Azteca"] ||
