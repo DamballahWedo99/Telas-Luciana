@@ -62,19 +62,29 @@ const LockScreen: React.FC<LockScreenProps> = ({
   const [colorFilter, setColorFilter] = useState<string>("all");
   const [ubicacionFilter, setUbicacionFilter] = useState<string>("all");
 
-  // Calcular opciones únicas para los filtros
+  // Cambiar estas líneas en los useMemo:
+
   const uniqueOCs = useMemo(
-    () => Array.from(new Set(inventory.map((item) => item.OC))).sort(),
+    () =>
+      Array.from(new Set(inventory.map((item) => item.OC)))
+        .filter(Boolean)
+        .sort(),
     [inventory]
   );
 
   const uniqueTelas = useMemo(
-    () => Array.from(new Set(inventory.map((item) => item.Tela))).sort(),
+    () =>
+      Array.from(new Set(inventory.map((item) => item.Tela)))
+        .filter(Boolean)
+        .sort(),
     [inventory]
   );
 
   const uniqueColors = useMemo(
-    () => Array.from(new Set(inventory.map((item) => item.Color))).sort(),
+    () =>
+      Array.from(new Set(inventory.map((item) => item.Color)))
+        .filter(Boolean)
+        .sort(),
     [inventory]
   );
 

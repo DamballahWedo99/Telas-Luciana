@@ -713,7 +713,6 @@ const Dashboard = () => {
 
       try {
         setIsLoadingInventory(true);
-        showToastOnce("loading", "Cargando inventario desde S3...");
 
         const now = new Date();
         const currentYear = now.getFullYear().toString();
@@ -740,13 +739,14 @@ const Dashboard = () => {
         const parsedData = processInventoryData(jsonData.data);
 
         setInventory(parsedData);
-        showToastOnce("success", "Inventario cargado desde S3 exitosamente");
         inventoryLoadedRef.current = true;
       } catch (error) {
         console.error("Error loading inventory from API:", error);
-        toast.error(
-          "Error al cargar el inventario desde S3. Verifica la conexión."
-        );
+        if (!isMobile) {
+          toast.error(
+            "Error al cargar el inventario desde S3. Verifica la conexión."
+          );
+        }
         setError(
           "Error al cargar el inventario desde S3. Verifica la conexión."
         );
@@ -758,7 +758,7 @@ const Dashboard = () => {
     loadInventoryFromAPI();
 
     return () => {};
-  }, [session?.user]);
+  }, [session?.user, isMobile]);
 
   const handleLoadHistoricalInventory = async (year: string, month: string) => {
     try {
@@ -881,7 +881,26 @@ const Dashboard = () => {
 
   if (isMobile) {
     return (
-      <LockScreen inventory={inventory} filters={filters} isAdmin={isAdmin} />
+      <div className="relative">
+        <LockScreen inventory={inventory} filters={filters} isAdmin={isAdmin} />
+        {isLoadingInventory && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 mx-4 max-w-sm w-full shadow-xl">
+              <div className="flex items-center space-x-3">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    Procesando información
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Cargando inventario desde S3...
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
