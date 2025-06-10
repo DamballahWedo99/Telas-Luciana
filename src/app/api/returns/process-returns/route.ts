@@ -445,83 +445,73 @@ async function markRollsAsReturned(
 ): Promise<boolean> {
   try {
     const now = new Date();
-    const monthsToSearch: string[] = [];
-    for (let i = 0; i <= 6; i++) {
-      const searchDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = searchDate.getFullYear();
-      const month = (searchDate.getMonth() + 1).toString().padStart(2, "0");
-      monthsToSearch.push(`Inventario/Historial Venta/${year}/${month}/`);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 90);
+
+    const listCommand = new ListObjectsV2Command({
+      Bucket: BUCKET_NAME,
+      Prefix: "Inventario/Historial Venta/",
+      MaxKeys: 1000,
+    });
+
+    const listResponse = await s3Client.send(listCommand);
+
+    if (!listResponse.Contents) {
+      return true;
     }
 
-    for (const prefix of monthsToSearch) {
+    const salesFiles = listResponse.Contents.filter(
+      (item) =>
+        item.Key &&
+        item.Key.endsWith(".json") &&
+        item.LastModified &&
+        item.LastModified >= cutoffDate
+    ).map((item) => item.Key!);
+
+    for (const fileKey of salesFiles) {
       try {
-        const listCommand = new ListObjectsV2Command({
+        const getCommand = new GetObjectCommand({
           Bucket: BUCKET_NAME,
-          Prefix: prefix,
-          MaxKeys: 100,
+          Key: fileKey,
         });
 
-        const listResponse = await s3Client.send(listCommand);
-        if (!listResponse.Contents) continue;
+        const response = await s3Client.send(getCommand);
+        const bodyString = await response.Body?.transformToString();
+        if (!bodyString) continue;
 
-        const salesFiles = listResponse.Contents.filter(
-          (item) => item.Key && item.Key.endsWith(".json")
-        ).map((item) => item.Key!);
+        const salesData = JSON.parse(bodyString);
+        let fileModified = false;
 
-        for (const fileKey of salesFiles) {
-          try {
-            const getCommand = new GetObjectCommand({
-              Bucket: BUCKET_NAME,
-              Key: fileKey,
-            });
+        if (salesData.rolls && Array.isArray(salesData.rolls)) {
+          for (const roll of salesData.rolls) {
+            const returnedRoll = returnedRolls.find(
+              (r) =>
+                String(r.roll_number) === String(roll.roll_number) &&
+                r.oc === roll.oc &&
+                r.fabric_type === roll.fabric_type &&
+                r.color === roll.color
+            );
 
-            const response = await s3Client.send(getCommand);
-            const bodyString = await response.Body?.transformToString();
-            if (!bodyString) continue;
-
-            const salesData = JSON.parse(bodyString);
-            const salesRecords = Array.isArray(salesData)
-              ? salesData
-              : [salesData];
-
-            let fileModified = false;
-
-            for (const record of salesRecords) {
-              if (record.rolls && Array.isArray(record.rolls)) {
-                for (const roll of record.rolls) {
-                  const returnedRoll = returnedRolls.find(
-                    (r) =>
-                      String(r.roll_number) === String(roll.roll_number) &&
-                      r.oc === roll.oc &&
-                      r.fabric_type === roll.fabric_type &&
-                      r.color === roll.color
-                  );
-
-                  if (returnedRoll) {
-                    roll.available_for_return = false;
-                    roll.returned_date = new Date().toISOString();
-                    roll.return_reason = returnedRoll.return_reason || "";
-                    fileModified = true;
-                  }
-                }
-              }
+            if (returnedRoll) {
+              roll.available_for_return = false;
+              roll.returned_date = new Date().toISOString();
+              roll.return_reason = returnedRoll.return_reason || "";
+              fileModified = true;
             }
-
-            if (fileModified) {
-              const putCommand = new PutObjectCommand({
-                Bucket: BUCKET_NAME,
-                Key: fileKey,
-                Body: JSON.stringify(salesRecords, null, 2),
-                ContentType: "application/json",
-              });
-
-              await s3Client.send(putCommand);
-            }
-          } catch (fileError) {
-            continue;
           }
         }
-      } catch (prefixError) {
+
+        if (fileModified) {
+          const putCommand = new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: fileKey,
+            Body: JSON.stringify(salesData, null, 2),
+            ContentType: "application/json",
+          });
+
+          await s3Client.send(putCommand);
+        }
+      } catch (fileError) {
         continue;
       }
     }

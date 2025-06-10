@@ -39,44 +39,29 @@ async function getSoldRollsFiles(daysBack: number = 30): Promise<string[]> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
-    const monthsToSearch: string[] = [];
-    for (let i = 0; i <= 3; i++) {
-      const searchDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = searchDate.getFullYear();
-      const month = (searchDate.getMonth() + 1).toString().padStart(2, "0");
-      monthsToSearch.push(`Inventario/Historial Venta/${year}/${month}/`);
+    const prefix = "Inventario/Historial Venta/";
+
+    const listCommand = new ListObjectsV2Command({
+      Bucket: BUCKET_NAME,
+      Prefix: prefix,
+      MaxKeys: 1000,
+    });
+
+    const listResponse = await s3Client.send(listCommand);
+
+    if (!listResponse.Contents) {
+      return [];
     }
 
-    const allFiles: string[] = [];
-
-    for (const prefix of monthsToSearch) {
-      try {
-        const listCommand = new ListObjectsV2Command({
-          Bucket: BUCKET_NAME,
-          Prefix: prefix,
-          MaxKeys: 1000,
-        });
-
-        const listResponse = await s3Client.send(listCommand);
-
-        if (listResponse.Contents) {
-          const monthFiles = listResponse.Contents.filter(
-            (item) =>
-              item.Key &&
-              item.Key.endsWith(".json") &&
-              item.LastModified &&
-              item.LastModified >= cutoffDate
-          )
-            .map((item) => item.Key!)
-            .sort((a, b) => b.localeCompare(a));
-
-          allFiles.push(...monthFiles);
-        }
-      } catch (monthError) {
-        console.error(`Error buscando en ${prefix}:`, monthError);
-        continue;
-      }
-    }
+    const allFiles = listResponse.Contents.filter(
+      (item) =>
+        item.Key &&
+        item.Key.endsWith(".json") &&
+        item.LastModified &&
+        item.LastModified >= cutoffDate
+    )
+      .map((item) => item.Key!)
+      .sort((a, b) => b.localeCompare(a));
 
     return allFiles;
   } catch (error) {
@@ -100,8 +85,12 @@ async function readSoldRollsFile(fileKey: string): Promise<SoldRoll[]> {
     }
 
     const data = JSON.parse(bodyString);
-    const salesRecords = Array.isArray(data) ? data : [data];
 
+    if (data.rolls && Array.isArray(data.rolls)) {
+      return data.rolls;
+    }
+
+    const salesRecords = Array.isArray(data) ? data : [data];
     const allRolls: SoldRoll[] = [];
 
     for (const record of salesRecords) {

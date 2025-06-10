@@ -46,43 +46,11 @@ function generateSalesFileName(): string {
   const year = now.getFullYear();
   const month = (now.getMonth() + 1).toString().padStart(2, "0");
   const day = now.getDate().toString().padStart(2, "0");
-  const timestamp = now.getTime();
+  const hours = now.getHours().toString().padStart(2, "0");
+  const minutes = now.getMinutes().toString().padStart(2, "0");
+  const seconds = now.getSeconds().toString().padStart(2, "0");
 
-  return `sale_${year}${month}${day}_${timestamp}.json`;
-}
-
-async function findCurrentMonthSalesFile(): Promise<string | null> {
-  try {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
-    const prefix = `Inventario/Historial Venta/${year}/${month}/`;
-
-    const listCommand = new ListObjectsV2Command({
-      Bucket: BUCKET_NAME,
-      Prefix: prefix,
-      MaxKeys: 100,
-    });
-
-    const listResponse = await s3Client.send(listCommand);
-
-    if (!listResponse.Contents || listResponse.Contents.length === 0) {
-      return null;
-    }
-
-    const salesFiles = listResponse.Contents.filter(
-      (item) => item.Key && item.Key.endsWith(".json")
-    ).sort((a, b) => {
-      const timeA = a.LastModified?.getTime() || 0;
-      const timeB = b.LastModified?.getTime() || 0;
-      return timeB - timeA;
-    });
-
-    return salesFiles.length > 0 ? salesFiles[0].Key! : null;
-  } catch (error) {
-    console.error("Error buscando archivo de ventas del mes:", error);
-    return null;
-  }
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}.json`;
 }
 
 async function saveSoldRollsToHistory(
@@ -91,8 +59,6 @@ async function saveSoldRollsToHistory(
 ): Promise<string> {
   try {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
 
     const rollsWithMetadata = salesData.rolls.map((roll) => ({
       ...roll,
@@ -117,45 +83,15 @@ async function saveSoldRollsToHistory(
       status: "completed",
     };
 
-    let existingFile = await findCurrentMonthSalesFile();
-    let existingData: any[] = [];
-
-    if (existingFile) {
-      try {
-        const getCommand = new GetObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: existingFile,
-        });
-
-        const response = await s3Client.send(getCommand);
-        const bodyString = await response.Body?.transformToString();
-
-        if (bodyString) {
-          const parsed = JSON.parse(bodyString);
-          existingData = Array.isArray(parsed) ? parsed : [parsed];
-        }
-      } catch (readError) {
-        console.error(
-          "Error leyendo archivo existente, creando uno nuevo:",
-          readError
-        );
-        existingFile = null;
-      }
-    }
-
-    existingData.push(saleRecord);
-
-    const fileName =
-      existingFile ||
-      `Inventario/Historial Venta/${year}/${month}/${generateSalesFileName()}`;
+    const fileName = `Inventario/Historial Venta/${generateSalesFileName()}`;
 
     const putCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: fileName,
-      Body: JSON.stringify(existingData, null, 2),
+      Body: JSON.stringify(saleRecord, null, 2),
       ContentType: "application/json",
       Metadata: {
-        "sale-count": existingData.length.toString(),
+        "sale-count": "1",
         "last-updated": now.toISOString(),
         "sold-by": soldBy,
       },
