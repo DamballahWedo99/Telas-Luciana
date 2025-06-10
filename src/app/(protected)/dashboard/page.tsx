@@ -82,7 +82,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-4">
-        <div className="my-4">
+        <div className="my-4 hidden md:block">
           <div className="flex justify-between items-center mb-3">
             <h1 className="text-2xl font-bold">{getNavigationTitle()}</h1>
             <div className="flex items-center gap-2">
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-              )}{" "}
+              )}
               <Button
                 variant="outline"
                 onClick={handleLogout}

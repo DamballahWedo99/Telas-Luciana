@@ -3247,9 +3247,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         <tr>
                           <td
                             colSpan={isAdmin ? 10 : 5}
-                            className="p-2 align-middle text-center h-24"
+                            className="relative p-0"
                           >
-                            No hay datos disponibles
+                            <div className="min-h-[50vh] relative">
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-gray-500">
+                                  No hay datos disponibles
+                                </span>
+                              </div>
+                            </div>
                           </td>
                         </tr>
                       ) : (
