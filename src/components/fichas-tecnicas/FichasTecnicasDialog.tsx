@@ -412,7 +412,7 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
   if (isSeller && isMobile) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-hidden p-0 rounded-3xl">
+        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-hidden p-0 rounded-3xl [&>button]:hidden">
           <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-3xl">
             <DialogTitle className="flex items-center gap-2 text-lg">
               <div className="p-2 bg-blue-100 rounded-2xl">
@@ -496,102 +496,52 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
   if (isSeller) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[500px] max-w-[90vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[900px] max-w-[95vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
               Fichas Técnicas
             </DialogTitle>
             <DialogDescription>
-              Descarga fichas técnicas disponibles.
+              Descarga fichas técnicas disponibles para tu rol.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="ficha-select">Seleccionar Ficha Técnica</Label>
-              {isLoadingFichas ? (
-                <div className="flex items-center gap-2 p-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-gray-600">
-                    Cargando fichas...
-                  </span>
+          <div className="space-y-4">
+            {isLoadingFichas ? (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <div className="p-4 bg-blue-50 rounded-full">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                 </div>
-              ) : fichas.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-lg">
-                  <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p>No hay fichas técnicas disponibles para tu rol.</p>
+                <p className="text-gray-600 font-medium">
+                  Cargando fichas técnicas...
+                </p>
+              </div>
+            ) : fichas.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <div className="p-6 bg-gray-50 rounded-full">
+                  <FileText className="h-12 w-12 text-gray-400" />
                 </div>
-              ) : (
-                <Select
-                  value={fichaSeleccionada}
-                  onValueChange={setFichaSeleccionada}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una ficha técnica" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fichas.map((ficha) => (
-                      <SelectItem key={ficha.key} value={ficha.key}>
-                        {ficha.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            {fichaSeleccionada && (
-              <div className="p-3 bg-gray-50 rounded-lg">
-                {(() => {
-                  const ficha = fichas.find((f) => f.key === fichaSeleccionada);
-                  return ficha ? (
-                    <div className="text-sm space-y-1">
-                      <p>
-                        <strong>Archivo:</strong> {ficha.key.split("/").pop()}
-                      </p>
-                      <p>
-                        <strong>Tamaño:</strong> {formatFileSize(ficha.size)}
-                      </p>
-                      <p>
-                        <strong>Fecha:</strong>{" "}
-                        {new Date(ficha.lastModified).toLocaleDateString(
-                          "es-ES"
-                        )}
-                      </p>
-                    </div>
-                  ) : null;
-                })()}
+                <div className="text-center space-y-2">
+                  <h3 className="font-semibold text-gray-900">
+                    No hay fichas disponibles
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    No hay fichas técnicas disponibles para tu rol.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[60vh] overflow-y-auto p-1">
+                {fichas.map((ficha) => (
+                  <FichaCard
+                    key={ficha.key}
+                    ficha={ficha}
+                    showAdminControls={false}
+                  />
+                ))}
               </div>
             )}
-          </div>
-
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancel}
-              disabled={isLoading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              onClick={() => handleDownload()}
-              disabled={isLoading || !fichaSeleccionada || fichas.length === 0}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Descargando...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Descargar PDF
-                </>
-              )}
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -40,12 +44,29 @@ export async function GET(request: NextRequest) {
     }
 
     const userRole = session.user.role || "seller";
-
     let allowedRoles = ["major_admin"];
-    if (key.includes("_roles_")) {
-      const rolesMatch = key.match(/_roles_([^_]+)/);
-      if (rolesMatch) {
-        allowedRoles = rolesMatch[1].split("-");
+
+    try {
+      const headCommand = new HeadObjectCommand({
+        Bucket: "telas-luciana",
+        Key: key,
+      });
+
+      const headResponse = await s3Client.send(headCommand);
+
+      if (headResponse.Metadata?.allowedRoles) {
+        allowedRoles = headResponse.Metadata.allowedRoles.split("-");
+      } else {
+        allowedRoles = ["major_admin", "admin", "seller"];
+      }
+    } catch (headError) {
+      if (key.includes("_roles_")) {
+        const rolesMatch = key.match(/_roles_([^_]+)/);
+        if (rolesMatch) {
+          allowedRoles = rolesMatch[1].split("-");
+        }
+      } else {
+        allowedRoles = ["major_admin", "admin", "seller"];
       }
     }
 
@@ -74,17 +95,7 @@ export async function GET(request: NextRequest) {
     }
 
     const bytes = await response.Body.transformToByteArray();
-
     const duration = Date.now() - startTime;
-
-    console.log(
-      `[FICHAS-TECNICAS] User ${session.user.email} downloaded ficha:`,
-      {
-        key,
-        userRole,
-        duration: `${duration}ms`,
-      }
-    );
 
     return new NextResponse(bytes, {
       headers: {
