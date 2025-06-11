@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
+import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useRouter } from "next/navigation";
 import { useUserVerification } from "@/hooks/useUserVerification";
@@ -16,7 +17,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { LogOutIcon, BarChart, LayoutDashboardIcon } from "lucide-react";
+import {
+  LogOutIcon,
+  BarChart,
+  LayoutDashboardIcon,
+  FileText,
+} from "lucide-react";
 
 type ViewType = "inventory" | "orders";
 
@@ -25,6 +31,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
   const router = useRouter();
 
   useUserVerification();
@@ -64,6 +71,10 @@ export default function DashboardPage() {
     setCurrentView("inventory");
   };
 
+  const handleOpenFichasTecnicas = () => {
+    setOpenFichasTecnicas(true);
+  };
+
   if (status === "loading" || isLoading) {
     return <LoadingScreen />;
   }
@@ -86,6 +97,24 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center mb-3">
             <h1 className="text-2xl font-bold">{getNavigationTitle()}</h1>
             <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleOpenFichasTecnicas}
+                      className="mr-2"
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Fichas Técnicas</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
               {isMajorAdmin && (
                 <div className="flex items-center gap-2 mr-2">
                   <TooltipProvider>
@@ -153,6 +182,11 @@ export default function DashboardPage() {
         {currentView === "inventory" && <Dashboard />}
 
         {currentView === "orders" && <PedidosDashboard />}
+
+        <FichasTecnicasDialog
+          open={openFichasTecnicas}
+          setOpen={setOpenFichasTecnicas}
+        />
       </div>
     </div>
   );

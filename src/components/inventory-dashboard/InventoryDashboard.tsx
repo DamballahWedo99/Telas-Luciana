@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import { XCircleIcon, Plus, Loader2 } from "lucide-react";
+import { XCircleIcon, Plus, Loader2, FileText } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,6 +35,7 @@ import { PendingFabricsCard } from "@/components/inventory-dashboard/PendingFabr
 import { NewOrderDialog } from "@/components/inventory-dashboard/NewOrderDialog";
 import { NewUserDialog } from "@/components/inventory-dashboard/NewUserDialog";
 import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
+import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
 import LockScreen from "@/components/inventory-dashboard/LockScreen";
 import {
   InventoryItem,
@@ -567,6 +568,7 @@ const Dashboard = () => {
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
   const [openNewRow, setOpenNewRow] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -871,7 +873,19 @@ const Dashboard = () => {
   if (isMobile) {
     return (
       <div className="relative">
+        <div className="fixed top-4 right-4 z-50">
+          <Button
+            onClick={() => setOpenFichasTecnicas(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
+            size="lg"
+          >
+            <FileText className="h-5 w-5" />
+            Fichas Técnicas
+          </Button>
+        </div>
+
         <LockScreen inventory={inventory} filters={filters} isAdmin={isAdmin} />
+
         {isLoadingInventory && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-6 mx-4 max-w-sm w-full shadow-xl">
@@ -889,6 +903,11 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+
+        <FichasTecnicasDialog
+          open={openFichasTecnicas}
+          setOpen={setOpenFichasTecnicas}
+        />
       </div>
     );
   }
@@ -982,6 +1001,11 @@ const Dashboard = () => {
           onSuccess={handleNewRowSuccess}
         />
       )}
+
+      <FichasTecnicasDialog
+        open={openFichasTecnicas}
+        setOpen={setOpenFichasTecnicas}
+      />
     </div>
   );
 };

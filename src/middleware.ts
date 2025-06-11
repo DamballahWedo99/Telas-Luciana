@@ -8,10 +8,8 @@ if (!secret) {
   throw new Error("Missing NEXTAUTH_SECRET environment variable.");
 }
 
-// Rutas públicas (sin autenticación)
 const publicRoutes = ["/", "/login", "/forgot-password", "/reset-password"];
 
-// APIs públicas (sin autenticación)
 const publicApiRoutes = [
   "/api/auth",
   "/api/auth/callback",
@@ -22,25 +20,25 @@ const publicApiRoutes = [
   "/api/contact",
 ];
 
-// Rutas que requieren rol admin o major_admin
 const adminRoutes = ["/dashboard/admin", "/dashboard/settings"];
 
-// APIs que requieren rol admin o major_admin
 const adminApiRoutes = [
   "/api/s3/inventario/create-row",
   "/api/s3/inventario/update",
+  "/api/s3/fichas-tecnicas/upload",
+  "/api/s3/fichas-tecnicas/delete",
 ];
 
-// APIs que requieren autenticación pero pueden acceder usuarios normales
 const protectedApiRoutes = [
   "/api/packing-list",
   "/api/returns",
   "/api/sales",
-  "/api/users", // Mover aquí para que admins puedan acceder
-  "/api/s3/inventario", // Mover aquí para acceso general
+  "/api/users",
+  "/api/s3/inventario",
+  "/api/s3/fichas-tecnicas",
+  "/api/s3/fichas-tecnicas/download",
 ];
 
-// Configuración de rate limiting por ruta - MÁS PERMISIVO
 const rateLimitConfig: Record<
   string,
   { type: "auth" | "api" | "contact"; message?: string }
@@ -59,30 +57,37 @@ const rateLimitConfig: Record<
     type: "contact",
     message: "Demasiados mensajes de contacto. Espera antes de enviar otro.",
   },
-  // ❌ REMOVIDO: Rate limiting de APIs críticas para desarrollo
-  // "/api/users": { type: "api" },
-  // "/api/s3/inventario": { type: "api" },
-  // "/api/packing-list": { type: "api" },
+  "/api/s3/fichas-tecnicas/upload": {
+    type: "api",
+    message:
+      "Demasiadas solicitudes de subida. Espera antes de intentar nuevamente.",
+  },
+  "/api/s3/fichas-tecnicas/delete": {
+    type: "api",
+    message:
+      "Demasiadas solicitudes de eliminación. Espera antes de intentar nuevamente.",
+  },
 };
 
-// Control de acceso granular por rol - SIMPLIFICADO
 const roleBasedAccess: Record<string, string[]> = {
-  // Solo admins pueden acceder a estas rutas
   admin_only: [
     "/api/s3/inventario/create-row",
     "/api/s3/inventario/update",
+    "/api/s3/fichas-tecnicas/upload",
+    "/api/s3/fichas-tecnicas/delete",
     "/dashboard/admin",
     "/dashboard/settings",
   ],
-  // Usuarios normales y admins pueden acceder
   authenticated: [
     "/api/packing-list",
     "/api/returns",
     "/api/sales",
-    "/api/users", // Ahora accesible para verificar usuarios
-    "/api/s3/inventario", // Lectura de inventario
-    "/api/users/verify", // Verificación de usuarios
-    "/dashboard", // Ruta principal del dashboard
+    "/api/users",
+    "/api/s3/inventario",
+    "/api/s3/fichas-tecnicas",
+    "/api/s3/fichas-tecnicas/download",
+    "/api/users/verify",
+    "/dashboard",
   ],
 };
 
@@ -126,36 +131,30 @@ function isProtectedApiRoute(pathname: string): boolean {
 }
 
 function hasRoleAccess(pathname: string, userRole: string): boolean {
-  // Admin y major_admin tienen acceso completo
   if (userRole === "admin" || userRole === "major_admin") {
     return true;
   }
 
-  // Verificar rutas que requieren admin específicamente
   const adminOnlyRoutes = roleBasedAccess["admin_only"];
   if (adminOnlyRoutes.some((route) => pathname.startsWith(route))) {
     return false;
   }
 
-  // Usuarios autenticados pueden acceder a rutas básicas
   const authenticatedRoutes = roleBasedAccess["authenticated"];
   if (authenticatedRoutes.some((route) => pathname.startsWith(route))) {
     return true;
   }
 
-  // ✅ CAMBIADO: Por defecto permitir acceso a dashboard principal
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
     return true;
   }
 
-  // Por defecto, denegar acceso a rutas no definidas
   return false;
 }
 
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 1. Aplicar rate limiting donde sea necesario (REDUCIDO)
   const rateLimitConfigItem = needsRateLimit(pathname);
   if (rateLimitConfigItem) {
     const rateLimitResponse = await rateLimit(req, {
@@ -168,26 +167,21 @@ export default async function middleware(req: NextRequest) {
     }
   }
 
-  // 2. Rutas públicas - permitir acceso
   if (isPublicRoute(pathname)) {
     return NextResponse.next();
   }
 
-  // 3. APIs públicas - permitir acceso
   if (isPublicApiRoute(pathname)) {
     return NextResponse.next();
   }
 
-  // 4. Verificar autenticación para todas las demás rutas
   const token = await getToken({ req, secret });
 
   if (!token) {
-    // Si no hay token y es una ruta de login, permitir
     if (pathname.startsWith("/login")) {
       return NextResponse.next();
     }
 
-    // Si es una API, devolver 401
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         {
@@ -198,16 +192,13 @@ export default async function middleware(req: NextRequest) {
       );
     }
 
-    // Para rutas web, redirigir a login
     const redirectUrl = new URL("/login", req.url);
     redirectUrl.searchParams.set("callbackUrl", req.url);
     return NextResponse.redirect(redirectUrl);
   }
 
-  // 5. Usuario autenticado - verificar permisos por rol
   const userRole = token.role as string;
 
-  // Verificar rutas admin específicas
   if (
     isAdminRoute(pathname) &&
     userRole !== "admin" &&
@@ -216,7 +207,6 @@ export default async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  // Verificar APIs admin específicas
   if (
     isAdminApiRoute(pathname) &&
     userRole !== "admin" &&
@@ -231,7 +221,6 @@ export default async function middleware(req: NextRequest) {
     );
   }
 
-  // Verificar APIs protegidas y control granular de acceso
   if (isProtectedApiRoute(pathname) || pathname.startsWith("/api/")) {
     if (!hasRoleAccess(pathname, userRole)) {
       return NextResponse.json(
@@ -244,15 +233,6 @@ export default async function middleware(req: NextRequest) {
     }
   }
 
-  // ❌ REMOVIDO: Redirección automática problemática del dashboard
-  // if (pathname === "/dashboard") {
-  //   const defaultRoute = userRole === "admin" || userRole === "major_admin"
-  //     ? "/dashboard/users"
-  //     : "/dashboard/ventas";
-  //   return NextResponse.redirect(new URL(defaultRoute, req.url));
-  // }
-
-  // 6. Verificar acceso a rutas web protegidas
   if (
     pathname.startsWith("/dashboard/") &&
     !hasRoleAccess(pathname, userRole)

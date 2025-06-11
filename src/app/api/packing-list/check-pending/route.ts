@@ -50,6 +50,14 @@ interface PendingFileInfo {
   totalFabrics: number;
 }
 
+function sanitizeJSONContent(content: string): string {
+  return content
+    .replace(/:\s*NaN\s*([,}])/g, ": null$1")
+    .replace(/:\s*undefined\s*([,}])/g, ": null$1")
+    .replace(/:\s*Infinity\s*([,}])/g, ": null$1")
+    .replace(/:\s*-Infinity\s*([,}])/g, ": null$1");
+}
+
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
@@ -116,7 +124,8 @@ export async function GET(request: NextRequest) {
 
         if (!fileContent) continue;
 
-        const jsonData = JSON.parse(fileContent);
+        const sanitizedContent = sanitizeJSONContent(fileContent);
+        const jsonData = JSON.parse(sanitizedContent);
         let dataToProcess: InventoryItem[] = [];
 
         if (Array.isArray(jsonData)) {
