@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import Papa from "papaparse";
+import React, { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,10 +21,33 @@ import {
 
 import { InventoryItem, NewOrderForm, UnitType } from "../../../types/types";
 
+const availableColors = [
+  "Amarillo Neon",
+  "Bandera",
+  "Beige",
+  "Blanco",
+  "Gris",
+  "Guinda",
+  "Marino",
+  "Marino Medio",
+  "Militar",
+  "Morado",
+  "Negro",
+  "Naranja",
+  "Oro",
+  "Oxford",
+  "Petróleo",
+  "Plúmbago",
+  "Rojo",
+  "Rey",
+  "Rosa Pastel",
+  "Turquesa",
+  "Verde Agua",
+];
+
 interface NewOrderDialogProps {
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  inventory: InventoryItem[];
   setInventory: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
   setSuccess: React.Dispatch<React.SetStateAction<string>>;
 }
@@ -33,34 +55,9 @@ interface NewOrderDialogProps {
 export const NewOrderDialog: React.FC<NewOrderDialogProps> = ({
   open,
   setOpen,
-  inventory,
   setInventory,
   setSuccess,
 }) => {
-  const [availableColors, setAvailableColors] = useState<string[]>([
-    "Amarillo Neon",
-    "Bandera",
-    "Beige",
-    "Blanco",
-    "Gris",
-    "Guinda",
-    "Marino",
-    "Marino Medio",
-    "Militar",
-    "Morado",
-    "Negro",
-    "Naranja",
-    "Oro",
-    "Oxford",
-    "Petróleo",
-    "Plúmbago",
-    "Rojo",
-    "Rey",
-    "Rosa Pastel",
-    "Turquesa",
-    "Verde Agua",
-  ]);
-
   const [newOrder, setNewOrder] = useState<NewOrderForm>({
     OC: "",
     Tela: "",

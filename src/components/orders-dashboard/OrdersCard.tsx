@@ -64,7 +64,7 @@ interface PedidoData {
   ddp_usd_unidad_s_iva?: number;
   "pedido_cliente.tipo_tela"?: string;
   "pedido_cliente.color"?: string;
-  [key: string]: any; // Para permitir acceso dinámico a propiedades
+  [key: string]: string | number | undefined;
 }
 
 interface OrdersFilterSectionProps {
@@ -100,22 +100,11 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
   ordenDeCompraOptions,
   tipoTelaOptions,
   colorOptions,
-  resetFilters,
 }) => {
-  // Determinar si hay opciones disponibles para mostrar en los dropdowns
   const hasOrdenDeCompraOptions = ordenDeCompraOptions.length > 0;
   const hasTipoTelaOptions = tipoTelaOptions.length > 0;
   const hasColorOptions = colorOptions.length > 0;
 
-  // Verificar si algún filtro está activo
-  const isFilterActive =
-    searchQuery !== "" ||
-    ordenDeCompraFilter !== "all" ||
-    tipoTelaFilter !== "all" ||
-    colorFilter !== "all" ||
-    ubicacionFilter !== "all";
-
-  // Reset filters if selected value is no longer in available options
   useEffect(() => {
     if (
       ordenDeCompraFilter !== "all" &&
@@ -140,7 +129,6 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
   return (
     <div className="pt-0 pb-4">
       <div className="flex flex-wrap gap-4 mb-4">
-        {/* Search bar - más grande */}
         <div className="flex-1 min-w-[200px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
@@ -162,7 +150,6 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
           </div>
         </div>
 
-        {/* Orden de Compra filter - más pequeño */}
         <div className="min-w-[150px] max-w-[150px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
@@ -207,7 +194,6 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
           </div>
         </div>
 
-        {/* Tipo de Tela filter - más pequeño */}
         <div className="min-w-[150px] max-w-[150px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
@@ -246,7 +232,6 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
           </div>
         </div>
 
-        {/* Color filter - más pequeño */}
         <div className="min-w-[150px] max-w-[150px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
@@ -282,7 +267,6 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
           </div>
         </div>
 
-        {/* Ubicación filter - más pequeño */}
         <div className="min-w-[150px] max-w-[150px]">
           <div className="space-y-2">
             <div className="flex items-center gap-1">
@@ -303,7 +287,6 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
         </div>
       </div>
 
-      {/* Filter summary */}
       <div className="flex items-center gap-2 text-sm">
         <Filter size={16} className="text-gray-500" />
         <span className="text-gray-500">Filtros activos:</span>
@@ -344,7 +327,6 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
   );
 };
 
-// Componente OrdersTable integrado
 const OrdersTable: React.FC<{
   filteredData: PedidoData[];
   paginatedData: PedidoData[];
@@ -362,14 +344,11 @@ const OrdersTable: React.FC<{
   totalPages,
   goToPage,
 }) => {
-  // Función para generar los números de página para la paginación
   const getPageNumbers = () => {
     const pages = [];
 
-    // Siempre mostrar primera página
     pages.push(1);
 
-    // Mostrar páginas cercanas a la actual
     for (
       let i = Math.max(2, currentPage - 1);
       i <= Math.min(totalPages - 1, currentPage + 1);
@@ -384,23 +363,18 @@ const OrdersTable: React.FC<{
       }
     }
 
-    // Siempre mostrar última página si hay más de una
     if (totalPages > 1) {
       pages.push(totalPages);
     }
 
-    // Eliminar duplicados
     return Array.from(new Set(pages));
   };
 
-  // Verificar que paginatedData tenga elementos antes de mostrar
   const hasData = paginatedData && paginatedData.length > 0;
 
-  // Calcular total_mxp_sum para cada orden_de_compra (siguiendo la lógica de paste.txt)
   const calculateOrdenGroups = () => {
     const ordenGroups: Record<string, { totalMxpSum: number }> = {};
 
-    // Primero, calculamos el total_mxp para cada fila y acumulamos por orden_de_compra
     filteredData.forEach((row) => {
       const ordenDeCompra = row.orden_de_compra || "";
       const totalFactura = row.total_factura || 0;
@@ -418,40 +392,29 @@ const OrdersTable: React.FC<{
     return ordenGroups;
   };
 
-  // Obtener grupos de órdenes para cálculos
   const ordenGroups = calculateOrdenGroups();
 
-  // Calcular valores para cada fila según la lógica de paste.txt
   const calculateRowData = (row: PedidoData) => {
-    // Extraer valores base (con valores predeterminados para evitar cálculos con undefined/null)
     const ordenDeCompra = row.orden_de_compra || "";
     const totalFactura = row.total_factura || 0;
     const tipoDeCambio = row.tipo_de_cambio || 0;
     const totalGastos = row.total_gastos || 0;
-    const mFactura = row.m_factura || 1; // Evitar división por cero
+    const mFactura = row.m_factura || 1;
 
-    // PASO 1: Calcular total_mxp (conversión pesos)
     const totalMxp = totalFactura * tipoDeCambio;
 
-    // PASO 2: Obtener la suma total_mxp para esta orden_de_compra
-    const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1; // Evitar división por cero
+    const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1;
 
-    // PASO 3: Calcular t_cambio como proporción del total_mxp de esta fila al total para su orden_de_compra
     const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
 
-    // PASO 4: Calcular gastos en pesos
     const gastosMxp = tCambio * totalGastos;
 
-    // PASO 5: Calcular DDP total en pesos
     const ddpTotalMxp = gastosMxp + totalMxp;
 
-    // PASO 6: Calcular DDP por unidad en pesos
     const ddpMxpUnidad = mFactura > 0 ? ddpTotalMxp / mFactura : 0;
 
-    // PASO 7: Calcular DDP por unidad en dólares
     const ddpUsdUnidad = tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
 
-    // PASO 8: Calcular DDP por unidad en dólares sin IVA
     const ddpUsdUnidadSIva = ddpUsdUnidad / 1.16;
 
     return {
@@ -467,7 +430,6 @@ const OrdersTable: React.FC<{
 
   return (
     <div className="bg-white rounded shadow-sm mb-6">
-      {/* Tabla con encabezado fijo inspirado en InventoryCard.tsx */}
       <div className="border rounded-md overflow-hidden">
         <div className="h-[500px] overflow-auto relative">
           <table className="w-full text-sm border-collapse min-w-[2500px]">
@@ -535,7 +497,6 @@ const OrdersTable: React.FC<{
                 </tr>
               ) : (
                 paginatedData.map((row, index) => {
-                  // Calcular valores para cada celda usando la lógica actualizada
                   const calculatedData = calculateRowData(row);
 
                   return (
@@ -602,7 +563,6 @@ const OrdersTable: React.FC<{
         </div>
       </div>
 
-      {/* Paginación mejorada con shadcn/ui */}
       {filteredData.length > 0 && (
         <div className="py-4 border-t border-gray-200 bg-white flex justify-center">
           <div className="flex items-center gap-4">
@@ -673,9 +633,6 @@ interface OrdersCardProps {
   setColorFilter: React.Dispatch<React.SetStateAction<string>>;
   ubicacionFilter: string;
   setUbicacionFilter: React.Dispatch<React.SetStateAction<string>>;
-  ordenDeCompraOptions: string[];
-  tipoTelaOptions: string[];
-  colorOptions: string[];
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   fileUploading: boolean;
   resetFilters: () => void;
@@ -702,9 +659,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   setColorFilter,
   ubicacionFilter,
   setUbicacionFilter,
-  ordenDeCompraOptions: allOrdenDeCompraOptions,
-  tipoTelaOptions: allTipoTelaOptions,
-  colorOptions: allColorOptions,
   handleFileUpload,
   fileUploading,
   resetFilters,
@@ -724,7 +678,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     }
   };
 
-  // Verificar si algún filtro está activo
   const isFilterActive =
     searchQuery !== "" ||
     ordenDeCompraFilter !== "all" ||
@@ -732,9 +685,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     colorFilter !== "all" ||
     ubicacionFilter !== "all";
 
-  // Calcular opciones filtradas para cada selector basado en las selecciones actuales
   const filteredOptions = useMemo(() => {
-    // Filtros para cada selector dependiendo de otras selecciones
     const getFilteredOrdenDeCompraOptions = (): string[] => {
       let filtered = [...data];
 
@@ -751,18 +702,16 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       }
 
       if (ubicacionFilter && ubicacionFilter !== "all") {
-        // Asumiendo que ubicación se determina en base a dónde está el item
         const ubicacionField =
           ubicacionFilter === "almacen"
             ? "llega_almacen_proveedor"
             : ubicacionFilter === "transito"
             ? "llega_a_Lazaro"
-            : "fecha_pedido"; // proveedor
+            : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
       }
 
-      // Use type guard to ensure we only return strings
       return [...new Set(filtered.map((item) => item.orden_de_compra))].filter(
         (value): value is string => typeof value === "string" && value !== ""
       );
@@ -789,12 +738,11 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
             ? "llega_almacen_proveedor"
             : ubicacionFilter === "transito"
             ? "llega_a_Lazaro"
-            : "fecha_pedido"; // proveedor
+            : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
       }
 
-      // Use type guard to ensure we only return strings
       return [
         ...new Set(filtered.map((item) => item["pedido_cliente.tipo_tela"])),
       ].filter(
@@ -823,12 +771,11 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
             ? "llega_almacen_proveedor"
             : ubicacionFilter === "transito"
             ? "llega_a_Lazaro"
-            : "fecha_pedido"; // proveedor
+            : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
       }
 
-      // Use type guard to ensure we only return strings
       return [
         ...new Set(filtered.map((item) => item["pedido_cliente.color"])),
       ].filter(
@@ -980,5 +927,4 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   );
 };
 
-// Export solo el componente OrdersFilterSection si se necesita en otro lugar
 export { OrdersFilterSection };

@@ -3,6 +3,7 @@ import {
   S3Client,
   GetObjectCommand,
   ListObjectsV2Command,
+  _Object,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -15,11 +16,45 @@ const s3Client = new S3Client({
   },
 });
 
+interface RawInventoryItem {
+  OC?: string;
+  Tela?: string;
+  Color?: string;
+  Ubicacion?: string;
+  Cantidad?: unknown;
+  Costo?: unknown;
+  Total?: unknown;
+  Unidades?: string;
+  Importacion?: string;
+  FacturaDragonAzteca?: string;
+  status?: string;
+  costo?: unknown;
+  COSTO?: unknown;
+  cantidad?: unknown;
+  CANTIDAD?: unknown;
+  [key: string]: unknown;
+}
+
+interface NormalizedInventoryItem {
+  OC: string;
+  Tela: string;
+  Color: string;
+  Ubicacion: string;
+  Cantidad: number;
+  Costo: number;
+  Total: number;
+  Unidades: string;
+  Importacion?: string;
+  FacturaDragonAzteca?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
 const fixInvalidJSON = (content: string): string => {
   return content.replace(/: *NaN/g, ": null");
 };
 
-const extractNumericValue = (value: any): number => {
+const extractNumericValue = (value: unknown): number => {
   if (value === null || value === undefined) return 0;
 
   if (typeof value === "number" && !isNaN(value)) return value;
@@ -37,11 +72,15 @@ const extractNumericValue = (value: any): number => {
   return 0;
 };
 
-const normalizeInventoryItem = (item: any) => {
-  const normalizedItem: any = JSON.parse(JSON.stringify(item));
+const normalizeInventoryItem = (
+  item: RawInventoryItem
+): NormalizedInventoryItem => {
+  const normalizedItem: Record<string, unknown> = JSON.parse(
+    JSON.stringify(item)
+  );
 
   const costoKeys = ["Costo", "costo", "COSTO"];
-  let costoKey = costoKeys.find((k) => k in normalizedItem) || "Costo";
+  const costoKey = costoKeys.find((k) => k in normalizedItem) || "Costo";
 
   const rawCosto = normalizedItem[costoKey];
   const costoValue = extractNumericValue(rawCosto);
@@ -49,7 +88,8 @@ const normalizeInventoryItem = (item: any) => {
   normalizedItem.Costo = costoValue;
 
   const cantidadKeys = ["Cantidad", "cantidad", "CANTIDAD"];
-  let cantidadKey = cantidadKeys.find((k) => k in normalizedItem) || "Cantidad";
+  const cantidadKey =
+    cantidadKeys.find((k) => k in normalizedItem) || "Cantidad";
 
   const rawCantidad = normalizedItem[cantidadKey];
   const cantidadValue = extractNumericValue(rawCantidad);
@@ -84,10 +124,10 @@ const normalizeInventoryItem = (item: any) => {
     configurable: true,
   });
 
-  return normalizedItem;
+  return normalizedItem as NormalizedInventoryItem;
 };
 
-const isPendingItem = (item: any): boolean => {
+const isPendingItem = (item: RawInventoryItem): boolean => {
   return item.status === "pending";
 };
 
@@ -146,8 +186,8 @@ export async function GET(request: NextRequest) {
     const listResponse = await s3Client.send(listCommand);
 
     const jsonFiles = (listResponse.Contents || [])
-      .filter((item) => item.Key && item.Key.endsWith(".json"))
-      .map((item) => item.Key!);
+      .filter((item: _Object) => item.Key && item.Key.endsWith(".json"))
+      .map((item: _Object) => item.Key!);
 
     if (jsonFiles.length === 0) {
       return NextResponse.json(
@@ -160,8 +200,8 @@ export async function GET(request: NextRequest) {
 
     const filesToProcess = debug ? jsonFiles.slice(0, 5) : jsonFiles;
 
-    const inventoryData = [];
-    const failedFiles = [];
+    const inventoryData: NormalizedInventoryItem[] = [];
+    const failedFiles: string[] = [];
     let pendingItemsSkipped = 0;
 
     for (const fileKey of filesToProcess) {
@@ -179,32 +219,34 @@ export async function GET(request: NextRequest) {
           fileContent = fixInvalidJSON(fileContent);
 
           try {
-            const jsonData = JSON.parse(fileContent);
+            const jsonData: unknown = JSON.parse(fileContent);
 
             if (Array.isArray(jsonData)) {
-              jsonData.forEach((item) => {
-                if (isPendingItem(item)) {
+              jsonData.forEach((item: unknown) => {
+                const typedItem = item as RawInventoryItem;
+                if (isPendingItem(typedItem)) {
                   pendingItemsSkipped++;
                   return;
                 }
 
-                const normalizedItem = normalizeInventoryItem(item);
+                const normalizedItem = normalizeInventoryItem(typedItem);
                 inventoryData.push(normalizedItem);
               });
             } else {
-              if (isPendingItem(jsonData)) {
+              const typedData = jsonData as RawInventoryItem;
+              if (isPendingItem(typedData)) {
                 pendingItemsSkipped++;
               } else {
-                const normalizedItem = normalizeInventoryItem(jsonData);
+                const normalizedItem = normalizeInventoryItem(typedData);
                 inventoryData.push(normalizedItem);
               }
             }
-          } catch (e) {
+          } catch {
             console.error(`Error al parsear JSON de ${fileKey}`);
             failedFiles.push(fileKey);
           }
         }
-      } catch (e) {
+      } catch {
         console.error(`Error al obtener archivo ${fileKey}`);
         failedFiles.push(fileKey);
       }

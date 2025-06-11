@@ -3,7 +3,6 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
 
-// Configurar cliente S3
 const s3Client = new S3Client({
   region: "us-west-2",
   credentials: {
@@ -12,13 +11,25 @@ const s3Client = new S3Client({
   },
 });
 
-// Configuración del bucket y ruta
 const BUCKET_NAME = "telas-luciana";
 const PACKING_LIST_PATH = "Inventario/Packing_Lists.xlsx/";
 
+interface StatusData {
+  uploadId: string;
+  fileName: string;
+  originalName: string;
+  status: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  fileSize: number;
+  processingStarted: string | null;
+  processingCompleted: string | null;
+  result: unknown | null;
+  error: string | null;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Aplicar rate limiting
     const rateLimitResult = await rateLimit(request, {
       type: "api",
       message:
@@ -29,13 +40,11 @@ export async function POST(request: NextRequest) {
       return rateLimitResult;
     }
 
-    // Verificar autenticación
     const session = await auth();
     if (!session || !session.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Verificar permisos de usuario (solo admin puede subir packing lists)
     const isAdmin =
       session.user.role === "admin" || session.user.role === "major_admin";
     if (!isAdmin) {
@@ -45,7 +54,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Obtener el archivo del FormData
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
@@ -56,10 +64,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar tipo de archivo
     const allowedTypes = [
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
-      "application/vnd.ms-excel", // .xls
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
     ];
 
     if (
@@ -76,8 +83,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar tamaño del archivo (máximo 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       return NextResponse.json(
         { error: "El archivo es demasiado grande. Tamaño máximo: 10MB" },
@@ -85,20 +91,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generar identificador único para el archivo
     const uploadId = crypto.randomUUID();
     const timestamp = new Date().getTime();
 
-    // Construir nombre del archivo con formato específico
     const now = new Date();
     const year = now.getFullYear();
     const month = (now.getMonth() + 1).toString().padStart(2, "0");
     const day = now.getDate().toString().padStart(2, "0");
 
-    // Formato: packing_lists_con_unidades_YYYY_MM_DD.xlsx
     const fileName = `packing_lists_con_unidades_${year}_${month}_${day}.xlsx`;
 
-    // Ruta completa en S3
     const s3Key = `${PACKING_LIST_PATH}${fileName}`;
 
     console.log("=== UPLOAD INFO ===");
@@ -110,11 +112,9 @@ export async function POST(request: NextRequest) {
     console.log("==================");
 
     try {
-      // Convertir el archivo a ArrayBuffer para subirlo a S3
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      // Subir archivo a S3
       const uploadCommand = new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: s3Key,
@@ -133,12 +133,11 @@ export async function POST(request: NextRequest) {
       await s3Client.send(uploadCommand);
       console.log("✅ Archivo Excel subido exitosamente");
 
-      // Crear registro de estado para el seguimiento del procesamiento
-      const statusData = {
+      const statusData: StatusData = {
         uploadId,
         fileName: s3Key,
         originalName: file.name,
-        status: "uploaded", // uploaded, processing, completed, failed
+        status: "uploaded",
         uploadedAt: new Date().toISOString(),
         uploadedBy: session.user.email || session.user.name || "",
         fileSize: file.size,
@@ -148,7 +147,6 @@ export async function POST(request: NextRequest) {
         error: null,
       };
 
-      // Guardar el estado en S3
       const statusKey = `${PACKING_LIST_PATH}status/${uploadId}.json`;
       const statusCommand = new PutObjectCommand({
         Bucket: BUCKET_NAME,
@@ -160,20 +158,19 @@ export async function POST(request: NextRequest) {
       await s3Client.send(statusCommand);
       console.log("✅ Status file guardado");
 
-      // Responder con éxito
       return NextResponse.json({
         success: true,
         message: "Archivo Packing List subido correctamente",
         uploadId,
         fileName: s3Key,
-        fileNameInS3: fileName, // Nombre limpio del archivo
+        fileNameInS3: fileName,
         originalName: file.name,
         fileSize: file.size,
         fileUrl: `https://${BUCKET_NAME}.s3.us-west-2.amazonaws.com/${s3Key}`,
         nextSteps:
           "El archivo será procesado automáticamente por Lambda en unos minutos",
       });
-    } catch (s3Error: any) {
+    } catch (s3Error: unknown) {
       console.error("Error subiendo archivo a S3:", s3Error);
       return NextResponse.json(
         {
@@ -196,7 +193,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Método GET para verificar el estado del endpoint
 export async function GET() {
   return NextResponse.json({
     message: "Endpoint para subir archivos Packing List",

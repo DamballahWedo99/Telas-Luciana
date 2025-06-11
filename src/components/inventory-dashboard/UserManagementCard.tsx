@@ -62,38 +62,34 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
   setOpenNewUser,
 }) => {
   const [userManagementCollapsed, setUserManagementCollapsed] = useState(true);
-  const [userSuccess, setUserSuccess] = useState<string | null>(null);
+  const [userSuccess] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const pendingActions = useRef<Record<string, boolean>>({});
 
-  // Función para ordenar usuarios por jerarquía
   const sortUsersByHierarchy = (users: User[]): User[] => {
-    // Definimos el orden de los roles
     const roleOrder: Record<string, number> = {
       major_admin: 1,
       admin: 2,
       seller: 3,
     };
 
-    // Ordenamos los usuarios según su rol
     return [...users].sort((a, b) => {
       return roleOrder[a.role] - roleOrder[b.role];
     });
   };
 
-  // Función para determinar el color de la insignia según el rol
   const getBadgeVariant = (
     role: string
   ): "default" | "outline" | "secondary" => {
     switch (role) {
       case "major_admin":
-        return "default"; // Color principal para administradores principales
+        return "default";
       case "admin":
-        return "secondary"; // Color secundario para administradores
+        return "secondary";
       default:
-        return "outline"; // Color de contorno para vendedores
+        return "outline";
     }
   };
 
@@ -109,8 +105,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
 
     pendingActions.current[userToDelete.id] = true;
     setUsers([...users]);
-
-    let deleteSuccessful = false;
 
     try {
       const response = await fetch(`/api/users/${userToDelete.id}`, {
@@ -149,7 +143,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
 
       toast.success(`Usuario eliminado correctamente`);
       setUsers(users.filter((user) => user.id !== userToDelete.id));
-      deleteSuccessful = true;
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -157,7 +150,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
         setTimeout(() => {
           pendingActions.current[userToDelete.id] = false;
 
-          // Cerrar el modal en cualquier caso (éxito o error)
           setConfirmDeleteOpen(false);
           setUserToDelete(null);
         }, 500);
@@ -165,7 +157,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
     }
   };
 
-  // Ordenamos los usuarios por jerarquía
   const sortedUsers = sortUsersByHierarchy(users);
 
   return (

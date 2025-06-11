@@ -31,7 +31,6 @@ interface OrdersMetricsCardProps {
 
 export const OrdersMetricsCard: React.FC<OrdersMetricsCardProps> = ({
   totals,
-  filteredDataLength,
   metricsCollapsed,
   setMetricsCollapsed,
 }) => {

@@ -30,6 +30,29 @@ interface PendingFabric {
   sourceFileKey?: string;
 }
 
+interface InventoryItem {
+  OC: string;
+  Tela: string;
+  Color: string;
+  Costo: number;
+  Cantidad: number;
+  Unidades: string;
+  Total: number;
+  Ubicacion: string;
+  Importacion: string;
+  FacturaDragonAzteca: string;
+}
+
+interface ProcessResponse {
+  success: boolean;
+  message: string;
+  inventoryItems: InventoryItem[];
+  updatedCount: number;
+  totalRequested: number;
+  uploadId: string;
+  errors?: string[];
+}
+
 const fixInvalidJSON = (content: string): string => {
   return content.replace(/: *NaN/g, ": null");
 };
@@ -60,7 +83,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { fabrics, fileName, uploadId } = (await request.json()) as {
+    const { fabrics, uploadId } = (await request.json()) as {
       fabrics: PendingFabric[];
       fileName: string;
       uploadId: string;
@@ -81,13 +104,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updatedItems: any[] = [];
+    const updatedItems: InventoryItem[] = [];
     const errors: string[] = [];
     let updatedCount = 0;
 
     for (const fabric of fabrics) {
       try {
-        let fileKey = fabric.sourceFileKey;
+        const fileKey = fabric.sourceFileKey;
 
         if (!fileKey) {
           errors.push(
@@ -152,7 +175,7 @@ export async function POST(request: NextRequest) {
           })
         );
 
-        const inventoryItem = {
+        const inventoryItem: InventoryItem = {
           OC: updatedItem.OC || "",
           Tela: updatedItem.Tela || "",
           Color: updatedItem.Color || "",
@@ -201,7 +224,7 @@ export async function POST(request: NextRequest) {
       `[COSTS] User ${session.user.email} updated costs for ${updatedCount} items`
     );
 
-    const response = {
+    const response: ProcessResponse = {
       success: true,
       message: `${updatedCount} telas actualizadas correctamente`,
       inventoryItems: updatedItems,
@@ -212,7 +235,7 @@ export async function POST(request: NextRequest) {
 
     if (errors.length > 0) {
       response.message += ` (${errors.length} errores)`;
-      (response as any).errors = errors;
+      response.errors = errors;
     }
 
     return NextResponse.json(response);

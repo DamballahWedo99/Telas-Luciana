@@ -20,6 +20,21 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
+const months = [
+  { value: "01", label: "Enero" },
+  { value: "02", label: "Febrero" },
+  { value: "03", label: "Marzo" },
+  { value: "04", label: "Abril" },
+  { value: "05", label: "Mayo" },
+  { value: "06", label: "Junio" },
+  { value: "07", label: "Julio" },
+  { value: "08", label: "Agosto" },
+  { value: "09", label: "Septiembre" },
+  { value: "10", label: "Octubre" },
+  { value: "11", label: "Noviembre" },
+  { value: "12", label: "Diciembre" },
+];
+
 interface InventoryHistoryDialogProps {
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -36,21 +51,6 @@ export const InventoryHistoryDialog: React.FC<InventoryHistoryDialogProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
-
-  const months = [
-    { value: "01", label: "Enero" },
-    { value: "02", label: "Febrero" },
-    { value: "03", label: "Marzo" },
-    { value: "04", label: "Abril" },
-    { value: "05", label: "Mayo" },
-    { value: "06", label: "Junio" },
-    { value: "07", label: "Julio" },
-    { value: "08", label: "Agosto" },
-    { value: "09", label: "Septiembre" },
-    { value: "10", label: "Octubre" },
-    { value: "11", label: "Noviembre" },
-    { value: "12", label: "Diciembre" },
-  ];
 
   useEffect(() => {
     const loadAvailableYears = async () => {

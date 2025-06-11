@@ -65,13 +65,120 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import {
-  parseNumericValue,
-  mapCsvFields,
-  normalizeCsvData,
-  formatNumber,
-} from "@/lib/utils";
-import { InventoryItem, UnitType, ParsedCSVData } from "../../../types/types";
+import { parseNumericValue, formatNumber } from "@/lib/utils";
+import { InventoryItem, UnitType } from "../../../types/types";
+
+interface RawInventoryItem {
+  OC?: string | null;
+  Tela?: string | null;
+  Color?: string | null;
+  Ubicacion?: string | null;
+  Cantidad?: number | string | null;
+  Costo?: number | string | null;
+  Unidades?: string | null;
+  Importacion?: string | null;
+  FacturaDragonAzteca?: string | null;
+  status?: string | null;
+  almacen?: string | null;
+  CDMX?: number | string | null;
+  MID?: number | string | null;
+  "Factura Dragón Azteca"?: string | null;
+  "Factura Dragon Azteca"?: string | null;
+  Importación?: string | null;
+}
+
+interface ApiSoldRoll {
+  roll_number: string;
+  fabric_type: string;
+  color: string;
+  lot: number;
+  oc: string;
+  almacen: string;
+  sold_quantity: number;
+  units: string;
+  costo: number;
+  sold_date: string;
+  sale_id: string;
+  available_for_return: boolean;
+  sale_type: string;
+}
+
+interface ReturnRollData {
+  roll_number: string;
+  fabric_type: string;
+  color: string;
+  lot: number;
+  oc: string;
+  almacen: string;
+  return_quantity: number;
+  units: string;
+  costo: number;
+  return_reason: string;
+  sale_id: string;
+  original_sold_date: string;
+}
+
+interface ZodError {
+  path: (string | number)[];
+  message: string;
+}
+
+interface SoldRollHistoryData {
+  roll_number: string;
+  fabric_type: string;
+  color: string;
+  lot: number;
+  oc: string;
+  almacen: string;
+  sold_quantity: number;
+  units: string;
+  costo: number;
+  sold_date: string;
+  sold_by: string;
+  available_for_return: boolean;
+  sale_type: string;
+}
+
+interface InventoryItemData {
+  OC: string;
+  Tela: string;
+  Color: string;
+  Ubicacion: string;
+  Cantidad: number;
+  Costo: number;
+  Unidades: string;
+  Total?: number;
+  Importacion?: string;
+  FacturaDragonAzteca?: string;
+  status?: string;
+}
+
+interface TransferUpdatePayload {
+  transferType: "consolidate" | "create";
+  oldItem: InventoryItemData;
+  existingMeridaItem?: InventoryItemData;
+  newItem?: InventoryItemData;
+  quantityToTransfer: number;
+  newMeridaQuantity?: number;
+}
+
+interface ProcessReturnResponse {
+  success: boolean;
+  summary: {
+    successful: number;
+    failed: number;
+  };
+  results: {
+    successful: ReturnResult[];
+  };
+  message?: string;
+}
+
+interface ReturnResult {
+  roll_number: string;
+  return_quantity: number;
+  success: boolean;
+}
 
 interface Roll {
   roll_number: number;
@@ -106,7 +213,6 @@ interface InventoryCardProps {
   setSuccess: React.Dispatch<React.SetStateAction<string>>;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openNewOrder: boolean;
-  setOpenNewOrder: React.Dispatch<React.SetStateAction<boolean>>;
   isAdmin: boolean;
   isLoading: boolean;
 }
@@ -131,17 +237,24 @@ interface FormData {
   FacturaDragonAzteca: string;
 }
 
-function processInventoryData(data: any[]): InventoryItem[] {
+function processInventoryData(data: unknown[]): InventoryItem[] {
   console.log(
     "🔄 [InventoryCard] Iniciando processInventoryData con",
     data.length,
     "elementos"
   );
 
-  const normalizeImportacion = (value: any): "DA" | "HOY" | "-" | "" => {
+  const safeParseNumeric = (
+    value: string | number | null | undefined
+  ): number => {
+    if (typeof value === "number") return value;
+    return parseNumericValue(value);
+  };
+
+  const normalizeImportacion = (value: unknown): "DA" | "HOY" | "-" | "" => {
     if (value === null || value === undefined) return "-";
 
-    const normalized = value.toString().toLowerCase().trim();
+    const normalized = String(value).toLowerCase().trim();
     if (normalized === "hoy") return "HOY";
     if (normalized === "da") return "DA";
     if (normalized === "nan" || normalized === "") return "-";
@@ -149,11 +262,12 @@ function processInventoryData(data: any[]): InventoryItem[] {
     return "";
   };
 
-  const filteredData = data.filter((item: any) => {
-    const isPending = item.status === "pending";
+  const filteredData = data.filter((item: unknown) => {
+    const typedItem = item as RawInventoryItem;
+    const isPending = typedItem.status === "pending";
     if (isPending) {
       console.log(
-        `⏭️ [InventoryCard] Saltando item pending: ${item.Tela} ${item.Color} (status: ${item.status})`
+        `⏭️ [InventoryCard] Saltando item pending: ${typedItem.Tela} ${typedItem.Color} (status: ${typedItem.status})`
       );
       return false;
     }
@@ -168,50 +282,61 @@ function processInventoryData(data: any[]): InventoryItem[] {
 
   const processedItems: InventoryItem[] = [];
 
-  filteredData.forEach((item: any, index: number) => {
+  filteredData.forEach((item: unknown, index: number) => {
+    const typedItem = item as RawInventoryItem;
+
     console.log(
       `\n--- [InventoryCard] Procesando item ${index + 1}/${
         filteredData.length
       } ---`
     );
-    console.log("Tela:", item.Tela, "Color:", item.Color);
+    console.log("Tela:", typedItem.Tela, "Color:", typedItem.Color);
     console.log("Datos raw:", {
-      OC: item.OC,
-      Ubicacion: item.Ubicacion,
-      almacen: item.almacen,
-      CDMX: item.CDMX,
-      MID: item.MID,
-      Cantidad: item.Cantidad,
-      status: item.status || "success",
+      OC: typedItem.OC,
+      Ubicacion: typedItem.Ubicacion,
+      almacen: typedItem.almacen,
+      CDMX: typedItem.CDMX,
+      MID: typedItem.MID,
+      Cantidad: typedItem.Cantidad,
+      status: typedItem.status || "success",
     });
 
-    const costo = parseNumericValue(item.Costo);
-    const cantidad = parseNumericValue(item.Cantidad);
+    const costo = safeParseNumeric(typedItem.Costo);
+    const cantidad = safeParseNumeric(typedItem.Cantidad);
 
     if (isNaN(costo)) {
-      console.warn("⚠️ [InventoryCard] Valor de costo inválido:", item.Costo);
+      console.warn(
+        "⚠️ [InventoryCard] Valor de costo inválido:",
+        typedItem.Costo
+      );
     }
     if (isNaN(cantidad)) {
       console.warn(
         "⚠️ [InventoryCard] Valor de cantidad inválido:",
-        item.Cantidad
+        typedItem.Cantidad
       );
     }
 
     let ubicacion = "";
     let cantidadFinal = cantidad;
 
-    if (item.almacen) {
-      ubicacion = item.almacen === "CDMX" ? "CDMX" : "Mérida";
+    if (typedItem.almacen) {
+      ubicacion = typedItem.almacen === "CDMX" ? "CDMX" : "Mérida";
       console.log(
         "✅ [InventoryCard] Usando columna 'almacen':",
-        item.almacen,
+        typedItem.almacen,
         "→",
         ubicacion
       );
-    } else if (item.CDMX !== undefined && item.MID !== undefined) {
-      const cantidadCDMX = parseNumericValue(item.CDMX);
-      const cantidadMID = parseNumericValue(item.MID);
+    } else if (typedItem.CDMX !== undefined && typedItem.MID !== undefined) {
+      const cantidadCDMX =
+        typeof typedItem.CDMX === "number"
+          ? typedItem.CDMX
+          : parseNumericValue(typedItem.CDMX);
+      const cantidadMID =
+        typeof typedItem.MID === "number"
+          ? typedItem.MID
+          : parseNumericValue(typedItem.MID);
 
       console.log(
         "📊 [InventoryCard] Cantidades - CDMX:",
@@ -224,44 +349,46 @@ function processInventoryData(data: any[]): InventoryItem[] {
         console.log("🔄 [InventoryCard] Creando dos entradas separadas");
 
         const cdmxItem = {
-          OC: item.OC || "",
-          Tela: item.Tela || "",
-          Color: item.Color || "",
+          OC: String(typedItem.OC || ""),
+          Tela: String(typedItem.Tela || ""),
+          Color: String(typedItem.Color || ""),
           Costo: costo,
           Cantidad: cantidadCDMX,
-          Unidades: (item.Unidades || "") as UnitType,
+          Unidades: (typedItem.Unidades || "") as UnitType,
           Total: costo * cantidadCDMX,
           Ubicacion: "CDMX",
           Importacion: normalizeImportacion(
-            item.Importacion || item.Importación || ""
+            typedItem.Importacion || typedItem["Importación"] || ""
           ),
-          FacturaDragonAzteca:
-            item["Factura Dragón Azteca"] ||
-            item["Factura Dragon Azteca"] ||
-            item.FacturaDragonAzteca ||
-            "",
+          FacturaDragonAzteca: String(
+            typedItem["Factura Dragón Azteca"] ||
+              typedItem["Factura Dragon Azteca"] ||
+              typedItem.FacturaDragonAzteca ||
+              ""
+          ),
         };
 
         console.log("✅ [InventoryCard] Item CDMX creado:", cdmxItem);
         processedItems.push(cdmxItem);
 
         const meridaItem = {
-          OC: item.OC || "",
-          Tela: item.Tela || "",
-          Color: item.Color || "",
+          OC: String(typedItem.OC || ""),
+          Tela: String(typedItem.Tela || ""),
+          Color: String(typedItem.Color || ""),
           Costo: costo,
           Cantidad: cantidadMID,
-          Unidades: (item.Unidades || "") as UnitType,
+          Unidades: (typedItem.Unidades || "") as UnitType,
           Total: costo * cantidadMID,
           Ubicacion: "Mérida",
           Importacion: normalizeImportacion(
-            item.Importacion || item.Importación || ""
+            typedItem.Importacion || typedItem["Importación"] || ""
           ),
-          FacturaDragonAzteca:
-            item["Factura Dragón Azteca"] ||
-            item["Factura Dragon Azteca"] ||
-            item.FacturaDragonAzteca ||
-            "",
+          FacturaDragonAzteca: String(
+            typedItem["Factura Dragón Azteca"] ||
+              typedItem["Factura Dragon Azteca"] ||
+              typedItem.FacturaDragonAzteca ||
+              ""
+          ),
         };
 
         console.log("✅ [InventoryCard] Item Mérida creado:", meridaItem);
@@ -283,17 +410,17 @@ function processInventoryData(data: any[]): InventoryItem[] {
           cantidadMID
         );
       } else {
-        ubicacion = item.Ubicacion || "";
+        ubicacion = String(typedItem.Ubicacion || "");
         console.log(
           "⚠️ [InventoryCard] No hay cantidad específica, usando ubicación original:",
           ubicacion
         );
       }
     } else {
-      ubicacion = item.Ubicacion || "";
+      ubicacion = String(typedItem.Ubicacion || "");
 
       if (!ubicacion) {
-        const oc = (item.OC || "").toLowerCase();
+        const oc = String(typedItem.OC || "").toLowerCase();
 
         if (
           oc.includes("ttl-04-25") ||
@@ -322,22 +449,23 @@ function processInventoryData(data: any[]): InventoryItem[] {
     }
 
     const finalItem = {
-      OC: item.OC || "",
-      Tela: item.Tela || "",
-      Color: item.Color || "",
+      OC: String(typedItem.OC || ""),
+      Tela: String(typedItem.Tela || ""),
+      Color: String(typedItem.Color || ""),
       Costo: costo,
       Cantidad: cantidadFinal,
-      Unidades: (item.Unidades || "") as UnitType,
+      Unidades: (typedItem.Unidades || "") as UnitType,
       Total: costo * cantidadFinal,
       Ubicacion: ubicacion,
       Importacion: normalizeImportacion(
-        item.Importacion || item.Importación || ""
+        typedItem.Importacion || typedItem["Importación"] || ""
       ),
-      FacturaDragonAzteca:
-        item["Factura Dragón Azteca"] ||
-        item["Factura Dragon Azteca"] ||
-        item.FacturaDragonAzteca ||
-        "",
+      FacturaDragonAzteca: String(
+        typedItem["Factura Dragón Azteca"] ||
+          typedItem["Factura Dragon Azteca"] ||
+          typedItem.FacturaDragonAzteca ||
+          ""
+      ),
     };
 
     console.log("✅ [InventoryCard] Item final creado:", {
@@ -357,7 +485,7 @@ function processInventoryData(data: any[]): InventoryItem[] {
   );
   console.log("📊 [InventoryCard] Resumen de ubicaciones:");
   const ubicacionCount = processedItems.reduce(
-    (acc: Record<string, number>, item: any) => {
+    (acc: Record<string, number>, item: InventoryItem) => {
       acc[item.Ubicacion || "Sin ubicación"] =
         (acc[item.Ubicacion || "Sin ubicación"] || 0) + 1;
       return acc;
@@ -395,7 +523,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   setColorFilter,
   ubicacionFilter,
   setUbicacionFilter,
-  setOpenNewOrder,
   isAdmin,
   isLoading,
 }) => {
@@ -440,13 +567,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [isEditingInProgress, setIsEditingInProgress] = useState(false);
   const [openReturnsDialog, setOpenReturnsDialog] = useState(false);
   const [isLoadingReturns, setIsLoadingReturns] = useState(false);
-  const [availableSoldRolls, setAvailableSoldRolls] = useState<any[]>([]);
+  const [availableSoldRolls, setAvailableSoldRolls] = useState<ApiSoldRoll[]>(
+    []
+  );
   const [selectedReturnRolls, setSelectedReturnRolls] = useState<number[]>([]);
   const [isProcessingReturns, setIsProcessingReturns] = useState(false);
-  const [groupedSoldRolls, setGroupedSoldRolls] = useState<
-    Record<string, any[]>
-  >({});
-  const [selectedOC, setSelectedOC] = useState<string | null>(null);
   const [isProcessingSell, setIsProcessingSell] = useState(false);
   const [selectedOCForReturns, setSelectedOCForReturns] = useState<string>("");
   const [selectedLotForReturns, setSelectedLotForReturns] =
@@ -456,7 +581,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     number[]
   >([]);
   const [groupedByOCAndLot, setGroupedByOCAndLot] = useState<
-    Record<string, Record<number, any[]>>
+    Record<string, Record<number, ApiSoldRoll[]>>
   >({});
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [isLoadingHistorical, setIsLoadingHistorical] = useState(false);
@@ -506,8 +631,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setOpenReturnsDialog(true);
     setIsLoadingReturns(true);
     setSelectedReturnRolls([]);
-    setGroupedSoldRolls({});
-    setSelectedOC(null);
     setSelectedOCForReturns("");
     setSelectedLotForReturns("");
     setAvailableOCs([]);
@@ -537,7 +660,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       console.log("📊 [RETURNS] Datos recibidos:", data.summary);
 
       const availableRolls = data.rolls.filter(
-        (roll: any) => roll.available_for_return
+        (roll: ApiSoldRoll) => roll.available_for_return
       );
 
       setAvailableSoldRolls(availableRolls);
@@ -548,10 +671,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return;
       }
 
-      const groupedByOCAndLot: Record<string, Record<number, any[]>> = {};
+      const groupedByOCAndLot: Record<
+        string,
+        Record<number, ApiSoldRoll[]>
+      > = {};
       const ocsSet = new Set<string>();
 
-      availableRolls.forEach((roll: any) => {
+      availableRolls.forEach((roll: ApiSoldRoll) => {
         const oc = roll.oc;
         const lot = roll.lot;
 
@@ -619,29 +745,34 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
   const validateField = (
     field: keyof NewRowFormValues,
-    value: any,
+    value: string | number,
     currentFormData: FormData,
     setFormErrors: React.Dispatch<
       React.SetStateAction<Partial<Record<keyof NewRowFormValues, string>>>
     >
   ) => {
     try {
-      const dataToValidate: any = { ...currentFormData };
-
       if (field === "Cantidad" || field === "Costo") {
-        const validationObject = {
-          ...currentFormData,
-          [field]: parseFloat(value as string) || 0,
-        };
-
-        newRowSchema
-          .pick({ [field]: true } as any)
-          .parse({ [field]: validationObject[field] });
-      } else {
-        dataToValidate[field] = value;
-        newRowSchema
-          .pick({ [field]: true } as any)
-          .parse({ [field]: dataToValidate[field] });
+        const numValue = parseFloat(value as string) || 0;
+        if (field === "Cantidad" && numValue <= 0) {
+          throw new Error("La cantidad debe ser mayor a 0");
+        }
+        if (field === "Costo" && numValue < 0) {
+          throw new Error("El costo no puede ser negativo");
+        }
+      } else if (
+        field === "OC" ||
+        field === "Tela" ||
+        field === "Color" ||
+        field === "Ubicacion"
+      ) {
+        if (typeof value === "string" && value.trim() === "") {
+          throw new Error("Este campo es requerido");
+        }
+      } else if (field === "Unidades") {
+        if (value !== "KGS" && value !== "MTS") {
+          throw new Error("Debe seleccionar KGS o MTS");
+        }
       }
 
       setFormErrors((prev) => {
@@ -650,13 +781,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return newErrors;
       });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        const fieldError = error.errors[0];
-        setFormErrors((prev) => ({
-          ...prev,
-          [field]: fieldError.message,
-        }));
-      }
+      setFormErrors((prev) => ({
+        ...prev,
+        [field]: error instanceof Error ? error.message : "Error de validación",
+      }));
     }
   };
 
@@ -695,12 +823,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setSelectedReturnRolls([]);
   };
 
-  const getFilteredRollsForReturns = () => {
+  const getFilteredRollsForReturns = (): ApiSoldRoll[] => {
     if (!selectedOCForReturns || !groupedByOCAndLot[selectedOCForReturns]) {
       return [];
     }
 
-    let rolls: any[] = [];
+    let rolls: ApiSoldRoll[] = [];
 
     if (selectedLotForReturns) {
       const lotNumber = parseInt(selectedLotForReturns);
@@ -713,14 +841,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       );
     }
 
-    return rolls.filter((roll: any) => roll.available_for_return);
+    return rolls.filter((roll: ApiSoldRoll) => roll.available_for_return);
   };
 
-  const calculateTotalReturnQuantityFiltered = () => {
+  const calculateTotalReturnQuantityFiltered = (): number => {
     const filteredRolls = getFilteredRollsForReturns();
     return filteredRolls
-      .filter((_: any, index: number) => selectedReturnRolls.includes(index))
-      .reduce((total: number, roll: any) => total + roll.sold_quantity, 0);
+      .filter((_: ApiSoldRoll, index: number) =>
+        selectedReturnRolls.includes(index)
+      )
+      .reduce(
+        (total: number, roll: ApiSoldRoll) => total + roll.sold_quantity,
+        0
+      );
   };
 
   const handleReturnRollSelectionFiltered = (rollIndex: number) => {
@@ -733,147 +866,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     });
   };
 
-  const handleProcessReturns = async () => {
-    if (selectedReturnRolls.length === 0) {
-      toast.error("Seleccione al menos un rollo para devolver");
-      return;
-    }
-
-    if (!selectedOC) {
-      toast.error("No se ha seleccionado una orden de compra válida");
-      return;
-    }
-
-    setIsProcessingReturns(true);
-
-    try {
-      console.log("🔄 [RETURNS] Iniciando procesamiento de devoluciones...");
-
-      const currentRolls = getCurrentOCRolls();
-      const rollsToReturn = selectedReturnRolls.map((index) => {
-        const roll = currentRolls[index];
-        return {
-          roll_number: roll.roll_number,
-          fabric_type: roll.fabric_type,
-          color: roll.color,
-          lot: roll.lot,
-          oc: roll.oc,
-          almacen: roll.almacen,
-          return_quantity: roll.sold_quantity,
-          units: roll.units,
-          costo: roll.costo || 0,
-          return_reason: "Devolución procesada desde interfaz",
-          sale_id: roll.sale_id,
-          original_sold_date: roll.sold_date,
-        };
-      });
-
-      console.log(
-        `📋 [RETURNS] Procesando devolución de ${rollsToReturn.length} rollos`
-      );
-
-      const response = await fetch("/api/returns/process-returns", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          rolls: rollsToReturn,
-          return_reason:
-            "Devolución procesada desde interfaz de administración",
-          notes: `Devolución de ${rollsToReturn.length} rollos de la OC ${selectedOC}`,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Error al procesar la devolución");
-      }
-
-      const result = await response.json();
-
-      console.log("✅ [RETURNS] Resultado del procesamiento:", result);
-
-      if (!result.success) {
-        throw new Error(result.message || "El procesamiento no fue exitoso");
-      }
-
-      if (result.summary.successful > 0) {
-        toast.success(
-          `✅ Devolución exitosa: ${result.summary.successful} rollos procesados`
-        );
-
-        if (result.results.successful.length > 0) {
-          const updatedInventory = [...inventory];
-
-          for (const returnedRoll of result.results.successful) {
-            const rollData = rollsToReturn.find(
-              (r) => r.roll_number === returnedRoll.roll_number
-            );
-            if (!rollData) continue;
-
-            const existingIndex = updatedInventory.findIndex(
-              (item) =>
-                item.OC === rollData.oc &&
-                item.Tela === rollData.fabric_type &&
-                item.Color === rollData.color &&
-                item.Ubicacion === rollData.almacen
-            );
-
-            if (existingIndex >= 0) {
-              updatedInventory[existingIndex].Cantidad +=
-                rollData.return_quantity;
-              updatedInventory[existingIndex].Total =
-                updatedInventory[existingIndex].Costo *
-                updatedInventory[existingIndex].Cantidad;
-            } else {
-              const newItem = {
-                OC: rollData.oc,
-                Tela: rollData.fabric_type,
-                Color: rollData.color,
-                Costo: rollData.costo,
-                Cantidad: rollData.return_quantity,
-                Unidades: rollData.units as UnitType,
-                Total: rollData.costo * rollData.return_quantity,
-                Ubicacion: rollData.almacen,
-                Importacion: "" as "DA" | "HOY",
-                FacturaDragonAzteca: "",
-              };
-              updatedInventory.push(newItem);
-            }
-          }
-
-          setInventory(updatedInventory);
-          console.log("🔄 [RETURNS] Inventario local actualizado");
-        }
-
-        if (result.summary.failed > 0) {
-          toast.warning(
-            `⚠️ ${result.summary.failed} rollos no pudieron ser procesados completamente`
-          );
-        }
-      } else {
-        toast.error(
-          `❌ No se pudieron procesar las devoluciones: ${result.message}`
-        );
-      }
-
-      if (result.summary.successful > 0) {
-        setOpenReturnsDialog(false);
-      }
-    } catch (error) {
-      console.error("❌ [RETURNS] Error procesando devoluciones:", error);
-      toast.error(
-        `Error al procesar devoluciones: ${
-          error instanceof Error ? error.message : "Error desconocido"
-        }`
-      );
-    } finally {
-      setIsProcessingReturns(false);
-    }
-  };
-
-  const handleProcessReturnsWithData = async (rollsToReturn: any[]) => {
+  const handleProcessReturnsWithData = async (
+    rollsToReturn: ReturnRollData[]
+  ) => {
     if (rollsToReturn.length === 0) {
       toast.error("Seleccione al menos un rollo para devolver");
       return;
@@ -906,7 +901,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         throw new Error(errorData.error || "Error al procesar la devolución");
       }
 
-      const result = await response.json();
+      const result: ProcessReturnResponse = await response.json();
 
       if (!result.success) {
         throw new Error(result.message || "El procesamiento no fue exitoso");
@@ -920,14 +915,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         if (result.results.successful.length > 0) {
           const updatedInventory = [...inventory];
 
-          for (const returnedRoll of result.results.successful) {
+          for (const returnedRoll of result.results
+            .successful as ReturnResult[]) {
             const rollData = rollsToReturn.find(
-              (r) => r.roll_number === returnedRoll.roll_number
+              (r: ReturnRollData) => r.roll_number === returnedRoll.roll_number
             );
             if (!rollData) continue;
 
             const existingIndex = updatedInventory.findIndex(
-              (item) =>
+              (item: InventoryItem) =>
                 item.OC === rollData.oc &&
                 item.Tela === rollData.fabric_type &&
                 item.Color === rollData.color &&
@@ -984,32 +980,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     } finally {
       setIsProcessingReturns(false);
     }
-  };
-
-  const getCurrentOCRolls = () => {
-    if (!selectedOC || !groupedSoldRolls[selectedOC]) {
-      return [];
-    }
-    return groupedSoldRolls[selectedOC].filter(
-      (roll: any) => roll.available_for_return
-    );
-  };
-
-  const calculateTotalReturnQuantity = () => {
-    const currentRolls = getCurrentOCRolls();
-    return currentRolls
-      .filter((_: any, index: number) => selectedReturnRolls.includes(index))
-      .reduce((total: number, roll: any) => total + roll.sold_quantity, 0);
-  };
-
-  const handleReturnRollSelection = (rollIndex: number) => {
-    setSelectedReturnRolls((prev) => {
-      if (prev.includes(rollIndex)) {
-        return prev.filter((i) => i !== rollIndex);
-      } else {
-        return [...prev, rollIndex];
-      }
-    });
   };
 
   const handleOpenEditDialog = (index: number) => {
@@ -1246,7 +1216,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       if (error instanceof z.ZodError) {
         const newErrors: Partial<Record<keyof NewRowFormValues, string>> = {};
 
-        error.errors.forEach((err: any) => {
+        error.errors.forEach((err: ZodError) => {
           const field = err.path[0] as keyof NewRowFormValues;
           newErrors[field] = err.message;
         });
@@ -1709,13 +1679,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         try {
           console.log("💾 [SELL] Guardando venta en historial...");
 
-          let soldRollsData: any[] = [];
+          let soldRollsData: SoldRollHistoryData[] = [];
 
           if (sellMode === "rolls" && selectedRolls.length > 0) {
             soldRollsData = selectedRolls.map((rollIndex) => {
               const roll = availableRolls[rollIndex];
               return {
-                roll_number: roll.roll_number,
+                roll_number: roll.roll_number.toString(),
                 fabric_type: item.Tela,
                 color: item.Color,
                 lot: selectedLot!,
@@ -1953,7 +1923,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           : null,
       });
 
-      let updatePayload: any;
+      let updatePayload: TransferUpdatePayload;
 
       if (existingMeridaItem) {
         console.log("✅ CONSOLIDANDO CON ITEM EXISTENTE EN MÉRIDA");
@@ -2035,8 +2005,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           );
         }
       } else {
-        updatedInventory.push(updatePayload.newItem);
-        console.log("➕ ESTADO LOCAL: Nuevo item agregado en Mérida");
+        if (updatePayload.newItem) {
+          updatedInventory.push(updatePayload.newItem as InventoryItem);
+          console.log("➕ ESTADO LOCAL: Nuevo item agregado en Mérida");
+        }
       }
 
       setInventory(updatedInventory);
@@ -2159,7 +2131,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 throw new Error(
                   `Los siguientes rollos no están en CDMX: ${packingListResponseData.rollsNotInCDMX
                     .map(
-                      (r: any) => `#${r.roll_number} (${r.current_location})`
+                      (r: { roll_number: string; current_location: string }) =>
+                        `#${r.roll_number} (${r.current_location})`
                     )
                     .join(", ")}`
                 );
@@ -4866,21 +4839,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                           <SelectValue placeholder="Seleccione una OC" />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableOCs.map((oc) => {
-                            const totalRollsInOC = Object.values(
-                              groupedByOCAndLot[oc] || {}
-                            )
-                              .flat()
-                              .filter(
-                                (roll: any) => roll.available_for_return
-                              ).length;
-
-                            return (
-                              <SelectItem key={oc} value={oc}>
-                                {oc} ({totalRollsInOC} rollos)
-                              </SelectItem>
-                            );
-                          })}
+                          {availableOCs.map((oc) => (
+                            <SelectItem key={oc} value={oc}>
+                              {oc}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -4897,12 +4860,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Todos los lotes</SelectItem>
-                          {availableLotsForReturns.map((lot) => {
+                          {availableLotsForReturns.map((lot: number) => {
                             const rollsInLot =
                               groupedByOCAndLot[selectedOCForReturns]?.[
                                 lot
                               ]?.filter(
-                                (roll: any) => roll.available_for_return
+                                (roll: ApiSoldRoll) => roll.available_for_return
                               )?.length || 0;
 
                             return (
@@ -5170,23 +5133,24 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               <Button
                 onClick={() => {
                   const currentRolls = getFilteredRollsForReturns();
-                  const rollsToReturn = selectedReturnRolls.map((index) => {
-                    const roll = currentRolls[index];
-                    return {
-                      roll_number: roll.roll_number,
-                      fabric_type: roll.fabric_type,
-                      color: roll.color,
-                      lot: roll.lot,
-                      oc: roll.oc,
-                      almacen: roll.almacen,
-                      return_quantity: roll.sold_quantity,
-                      units: roll.units,
-                      costo: roll.costo || 0,
-                      return_reason: "Devolución procesada desde interfaz",
-                      sale_id: roll.sale_id,
-                      original_sold_date: roll.sold_date,
-                    };
-                  });
+                  const rollsToReturn: ReturnRollData[] =
+                    selectedReturnRolls.map((index: number) => {
+                      const roll = currentRolls[index];
+                      return {
+                        roll_number: roll.roll_number,
+                        fabric_type: roll.fabric_type,
+                        color: roll.color,
+                        lot: roll.lot,
+                        oc: roll.oc,
+                        almacen: roll.almacen,
+                        return_quantity: roll.sold_quantity,
+                        units: roll.units,
+                        costo: roll.costo || 0,
+                        return_reason: "Devolución procesada desde interfaz",
+                        sale_id: roll.sale_id,
+                        original_sold_date: roll.sold_date,
+                      };
+                    });
 
                   handleProcessReturnsWithData(rollsToReturn);
                 }}

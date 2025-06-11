@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   ListObjectsV2Command,
+  _Object,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -38,6 +39,72 @@ interface ReturnRequest {
   rolls: ReturnRoll[];
   return_reason: string;
   notes?: string;
+}
+
+interface InventoryItem {
+  OC: string;
+  Tela: string;
+  Color: string;
+  Costo: number;
+  Cantidad: number;
+  Unidades: string;
+  Total: number;
+  Ubicacion: string;
+  Importacion: string;
+  FacturaDragonAzteca: string;
+  status?: string;
+  lastModified?: string;
+  almacen?: string;
+  created_from?: string;
+}
+
+interface PackingListEntry {
+  fabric_type: string;
+  color: string;
+  lot: number;
+  rolls: PackingListRoll[];
+}
+
+interface PackingListRoll {
+  roll_number: number | string;
+  almacen: string;
+  kg?: number;
+  mts?: number;
+}
+
+interface SalesRecord {
+  rolls?: SoldRoll[];
+  [key: string]: unknown;
+}
+
+interface SoldRoll {
+  roll_number: number | string;
+  oc: string;
+  fabric_type: string;
+  color: string;
+  available_for_return?: boolean;
+  returned_date?: string;
+  return_reason?: string;
+}
+
+interface ProcessResult {
+  roll_number: number | string;
+  fabric_type?: string;
+  color?: string;
+  return_quantity?: number;
+  units?: string;
+  inventory_updated?: boolean;
+  packing_list_updated?: boolean;
+  sale_type?: string;
+  error?: string;
+}
+
+interface Results {
+  successful: ProcessResult[];
+  failed: ProcessResult[];
+  inventoryUpdates: number;
+  packingListUpdates: number;
+  historyUpdates: number;
 }
 
 function isManualSale(rollNumber: number | string): boolean {
@@ -93,12 +160,12 @@ async function findInventoryFile(
         let fileContent = await fileResponse.Body.transformToString();
         fileContent = fileContent.replace(/: *NaN/g, ": null");
 
-        let jsonData = JSON.parse(fileContent);
+        let jsonData: InventoryItem[] = JSON.parse(fileContent);
         if (!Array.isArray(jsonData)) {
-          jsonData = [jsonData];
+          jsonData = [jsonData as InventoryItem];
         }
 
-        const foundItem = jsonData.find((item: any) => {
+        const foundItem = jsonData.find((item: InventoryItem) => {
           const matchOC = item.OC?.toLowerCase() === oc.toLowerCase();
           const matchTela = item.Tela?.toLowerCase() === tela.toLowerCase();
           const matchColor = item.Color?.toLowerCase() === color.toLowerCase();
@@ -111,7 +178,7 @@ async function findInventoryFile(
         if (foundItem) {
           return fileKey;
         }
-      } catch (fileError) {
+      } catch {
         continue;
       }
     }
@@ -134,19 +201,19 @@ async function findInventoryFile(
         let fileContent = await fileResponse.Body.transformToString();
         fileContent = fileContent.replace(/: *NaN/g, ": null");
 
-        let jsonData = JSON.parse(fileContent);
+        let jsonData: InventoryItem[] = JSON.parse(fileContent);
         if (!Array.isArray(jsonData)) {
-          jsonData = [jsonData];
+          jsonData = [jsonData as InventoryItem];
         }
 
-        const foundItem = jsonData.find((item: any) => {
+        const foundItem = jsonData.find((item: InventoryItem) => {
           return item.OC?.toLowerCase() === oc.toLowerCase();
         });
 
         if (foundItem) {
           return fileKey;
         }
-      } catch (fileError) {
+      } catch {
         continue;
       }
     }
@@ -195,11 +262,11 @@ async function findPackingListFile(
         const bodyString = await response.Body?.transformToString();
         if (!bodyString) continue;
 
-        const data = JSON.parse(bodyString);
+        const data: PackingListEntry[] = JSON.parse(bodyString);
         if (!Array.isArray(data)) continue;
 
         const foundEntry = data.find(
-          (entry: any) =>
+          (entry: PackingListEntry) =>
             entry.fabric_type?.toLowerCase() === tela.toLowerCase() &&
             entry.color?.toLowerCase() === color.toLowerCase() &&
             entry.lot === lot
@@ -208,7 +275,7 @@ async function findPackingListFile(
         if (foundEntry) {
           return fileKey;
         }
-      } catch (fileError) {
+      } catch {
         continue;
       }
     }
@@ -236,9 +303,9 @@ async function updateInventory(
     let fileContent = await fileResponse.Body.transformToString();
     fileContent = fileContent.replace(/: *NaN/g, ": null");
 
-    let jsonData = JSON.parse(fileContent);
+    let jsonData: InventoryItem[] = JSON.parse(fileContent);
     if (!Array.isArray(jsonData)) {
-      jsonData = [jsonData];
+      jsonData = [jsonData as InventoryItem];
     }
 
     let itemFound = false;
@@ -258,11 +325,11 @@ async function updateInventory(
           roll.almacen.toLowerCase().trim();
 
       if (matchOC && matchTela && matchColor && matchUbicacion) {
-        const currentQuantity = parseFloat(item.Cantidad) || 0;
+        const currentQuantity = parseFloat(String(item.Cantidad)) || 0;
         const newQuantity = currentQuantity + roll.return_quantity;
 
         jsonData[i].Cantidad = newQuantity;
-        jsonData[i].Total = (parseFloat(item.Costo) || 0) * newQuantity;
+        jsonData[i].Total = (parseFloat(String(item.Costo)) || 0) * newQuantity;
 
         itemFound = true;
         break;
@@ -270,7 +337,7 @@ async function updateInventory(
     }
 
     if (!itemFound) {
-      const newItem = {
+      const newItem: InventoryItem = {
         OC: roll.oc,
         Tela: roll.fabric_type,
         Color: roll.color,
@@ -310,8 +377,7 @@ async function updateInventory(
 
 async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
   try {
-    const now = new Date();
-    const year = now.getFullYear().toString();
+    const year = new Date().getFullYear().toString();
     const monthNames = [
       "Enero",
       "Febrero",
@@ -326,7 +392,7 @@ async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
       "Noviembre",
       "Diciembre",
     ];
-    const monthName = monthNames[now.getMonth()];
+    const monthName = monthNames[new Date().getMonth()];
 
     const fileName = `inventario_${roll.oc.replace(
       /[^a-zA-Z0-9]/g,
@@ -334,7 +400,7 @@ async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
     )}_${Date.now()}.json`;
     const fileKey = `Inventario/${year}/${monthName}/${fileName}`;
 
-    const newItem = {
+    const newItem: InventoryItem = {
       OC: roll.oc,
       Tela: roll.fabric_type,
       Color: roll.color,
@@ -384,7 +450,7 @@ async function updatePackingList(
     const bodyString = await response.Body?.transformToString();
     if (!bodyString) return false;
 
-    const data = JSON.parse(bodyString);
+    const data: PackingListEntry[] = JSON.parse(bodyString);
     if (!Array.isArray(data)) return false;
 
     let entryFound = false;
@@ -396,26 +462,42 @@ async function updatePackingList(
         entry.lot === roll.lot
       ) {
         const existingRollIndex = entry.rolls?.findIndex(
-          (r: any) => r.roll_number === roll.roll_number
+          (r: PackingListRoll) => r.roll_number === roll.roll_number
         );
 
         if (existingRollIndex >= 0) {
-          entry.rolls[existingRollIndex] = {
+          const updatedRoll: PackingListRoll = {
             roll_number: roll.roll_number,
             almacen: roll.almacen,
-            [roll.units.toLowerCase() === "kgs" ? "kg" : "mts"]:
-              roll.return_quantity,
           };
+
+          if (roll.units.toLowerCase() === "kgs") {
+            updatedRoll.kg = roll.return_quantity;
+          } else {
+            updatedRoll.mts = roll.return_quantity;
+          }
+
+          entry.rolls[existingRollIndex] = updatedRoll;
         } else {
           if (!entry.rolls) entry.rolls = [];
-          entry.rolls.push({
+
+          const newRoll: PackingListRoll = {
             roll_number: roll.roll_number,
             almacen: roll.almacen,
-            [roll.units.toLowerCase() === "kgs" ? "kg" : "mts"]:
-              roll.return_quantity,
-          });
+          };
 
-          entry.rolls.sort((a: any, b: any) => a.roll_number - b.roll_number);
+          if (roll.units.toLowerCase() === "kgs") {
+            newRoll.kg = roll.return_quantity;
+          } else {
+            newRoll.mts = roll.return_quantity;
+          }
+
+          entry.rolls.push(newRoll);
+
+          entry.rolls.sort(
+            (a: PackingListRoll, b: PackingListRoll) =>
+              Number(a.roll_number) - Number(b.roll_number)
+          );
         }
 
         entryFound = true;
@@ -444,7 +526,6 @@ async function markRollsAsReturned(
   returnedRolls: ReturnRoll[]
 ): Promise<boolean> {
   try {
-    const now = new Date();
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - 90);
 
@@ -461,7 +542,7 @@ async function markRollsAsReturned(
     }
 
     const salesFiles = listResponse.Contents.filter(
-      (item) =>
+      (item: _Object) =>
         item.Key &&
         item.Key.endsWith(".json") &&
         item.LastModified &&
@@ -479,7 +560,7 @@ async function markRollsAsReturned(
         const bodyString = await response.Body?.transformToString();
         if (!bodyString) continue;
 
-        const salesData = JSON.parse(bodyString);
+        const salesData: SalesRecord = JSON.parse(bodyString);
         let fileModified = false;
 
         if (salesData.rolls && Array.isArray(salesData.rolls)) {
@@ -511,7 +592,7 @@ async function markRollsAsReturned(
 
           await s3Client.send(putCommand);
         }
-      } catch (fileError) {
+      } catch {
         continue;
       }
     }
@@ -623,9 +704,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results = {
-      successful: [] as any[],
-      failed: [] as any[],
+    const results: Results = {
+      successful: [],
+      failed: [],
       inventoryUpdates: 0,
       packingListUpdates: 0,
       historyUpdates: 0,
@@ -638,7 +719,7 @@ export async function POST(request: NextRequest) {
         let packingListUpdated = false;
 
         if (isManual) {
-          let inventoryFile = await findInventoryFile(
+          const inventoryFile = await findInventoryFile(
             roll.oc,
             roll.fabric_type,
             roll.color,

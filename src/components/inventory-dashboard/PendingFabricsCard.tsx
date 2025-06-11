@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 
 import {
@@ -28,7 +28,6 @@ import {
   ClockIcon,
   RefreshCwIcon,
   DollarSignIcon,
-  EyeIcon,
   Loader2Icon,
   AlertCircleIcon,
   CheckCircleIcon,
@@ -43,7 +42,7 @@ interface PendingFabric {
   unidades: string;
   oc?: string;
   costo: number | null;
-  fileName?: string; // Para rastrear de qué archivo vino
+  fileName?: string;
 }
 
 interface PendingFile {
@@ -59,8 +58,8 @@ interface GroupedByOC {
   oc: string;
   fabrics: PendingFabric[];
   totalFabrics: number;
-  fileNames: string[]; // Archivos que contribuyen a esta OC
-  processedAt: string; // Fecha más reciente
+  fileNames: string[];
+  processedAt: string;
 }
 
 interface PendingFabricsCardProps {
@@ -72,7 +71,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   setInventory,
   isAdmin,
 }) => {
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [groupedByOC, setGroupedByOC] = useState<GroupedByOC[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -90,7 +88,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     }).format(num);
   };
 
-  // Función para agrupar archivos por OC
   const groupFilesByOC = (files: PendingFile[]): GroupedByOC[] => {
     const grouped: Record<string, GroupedByOC> = {};
 
@@ -108,7 +105,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
           };
         }
 
-        // Agregar fileName al fabric para rastrear origen
         const fabricWithFile = {
           ...fabric,
           fileName: file.fileName,
@@ -117,12 +113,10 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         grouped[oc].fabrics.push(fabricWithFile);
         grouped[oc].totalFabrics++;
 
-        // Agregar nombre de archivo si no está ya
         if (!grouped[oc].fileNames.includes(file.fileName)) {
           grouped[oc].fileNames.push(file.fileName);
         }
 
-        // Usar la fecha más reciente
         if (new Date(file.processedAt) > new Date(grouped[oc].processedAt)) {
           grouped[oc].processedAt = file.processedAt;
         }
@@ -132,8 +126,7 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     return Object.values(grouped).sort((a, b) => a.oc.localeCompare(b.oc));
   };
 
-  // 🔍 Función principal para verificar archivos pending
-  const checkPendingFiles = async () => {
+  const checkPendingFiles = useCallback(async () => {
     if (!isAdmin) return;
 
     console.log("🔍 [PendingFabricsCard] Verificando archivos pending...");
@@ -149,9 +142,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       const data = await response.json();
       console.log("📊 [PendingFabricsCard] Respuesta recibida:", data);
 
-      setPendingFiles(data.pendingFiles || []);
-
-      // Agrupar por OC
       const grouped = groupFilesByOC(data.pendingFiles || []);
       setGroupedByOC(grouped);
 
@@ -173,9 +163,127 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isAdmin]);
 
-  // 🎯 TRIGGER 1: Al montar el componente (carga inicial)
+  const pollForPendingFiles = useCallback(
+    async (
+      fileName: string,
+      maxAttempts: number = 3,
+      delayMs: number = 5000
+    ) => {
+      console.log(
+        `🔄 [PendingFabricsCard] Iniciando polling para ${fileName} (${maxAttempts} intentos, delay ${delayMs}ms)`
+      );
+
+      let attempt = 1;
+
+      const poll = async (): Promise<void> => {
+        try {
+          console.log(
+            `📡 [PendingFabricsCard] Intento ${attempt}/${maxAttempts} - Verificando archivos pending...`
+          );
+
+          if (attempt === 1) {
+            toast.info(
+              `🔄 Procesando ${fileName}... (Intento ${attempt}/${maxAttempts})`,
+              {
+                duration: delayMs - 500,
+              }
+            );
+          } else {
+            toast.info(
+              `🔄 Reintentando... (Intento ${attempt}/${maxAttempts})`,
+              {
+                duration: delayMs - 500,
+              }
+            );
+          }
+
+          const response = await fetch("/api/packing-list/check-pending");
+
+          if (!response.ok) {
+            throw new Error("Error al verificar archivos pending");
+          }
+
+          const data = await response.json();
+          console.log(
+            `📊 [PendingFabricsCard] Intento ${attempt} - Respuesta:`,
+            {
+              hasPendingFiles: data.hasPendingFiles,
+              totalPendingFiles: data.totalPendingFiles,
+              totalPendingFabrics: data.totalPendingFabrics,
+            }
+          );
+
+          if (data.hasPendingFiles && data.totalPendingFabrics > 0) {
+            console.log(
+              `✅ [PendingFabricsCard] ¡Éxito en intento ${attempt}! Archivos pending encontrados`
+            );
+
+            const grouped = groupFilesByOC(data.pendingFiles || []);
+            setGroupedByOC(grouped);
+            setLastCheck(new Date());
+
+            toast.success(
+              `✅ ${fileName} procesado exitosamente - ${data.totalPendingFabrics} telas encontradas`,
+              {
+                duration: 5000,
+              }
+            );
+
+            return;
+          }
+
+          if (attempt >= maxAttempts) {
+            console.error(
+              `❌ [PendingFabricsCard] Polling fallido después de ${maxAttempts} intentos`
+            );
+
+            toast.error(`❌ Error procesando ${fileName}`, {
+              description: `Lambda no procesó el archivo después de ${maxAttempts} intentos. Intenta subir el archivo nuevamente.`,
+              duration: 10000,
+            });
+
+            return;
+          }
+
+          attempt++;
+          console.log(
+            `⏳ [PendingFabricsCard] Esperando ${delayMs}ms antes del próximo intento...`
+          );
+
+          setTimeout(() => {
+            poll();
+          }, delayMs);
+        } catch (error) {
+          console.error(
+            `❌ [PendingFabricsCard] Error en intento ${attempt}:`,
+            error
+          );
+
+          if (attempt >= maxAttempts) {
+            toast.error(
+              `❌ Error verificando archivos pending para ${fileName}`,
+              {
+                description: `Falló después de ${maxAttempts} intentos. Verifica la conexión o intenta de nuevo.`,
+                duration: 10000,
+              }
+            );
+            return;
+          }
+
+          attempt++;
+          setTimeout(() => {
+            poll();
+          }, delayMs);
+        }
+      };
+
+      await poll();
+    },
+    []
+  );
+
   useEffect(() => {
     console.log(
       "🔧 [PendingFabricsCard] TRIGGER 1: Carga inicial del Dashboard"
@@ -185,18 +293,17 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     console.log(
       "✅ [PendingFabricsCard] Verificación automática DESACTIVADA para evitar archivos vacíos"
     );
-  }, [isAdmin]);
+  }, [isAdmin, checkPendingFiles]);
 
-  // 🎯 TRIGGER 4: Escuchar eventos de packing list subidos
   useEffect(() => {
-    const handlePackingListEvent = async (event: any) => {
+    const handlePackingListEvent = async (event: Event) => {
       console.log(
         "🔧 [PendingFabricsCard] TRIGGER 4: Detectado packing list subido"
       );
 
-      const fileName = event.detail?.fileName || "archivo desconocido";
+      const customEvent = event as CustomEvent<{ fileName?: string }>;
+      const fileName = customEvent.detail?.fileName || "archivo desconocido";
 
-      // Sistema de polling para esperar a que Lambda procese
       await pollForPendingFiles(fileName);
     };
 
@@ -208,129 +315,8 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         handlePackingListEvent
       );
     };
-  }, []);
+  }, [pollForPendingFiles]);
 
-  // 🔄 Sistema de polling para verificar archivos pending
-  const pollForPendingFiles = async (
-    fileName: string,
-    maxAttempts: number = 3,
-    delayMs: number = 5000
-  ) => {
-    console.log(
-      `🔄 [PendingFabricsCard] Iniciando polling para ${fileName} (${maxAttempts} intentos, delay ${delayMs}ms)`
-    );
-
-    let attempt = 1;
-    let lastPendingCount = 0;
-
-    const poll = async (): Promise<void> => {
-      try {
-        console.log(
-          `📡 [PendingFabricsCard] Intento ${attempt}/${maxAttempts} - Verificando archivos pending...`
-        );
-
-        // Mostrar toast de progreso en el primer intento
-        if (attempt === 1) {
-          toast.info(
-            `🔄 Procesando ${fileName}... (Intento ${attempt}/${maxAttempts})`,
-            {
-              duration: delayMs - 500,
-            }
-          );
-        } else {
-          toast.info(`🔄 Reintentando... (Intento ${attempt}/${maxAttempts})`, {
-            duration: delayMs - 500,
-          });
-        }
-
-        const response = await fetch("/api/packing-list/check-pending");
-
-        if (!response.ok) {
-          throw new Error("Error al verificar archivos pending");
-        }
-
-        const data = await response.json();
-        console.log(`📊 [PendingFabricsCard] Intento ${attempt} - Respuesta:`, {
-          hasPendingFiles: data.hasPendingFiles,
-          totalPendingFiles: data.totalPendingFiles,
-          totalPendingFabrics: data.totalPendingFabrics,
-        });
-
-        // Si encontramos archivos pending, actualizar y terminar
-        if (data.hasPendingFiles && data.totalPendingFabrics > 0) {
-          console.log(
-            `✅ [PendingFabricsCard] ¡Éxito en intento ${attempt}! Archivos pending encontrados`
-          );
-
-          setPendingFiles(data.pendingFiles || []);
-          const grouped = groupFilesByOC(data.pendingFiles || []);
-          setGroupedByOC(grouped);
-          setLastCheck(new Date());
-
-          toast.success(
-            `✅ ${fileName} procesado exitosamente - ${data.totalPendingFabrics} telas encontradas`,
-            {
-              duration: 5000,
-            }
-          );
-
-          return; // Terminar el polling exitosamente
-        }
-
-        // Si no hay archivos pending y es el último intento, fallar
-        if (attempt >= maxAttempts) {
-          console.error(
-            `❌ [PendingFabricsCard] Polling fallido después de ${maxAttempts} intentos`
-          );
-
-          toast.error(`❌ Error procesando ${fileName}`, {
-            description: `Lambda no procesó el archivo después de ${maxAttempts} intentos. Intenta subir el archivo nuevamente.`,
-            duration: 10000,
-          });
-
-          return; // Terminar el polling con error
-        }
-
-        // Si no es el último intento, continuar
-        attempt++;
-        console.log(
-          `⏳ [PendingFabricsCard] Esperando ${delayMs}ms antes del próximo intento...`
-        );
-
-        setTimeout(() => {
-          poll(); // Recursivamente intentar de nuevo
-        }, delayMs);
-      } catch (error) {
-        console.error(
-          `❌ [PendingFabricsCard] Error en intento ${attempt}:`,
-          error
-        );
-
-        // Si es el último intento, mostrar error final
-        if (attempt >= maxAttempts) {
-          toast.error(
-            `❌ Error verificando archivos pending para ${fileName}`,
-            {
-              description: `Falló después de ${maxAttempts} intentos. Verifica la conexión o intenta de nuevo.`,
-              duration: 10000,
-            }
-          );
-          return;
-        }
-
-        // Si no es el último intento, continuar
-        attempt++;
-        setTimeout(() => {
-          poll();
-        }, delayMs);
-      }
-    };
-
-    // Iniciar el polling
-    await poll();
-  };
-
-  // 🎯 TRIGGER 2: Botón manual de actualización
   const handleManualRefresh = () => {
     console.log(
       "🔧 [PendingFabricsCard] TRIGGER 2: Actualización manual por admin"
@@ -338,7 +324,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     checkPendingFiles();
   };
 
-  // Formatear fecha
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleString("es-MX", {
@@ -353,7 +338,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     }
   };
 
-  // Abrir modal para asignar costos
   const handleAssignCosts = (ocGroup: GroupedByOC) => {
     console.log(
       "💰 [PendingFabricsCard] Abriendo modal para asignar costos a OC:",
@@ -364,7 +348,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     setShowCostsDialog(true);
   };
 
-  // Manejar cambio de costo para una tela específica
   const handleCostChange = (fabricId: string, cost: string) => {
     const costValue = cost.trim() === "" ? null : parseFloat(cost);
 
@@ -375,7 +358,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     );
   };
 
-  // Validar que todas las telas tengan costos
   const validateCosts = (): boolean => {
     const missingCosts = fabricsWithCosts.some(
       (fabric) => fabric.costo === null
@@ -387,7 +369,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     return true;
   };
 
-  // 🎯 TRIGGER 3: Guardar costos y verificar post-proceso
   const handleSaveCosts = async () => {
     if (!validateCosts() || !selectedOCGroup) return;
 
@@ -398,15 +379,13 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     setIsProcessing(true);
 
     try {
-      // Preparar datos para enviar - mapear fileName a sourceFileKey
       const fabricsToSave = fabricsWithCosts.map((fabric) => ({
         ...fabric,
-        sourceFileKey: fabric.fileName, // API espera sourceFileKey
+        sourceFileKey: fabric.fileName,
         sourceFile:
-          fabric.fileName?.split("/").pop()?.replace(".json", "") || "", // Nombre legible del archivo
+          fabric.fileName?.split("/").pop()?.replace(".json", "") || "",
       }));
 
-      // Generar uploadId limpio y corto
       const uploadId = `${selectedOCGroup.oc}-${Date.now()}`;
 
       console.log("📤 [PendingFabricsCard] Enviando datos:", {
@@ -417,7 +396,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         firstFabric: fabricsToSave[0],
       });
 
-      // Enviar las telas con costos para guardar en el inventario
       const response = await fetch("/api/packing-list/save-costs", {
         method: "POST",
         headers: {
@@ -425,9 +403,8 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         },
         body: JSON.stringify({
           fabrics: fabricsToSave,
-          fileName: selectedOCGroup.fileNames[0], // API espera fileName (usar el primero)
-          uploadId: uploadId, // API espera uploadId
-          // Datos adicionales para debugging
+          fileName: selectedOCGroup.fileNames[0],
+          uploadId: uploadId,
           ocGroup: selectedOCGroup.oc,
           fileNames: selectedOCGroup.fileNames,
         }),
@@ -444,13 +421,11 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         result
       );
 
-      // Actualizar el inventario local con los nuevos ítems
       setInventory((prevInventory) => [
         ...prevInventory,
         ...result.inventoryItems,
       ]);
 
-      // Cerrar modal y limpiar estado
       setShowCostsDialog(false);
       setSelectedOCGroup(null);
 
@@ -458,12 +433,11 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         `${result.inventoryItems.length} telas de OC ${selectedOCGroup.oc} agregadas al inventario`
       );
 
-      // 🎯 TRIGGER 3: Verificar si quedan archivos pending después de procesar
       console.log(
         "🔧 [PendingFabricsCard] TRIGGER 3: Verificación post-guardado de costos"
       );
       setTimeout(() => {
-        checkPendingFiles(); // Pequeño delay para asegurar que S3 esté actualizado
+        checkPendingFiles();
       }, 1000);
     } catch (error) {
       console.error("❌ [PendingFabricsCard] Error al guardar costos:", error);
@@ -473,12 +447,10 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     }
   };
 
-  // No mostrar el componente si no es admin
   if (!isAdmin) {
     return null;
   }
 
-  // No mostrar si no hay archivos pending
   if (groupedByOC.length === 0) {
     return null;
   }

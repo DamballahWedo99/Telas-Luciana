@@ -1,9 +1,18 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+interface CsvRow {
+  [key: string]: string | number | null | undefined;
+}
+
+interface NormalizedRow {
+  [key: string]: string | undefined;
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
 export function parseNumericValue(value: string | null | undefined): number {
   if (value === null || value === undefined || value === "") {
     return 0;
@@ -116,17 +125,20 @@ export function mapCsvFields(fields: string[]): Record<string, string> {
   return fieldMap;
 }
 
-/**
- */
 export function normalizeCsvData(
-  data: any[],
+  data: CsvRow[],
   fieldMap: Record<string, string>
-): any[] {
+): NormalizedRow[] {
   return data.map((row) => {
-    const normalizedRow: any = {};
+    const normalizedRow: NormalizedRow = {};
 
     for (const [standardField, csvField] of Object.entries(fieldMap)) {
-      normalizedRow[standardField] = row[csvField];
+      const value = row[csvField];
+      if (value === null || value === undefined) {
+        normalizedRow[standardField] = undefined;
+      } else {
+        normalizedRow[standardField] = String(value);
+      }
     }
 
     return normalizedRow;

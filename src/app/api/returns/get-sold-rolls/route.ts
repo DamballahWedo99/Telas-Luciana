@@ -35,7 +35,6 @@ interface SoldRoll {
 
 async function getSoldRollsFiles(daysBack: number = 30): Promise<string[]> {
   try {
-    const now = new Date();
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 

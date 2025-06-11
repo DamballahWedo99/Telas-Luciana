@@ -27,7 +27,6 @@ import { loginSchema, LoginFormValues } from "@/lib/zod";
 export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const {
@@ -43,7 +42,6 @@ export default function LoginForm() {
   const onSubmit = async (values: LoginFormValues) => {
     try {
       setIsLoading(true);
-      setError(null);
 
       const result = await loginAction(values);
 

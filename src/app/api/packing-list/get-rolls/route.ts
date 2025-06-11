@@ -3,6 +3,7 @@ import {
   S3Client,
   GetObjectCommand,
   ListObjectsV2Command,
+  _Object,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -15,9 +16,24 @@ const s3Client = new S3Client({
   },
 });
 
+interface Roll {
+  roll_number: number;
+  meters?: number;
+  weight?: number;
+  [key: string]: unknown;
+}
+
+interface PackingListEntry {
+  fabric_type: string;
+  color: string;
+  lot: string;
+  rolls: Roll[];
+  [key: string]: unknown;
+}
+
 async function getAllPackingListFiles(): Promise<string[]> {
   try {
-    let allFiles: any[] = [];
+    let allFiles: _Object[] = [];
     let continuationToken: string | undefined;
 
     do {
@@ -54,7 +70,9 @@ async function getAllPackingListFiles(): Promise<string[]> {
   }
 }
 
-async function readPackingListFile(fileKey: string): Promise<any[]> {
+async function readPackingListFile(
+  fileKey: string
+): Promise<PackingListEntry[]> {
   try {
     const command = new GetObjectCommand({
       Bucket: "telas-luciana",
@@ -107,59 +125,62 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let allData: any[] = [];
+    let allData: PackingListEntry[] = [];
 
     for (const fileKey of allFiles) {
       const fileData = await readPackingListFile(fileKey);
       allData = allData.concat(fileData);
     }
 
-    const filteredData = allData.filter((entry: any) => {
+    const filteredData = allData.filter((entry: PackingListEntry) => {
       const matchesFabric =
         entry.fabric_type?.toLowerCase() === tela.toLowerCase();
       const matchesColor = entry.color?.toLowerCase() === color.toLowerCase();
       return matchesFabric && matchesColor;
     });
 
-    const consolidatedData = filteredData.reduce((acc: any[], current: any) => {
-      const existingIndex = acc.findIndex(
-        (item) =>
-          item.fabric_type === current.fabric_type &&
-          item.color === current.color &&
-          item.lot === current.lot
-      );
-
-      if (existingIndex >= 0) {
-        const existingEntry = acc[existingIndex];
-        const rollsMap = new Map();
-
-        (existingEntry.rolls || []).forEach((roll: any) => {
-          rollsMap.set(roll.roll_number, roll);
-        });
-
-        (current.rolls || []).forEach((roll: any) => {
-          rollsMap.set(roll.roll_number, roll);
-        });
-
-        acc[existingIndex].rolls = Array.from(rollsMap.values()).sort(
-          (a, b) => a.roll_number - b.roll_number
+    const consolidatedData = filteredData.reduce(
+      (acc: PackingListEntry[], current: PackingListEntry) => {
+        const existingIndex = acc.findIndex(
+          (item) =>
+            item.fabric_type === current.fabric_type &&
+            item.color === current.color &&
+            item.lot === current.lot
         );
-      } else {
-        const rollsMap = new Map();
-        (current.rolls || []).forEach((roll: any) => {
-          rollsMap.set(roll.roll_number, roll);
-        });
 
-        acc.push({
-          ...current,
-          rolls: Array.from(rollsMap.values()).sort(
+        if (existingIndex >= 0) {
+          const existingEntry = acc[existingIndex];
+          const rollsMap = new Map();
+
+          (existingEntry.rolls || []).forEach((roll: Roll) => {
+            rollsMap.set(roll.roll_number, roll);
+          });
+
+          (current.rolls || []).forEach((roll: Roll) => {
+            rollsMap.set(roll.roll_number, roll);
+          });
+
+          acc[existingIndex].rolls = Array.from(rollsMap.values()).sort(
             (a, b) => a.roll_number - b.roll_number
-          ),
-        });
-      }
+          );
+        } else {
+          const rollsMap = new Map();
+          (current.rolls || []).forEach((roll: Roll) => {
+            rollsMap.set(roll.roll_number, roll);
+          });
 
-      return acc;
-    }, []);
+          acc.push({
+            ...current,
+            rolls: Array.from(rollsMap.values()).sort(
+              (a, b) => a.roll_number - b.roll_number
+            ),
+          });
+        }
+
+        return acc;
+      },
+      []
+    );
 
     return NextResponse.json(consolidatedData);
   } catch (error) {

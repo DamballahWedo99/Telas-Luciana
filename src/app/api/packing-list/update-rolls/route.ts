@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   ListObjectsV2Command,
+  _Object,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -16,9 +17,37 @@ const s3Client = new S3Client({
   },
 });
 
+interface Roll {
+  roll_number: number;
+  almacen?: string;
+  meters?: number;
+  weight?: number;
+  [key: string]: unknown;
+}
+
+interface PackingListEntry {
+  fabric_type: string;
+  color: string;
+  lot: number;
+  rolls: Roll[];
+  [key: string]: unknown;
+}
+
+interface FileWithRolls {
+  fileKey: string;
+  data: PackingListEntry[];
+}
+
+interface UpdateRollsRequest {
+  tela: string;
+  color: string;
+  lot: number;
+  soldRolls: number[];
+}
+
 async function getAllPackingListFiles(): Promise<string[]> {
   try {
-    let allFiles: any[] = [];
+    let allFiles: _Object[] = [];
     let continuationToken: string | undefined;
 
     do {
@@ -55,7 +84,9 @@ async function getAllPackingListFiles(): Promise<string[]> {
   }
 }
 
-async function readPackingListFile(fileKey: string): Promise<any[] | null> {
+async function readPackingListFile(
+  fileKey: string
+): Promise<PackingListEntry[] | null> {
   try {
     const command = new GetObjectCommand({
       Bucket: "telas-luciana",
@@ -78,21 +109,21 @@ async function findRollInFiles(
   lot: string,
   rollNumbers: number[],
   files: string[]
-): Promise<{ fileKey: string; data: any[] } | null> {
+): Promise<FileWithRolls | null> {
   for (const fileKey of files) {
     const data = await readPackingListFile(fileKey);
     if (!data) continue;
 
     const foundEntry = data.find(
-      (entry: any) =>
+      (entry: PackingListEntry) =>
         entry.fabric_type?.toLowerCase() === tela.toLowerCase() &&
         entry.color?.toLowerCase() === color.toLowerCase() &&
-        entry.lot === lot
+        entry.lot === parseInt(lot)
     );
 
     if (foundEntry && foundEntry.rolls) {
       const availableRollNumbers = foundEntry.rolls.map(
-        (roll: any) => roll.roll_number
+        (roll: Roll) => roll.roll_number
       );
       const rollsFoundInThisFile = rollNumbers.filter((rollNum: number) =>
         availableRollNumbers.includes(rollNum)
@@ -133,7 +164,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = (await request.json()) as UpdateRollsRequest;
     const { tela, color, lot, soldRolls } = body;
 
     if (!tela || !color || !lot || !soldRolls || soldRolls.length === 0) {
@@ -144,7 +175,7 @@ export async function POST(request: NextRequest) {
     }
 
     const invalidRolls = soldRolls.filter(
-      (roll: any) => typeof roll !== "number"
+      (roll: number) => typeof roll !== "number"
     );
     if (invalidRolls.length > 0) {
       return NextResponse.json(
@@ -165,7 +196,7 @@ export async function POST(request: NextRequest) {
     const fileWithRolls = await findRollInFiles(
       tela,
       color,
-      lot,
+      lot.toString(),
       soldRolls,
       allFiles
     );
@@ -181,7 +212,7 @@ export async function POST(request: NextRequest) {
 
     const { fileKey, data: packingListData } = fileWithRolls;
 
-    const updatedData = packingListData.map((entry: any) => {
+    const updatedData = packingListData.map((entry: PackingListEntry) => {
       if (
         entry.fabric_type?.toLowerCase() === tela.toLowerCase() &&
         entry.color?.toLowerCase() === color.toLowerCase() &&
@@ -189,7 +220,7 @@ export async function POST(request: NextRequest) {
       ) {
         entry.rolls =
           entry.rolls?.filter(
-            (roll: any) => !soldRolls.includes(roll.roll_number)
+            (roll: Roll) => !soldRolls.includes(roll.roll_number)
           ) || [];
       }
       return entry;
@@ -204,7 +235,7 @@ export async function POST(request: NextRequest) {
 
     if (updatedEntry) {
       const remainingRollNumbers =
-        updatedEntry.rolls?.map((r: any) => r.roll_number) || [];
+        updatedEntry.rolls?.map((r: Roll) => r.roll_number) || [];
       const soldRollsStillPresent = soldRolls.filter((rollNum: number) =>
         remainingRollNumbers.includes(rollNum)
       );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -9,10 +9,6 @@ import {
   FilterIcon,
   SearchIcon,
   XCircleIcon,
-  BarChart3Icon,
-  BoxIcon,
-  Filter,
-  AlertCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,12 +29,6 @@ import {
   CardDescription,
   CardFooter,
 } from "@/components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 import { formatNumber } from "@/lib/utils";
 import { InventoryItem, FilterOptions, UnitType } from "../../../types/types";
@@ -49,20 +39,13 @@ interface LockScreenProps {
   isAdmin: boolean;
 }
 
-const LockScreen: React.FC<LockScreenProps> = ({
-  inventory,
-  filters: initialFilters,
-  isAdmin,
-}) => {
-  // Estado local para los filtros
+const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [unitFilter, setUnitFilter] = useState<UnitType | "all">("all");
   const [ocFilter, setOcFilter] = useState<string>("all");
   const [telaFilter, setTelaFilter] = useState<string>("all");
   const [colorFilter, setColorFilter] = useState<string>("all");
   const [ubicacionFilter, setUbicacionFilter] = useState<string>("all");
-
-  // Cambiar estas líneas en los useMemo:
 
   const uniqueOCs = useMemo(
     () =>
@@ -96,7 +79,6 @@ const LockScreen: React.FC<LockScreenProps> = ({
     [inventory]
   );
 
-  // Función para resetear todos los filtros
   const resetAllFilters = () => {
     setSearchTerm("");
     setUnitFilter("all");
@@ -106,7 +88,6 @@ const LockScreen: React.FC<LockScreenProps> = ({
     setUbicacionFilter("all");
   };
 
-  // Verificar si hay algún filtro activo
   const isFilterActive = useMemo(() => {
     return (
       searchTerm !== "" ||
@@ -125,7 +106,6 @@ const LockScreen: React.FC<LockScreenProps> = ({
     ubicacionFilter,
   ]);
 
-  // Inventario filtrado basado en los filtros aplicados
   const filteredInventory = useMemo(
     () =>
       inventory.filter((item) => {
@@ -172,7 +152,6 @@ const LockScreen: React.FC<LockScreenProps> = ({
     ]
   );
 
-  // Calcular totales del inventario filtrado
   const totalCantidad = useMemo(() => {
     return filteredInventory.reduce((total, item) => total + item.Cantidad, 0);
   }, [filteredInventory]);
@@ -181,7 +160,6 @@ const LockScreen: React.FC<LockScreenProps> = ({
     return filteredInventory.reduce((total, item) => total + item.Total, 0);
   }, [filteredInventory]);
 
-  // Función para exportar a PDF
   const handleExportPDF = () => {
     try {
       const doc = new jsPDF({
@@ -288,7 +266,6 @@ const LockScreen: React.FC<LockScreenProps> = ({
         },
       });
 
-      // Si hay filtros activos, mostrarlos en el PDF
       if (isFilterActive) {
         let yPos = 180;
         doc.setFontSize(10);

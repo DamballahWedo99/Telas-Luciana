@@ -152,9 +152,7 @@ export default function DashboardPage() {
 
         {currentView === "inventory" && <Dashboard />}
 
-        {currentView === "orders" && (
-          <PedidosDashboard onBack={handleBackFromPedidosDashboard} />
-        )}
+        {currentView === "orders" && <PedidosDashboard />}
       </div>
     </div>
   );

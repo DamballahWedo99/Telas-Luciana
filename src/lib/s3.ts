@@ -4,7 +4,19 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 
-// CORREGIDO: Usar variables de entorno del servidor, no NEXT_PUBLIC_
+interface InventarioItem {
+  OC?: string;
+  Tela?: string;
+  Color?: string;
+  Costo?: number;
+  Cantidad?: number;
+  Unidades?: string;
+  Total?: number;
+  Ubicacion?: string;
+  Importacion?: string;
+  FacturaDragonAzteca?: string;
+}
+
 const s3Client = new S3Client({
   region: "us-west-2",
   credentials: {
@@ -36,7 +48,6 @@ export async function getFileFromS3(
   }
 }
 
-// Nueva función para listar objetos en un prefijo de S3
 export async function listFilesFromS3(
   bucket: string,
   prefix: string
@@ -62,11 +73,10 @@ export async function listFilesFromS3(
   }
 }
 
-// CORREGIDO: Función simplificada para obtener inventario directamente como JSON
 export async function getInventarioJson(
   year?: string,
   month?: string
-): Promise<any[]> {
+): Promise<InventarioItem[]> {
   try {
     let url = "/api/s3/inventario";
     const params = new URLSearchParams();
@@ -79,7 +89,6 @@ export async function getInventarioJson(
       params.append("month", month);
     }
 
-    // Indicar que queremos formato JSON
     params.append("format", "json");
 
     const queryString = params.toString();
@@ -102,7 +111,6 @@ export async function getInventarioJson(
   }
 }
 
-// MANTENER: Para compatibilidad con código existente que espera CSV
 export async function getInventarioCsv(
   year?: string,
   month?: string
@@ -110,11 +118,10 @@ export async function getInventarioCsv(
   try {
     const data = await getInventarioJson(year, month);
 
-    // Convertir JSON a CSV para mantener compatibilidad
     const csvHeader =
       "OC,Tela,Color,Costo,Cantidad,Unidades,Total,Ubicacion,Importacion,FacturaDragonAzteca\n";
     const csvRows = data
-      .map((item: any) => {
+      .map((item: InventarioItem) => {
         return `${item.OC || ""},${item.Tela || ""},${item.Color || ""},${
           item.Costo || 0
         },${item.Cantidad || 0},${item.Unidades || ""},${item.Total || 0},${

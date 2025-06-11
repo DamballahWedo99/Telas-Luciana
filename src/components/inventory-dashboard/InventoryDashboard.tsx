@@ -5,16 +5,10 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import { XCircleIcon, Plus, Loader2, HistoryIcon } from "lucide-react";
+import { XCircleIcon, Plus, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -69,11 +63,6 @@ function useIsMobile() {
 
   return isMobile;
 }
-
-const toastsShown = {
-  loading: false,
-  success: false,
-};
 
 interface NewRowDialogProps {
   open: boolean;
@@ -261,8 +250,8 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
             Agregar Nueva Row de Inventario
           </DialogTitle>
           <DialogDescription>
-            Crea una nueva entrada de inventario con status "success". Todos los
-            campos marcados con * son obligatorios.
+            Crea una nueva entrada de inventario con status &quot;success&quot;.
+            Todos los campos marcados con * son obligatorios.
           </DialogDescription>
         </DialogHeader>
 
@@ -438,14 +427,28 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
   );
 };
 
-function processInventoryData(data: any[]): InventoryItem[] {
+function processInventoryData(
+  data: Record<string, unknown>[]
+): InventoryItem[] {
   const processedItems: InventoryItem[] = [];
 
-  data.forEach((item: any) => {
-    const costo = parseNumericValue(item.Costo);
-    const cantidad = parseNumericValue(item.Cantidad);
+  data.forEach((item: Record<string, unknown>) => {
+    const safeStringValue = (value: unknown): string => {
+      if (value === null || value === undefined) return "";
+      if (typeof value === "string") return value;
+      return String(value);
+    };
 
-    const normalizeImportacion = (value: any): "DA" | "HOY" | "-" | "" => {
+    const safeNumericValue = (value: unknown): string | null => {
+      if (value === null || value === undefined) return null;
+      if (typeof value === "string") return value;
+      return String(value);
+    };
+
+    const costo = parseNumericValue(safeNumericValue(item.Costo));
+    const cantidad = parseNumericValue(safeNumericValue(item.Cantidad));
+
+    const normalizeImportacion = (value: unknown): "DA" | "HOY" | "-" | "" => {
       if (value === null || value === undefined) return "-";
 
       const normalized = value.toString().toLowerCase().trim();
@@ -462,22 +465,23 @@ function processInventoryData(data: any[]): InventoryItem[] {
     if (item.almacen) {
       ubicacion = item.almacen === "CDMX" ? "CDMX" : "Mérida";
     } else if (item.CDMX !== undefined && item.MID !== undefined) {
-      const cantidadCDMX = parseNumericValue(item.CDMX);
-      const cantidadMID = parseNumericValue(item.MID);
+      const cantidadCDMX = parseNumericValue(safeNumericValue(item.CDMX));
+      const cantidadMID = parseNumericValue(safeNumericValue(item.MID));
 
       if (cantidadCDMX > 0 && cantidadMID > 0) {
         const baseItem = {
-          OC: item.OC || "",
-          Tela: item.Tela || "",
-          Color: item.Color || "",
+          OC: safeStringValue(item.OC),
+          Tela: safeStringValue(item.Tela),
+          Color: safeStringValue(item.Color),
           Costo: costo,
           Unidades: (item.Unidades || "").toString().toUpperCase() as UnitType,
           Importacion: normalizeImportacion(item.Importación || ""),
-          FacturaDragonAzteca:
+          FacturaDragonAzteca: safeStringValue(
             item["Factura Dragón Azteca"] ||
-            item["Factura Dragon Azteca"] ||
-            item.FacturaDragonAzteca ||
-            "",
+              item["Factura Dragon Azteca"] ||
+              item.FacturaDragonAzteca ||
+              ""
+          ),
         };
 
         processedItems.push({
@@ -502,13 +506,13 @@ function processInventoryData(data: any[]): InventoryItem[] {
         ubicacion = "Mérida";
         cantidadFinal = cantidadMID;
       } else {
-        ubicacion = item.Ubicacion || "";
+        ubicacion = safeStringValue(item.Ubicacion);
       }
     } else {
-      ubicacion = item.Ubicacion || "";
+      ubicacion = safeStringValue(item.Ubicacion);
 
       if (!ubicacion) {
-        const oc = (item.OC || "").toLowerCase();
+        const oc = safeStringValue(item.OC).toLowerCase();
 
         if (
           oc.includes("ttl-04-25") ||
@@ -525,20 +529,21 @@ function processInventoryData(data: any[]): InventoryItem[] {
     }
 
     const finalItem = {
-      OC: item.OC || "",
-      Tela: item.Tela || "",
-      Color: item.Color || "",
+      OC: safeStringValue(item.OC),
+      Tela: safeStringValue(item.Tela),
+      Color: safeStringValue(item.Color),
       Costo: costo,
       Cantidad: cantidadFinal,
       Unidades: (item.Unidades || "").toString().toUpperCase() as UnitType,
       Total: costo * cantidadFinal,
       Ubicacion: ubicacion,
       Importacion: normalizeImportacion(item.Importación || ""),
-      FacturaDragonAzteca:
+      FacturaDragonAzteca: safeStringValue(
         item["Factura Dragón Azteca"] ||
-        item["Factura Dragon Azteca"] ||
-        item.FacturaDragonAzteca ||
-        "",
+          item["Factura Dragon Azteca"] ||
+          item.FacturaDragonAzteca ||
+          ""
+      ),
     };
 
     processedItems.push(finalItem);
@@ -558,10 +563,8 @@ const Dashboard = () => {
   const [colorFilter, setColorFilter] = useState<string>("all");
   const [ubicacionFilter, setUbicacionFilter] = useState<string>("all");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [openNewOrder, setOpenNewOrder] = useState(false);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [openNewRow, setOpenNewRow] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
 
@@ -572,6 +575,13 @@ const Dashboard = () => {
   const inventoryLoadedRef = useRef(false);
 
   const { data: session } = useSession();
+
+  const setSuccess = (message: string | ((prev: string) => string)) => {
+    const messageText = typeof message === "function" ? message("") : message;
+    if (messageText) {
+      toast.success(messageText);
+    }
+  };
 
   const isAdmin =
     session?.user?.role === "admin" || session?.user?.role === "major_admin";
@@ -604,21 +614,6 @@ const Dashboard = () => {
     const month = months.find((m) => m.value === monthNumber);
     return month ? month.label : "";
   }
-
-  const showToastOnce = (type: "loading" | "success", message: string) => {
-    if (!toastsShown[type]) {
-      if (type === "loading") {
-        toast.info(message);
-      } else {
-        toast.success(message);
-      }
-      toastsShown[type] = true;
-
-      setTimeout(() => {
-        toastsShown[type] = false;
-      }, 10000);
-    }
-  };
 
   const handleNewRowSuccess = () => {
     console.log(
@@ -700,10 +695,6 @@ const Dashboard = () => {
           "🏁 [RELOAD-INVENTORY] === PROCESO DE RECARGA COMPLETADO ==="
         );
       });
-  };
-
-  const handleViewHistory = () => {
-    setOpenHistoryDialog(true);
   };
 
   useEffect(() => {
@@ -788,7 +779,6 @@ const Dashboard = () => {
       toast.success(
         `Inventario de ${getMonthName(month)} ${year} cargado exitosamente`
       );
-      setShowHistory(true);
     } catch (error) {
       console.error("Error loading historical inventory:", error);
       toast.error(
@@ -852,7 +842,7 @@ const Dashboard = () => {
         try {
           const fieldMap = mapCsvFields(results.meta.fields || []);
 
-          let dataToProcess = results.data;
+          let dataToProcess: Record<string, unknown>[] = results.data;
           if (
             Object.keys(fieldMap).length > 0 &&
             Object.keys(fieldMap).length !== results.meta.fields?.length
@@ -943,7 +933,6 @@ const Dashboard = () => {
         setSuccess={setSuccess}
         handleFileUpload={handleFileUpload}
         openNewOrder={openNewOrder}
-        setOpenNewOrder={setOpenNewOrder}
         isAdmin={isAdmin}
         isLoading={isLoadingInventory}
       />
@@ -964,7 +953,6 @@ const Dashboard = () => {
       <NewOrderDialog
         open={openNewOrder}
         setOpen={setOpenNewOrder}
-        inventory={inventory}
         setInventory={setInventory}
         setSuccess={setSuccess}
       />
@@ -1001,3 +989,5 @@ const Dashboard = () => {
 export default Dashboard;
 
 export { processInventoryData };
+
+export {};

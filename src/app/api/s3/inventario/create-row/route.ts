@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   ListObjectsV2Command,
   DeleteObjectCommand,
+  _Object,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -30,19 +31,49 @@ interface InventoryItem {
   FacturaDragonAzteca?: string;
   status: string;
   lastModified: string;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+interface RawInventoryItem {
+  OC?: unknown;
+  Tela?: unknown;
+  Color?: unknown;
+  Ubicacion?: unknown;
+  Cantidad?: unknown;
+  Costo?: unknown;
+  Total?: unknown;
+  Unidades?: unknown;
+  Importacion?: unknown;
+  FacturaDragonAzteca?: unknown;
+  status?: unknown;
+  lastModified?: unknown;
+  [key: string]: unknown;
 }
 
 interface TransferPayload {
   transferType: "consolidate" | "create";
-  oldItem: any;
-  existingMeridaItem?: any;
-  newItem?: any;
+  oldItem: RawInventoryItem;
+  existingMeridaItem?: RawInventoryItem;
+  newItem?: RawInventoryItem;
   quantityToTransfer: number;
   newMeridaQuantity?: number;
 }
 
-const isLambdaSafeItem = (item: any): boolean => {
+interface UpdateRequest {
+  oldItem: RawInventoryItem;
+  newItem?: RawInventoryItem;
+  isEdit?: boolean;
+  quantityChange?: number;
+}
+
+interface FileSearchResult {
+  found: boolean;
+  itemIndex?: number;
+  normalizedData?: InventoryItem[];
+  originalData?: unknown[];
+}
+
+const isLambdaSafeItem = (item: InventoryItem): boolean => {
   return !!(
     item.OC &&
     String(item.OC).trim() !== "" &&
@@ -62,7 +93,7 @@ const isLambdaSafeItem = (item: any): boolean => {
   );
 };
 
-const safeNormalize = (value: any, defaultValue: string = ""): string => {
+const safeNormalize = (value: unknown, defaultValue: string = ""): string => {
   if (
     value === null ||
     value === undefined ||
@@ -84,7 +115,7 @@ const safeNormalize = (value: any, defaultValue: string = ""): string => {
   return str;
 };
 
-const safeNumber = (value: any, defaultValue: number = 0): number => {
+const safeNumber = (value: unknown, defaultValue: number = 0): number => {
   if (
     value === null ||
     value === undefined ||
@@ -98,7 +129,7 @@ const safeNumber = (value: any, defaultValue: number = 0): number => {
   return isNaN(num) ? defaultValue : num;
 };
 
-const normalizeItem = (rawItem: any): InventoryItem | null => {
+const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
   try {
     if (!rawItem || typeof rawItem !== "object") {
       return null;
@@ -146,13 +177,8 @@ const normalizeItem = (rawItem: any): InventoryItem | null => {
 
 const findItemInFile = async (
   fileKey: string,
-  targetItem: any
-): Promise<{
-  found: boolean;
-  itemIndex?: number;
-  normalizedData?: InventoryItem[];
-  originalData?: any[];
-}> => {
+  targetItem: RawInventoryItem
+): Promise<FileSearchResult> => {
   try {
     const getCommand = new GetObjectCommand({
       Bucket: "telas-luciana",
@@ -169,7 +195,7 @@ const findItemInFile = async (
       return { found: false };
     }
 
-    let rawData;
+    let rawData: unknown;
     try {
       rawData = JSON.parse(content);
     } catch (parseError) {
@@ -177,12 +203,15 @@ const findItemInFile = async (
       return { found: false };
     }
 
+    let dataArray: unknown[];
     if (!Array.isArray(rawData)) {
-      rawData = [rawData];
+      dataArray = [rawData];
+    } else {
+      dataArray = rawData;
     }
 
-    const normalizedData = rawData
-      .map((item) => normalizeItem(item))
+    const normalizedData = dataArray
+      .map((item) => normalizeItem(item as RawInventoryItem))
       .filter((item) => item !== null) as InventoryItem[];
 
     const targetOC = safeNormalize(targetItem.OC).toLowerCase().trim();
@@ -214,7 +243,7 @@ const findItemInFile = async (
           found: true,
           itemIndex: i,
           normalizedData,
-          originalData: rawData,
+          originalData: dataArray,
         };
       }
     }
@@ -228,13 +257,8 @@ const findItemInFile = async (
 
 const findConsolidableItem = async (
   fileKey: string,
-  targetItem: any
-): Promise<{
-  found: boolean;
-  itemIndex?: number;
-  normalizedData?: InventoryItem[];
-  originalData?: any[];
-}> => {
+  targetItem: RawInventoryItem
+): Promise<FileSearchResult> => {
   try {
     const getCommand = new GetObjectCommand({
       Bucket: "telas-luciana",
@@ -251,7 +275,7 @@ const findConsolidableItem = async (
       return { found: false };
     }
 
-    let rawData;
+    let rawData: unknown;
     try {
       rawData = JSON.parse(content);
     } catch (parseError) {
@@ -259,12 +283,15 @@ const findConsolidableItem = async (
       return { found: false };
     }
 
+    let dataArray: unknown[];
     if (!Array.isArray(rawData)) {
-      rawData = [rawData];
+      dataArray = [rawData];
+    } else {
+      dataArray = rawData;
     }
 
-    const normalizedData = rawData
-      .map((item) => normalizeItem(item))
+    const normalizedData = dataArray
+      .map((item) => normalizeItem(item as RawInventoryItem))
       .filter((item) => item !== null) as InventoryItem[];
 
     const targetOC = safeNormalize(targetItem.OC).toLowerCase();
@@ -296,7 +323,7 @@ const findConsolidableItem = async (
           found: true,
           itemIndex: i,
           normalizedData,
-          originalData: rawData,
+          originalData: dataArray,
         };
       }
     }
@@ -465,14 +492,17 @@ const processTransferWithConsolidation = async (
       }
 
       const content = await fileResponse.Body.transformToString();
-      let rawData = JSON.parse(content);
+      const rawData: unknown = JSON.parse(content);
 
+      let dataArray: unknown[];
       if (!Array.isArray(rawData)) {
-        rawData = [rawData];
+        dataArray = [rawData];
+      } else {
+        dataArray = rawData;
       }
 
-      const normalizedData = rawData
-        .map((item: any) => normalizeItem(item))
+      const normalizedData = dataArray
+        .map((item: unknown) => normalizeItem(item as RawInventoryItem))
         .filter(
           (item: InventoryItem | null) => item !== null
         ) as InventoryItem[];
@@ -559,9 +589,9 @@ export async function POST(request: NextRequest) {
 
       const listResponse = await s3Client.send(listCommand);
       const jsonFiles = (listResponse.Contents || [])
-        .filter((item) => item.Key && item.Key.endsWith(".json"))
-        .filter((item) => !item.Key!.includes("_backup_"))
-        .map((item) => item.Key!)
+        .filter((item: _Object) => item.Key && item.Key.endsWith(".json"))
+        .filter((item: _Object) => !item.Key!.includes("_backup_"))
+        .map((item: _Object) => item.Key!)
         .sort();
 
       const result = await processTransferWithConsolidation(
@@ -582,7 +612,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { oldItem, newItem, isEdit, quantityChange } = body;
+    const updateRequest = body as UpdateRequest;
+    const { oldItem, newItem, isEdit, quantityChange } = updateRequest;
 
     if (!oldItem) {
       return NextResponse.json(
@@ -617,9 +648,9 @@ export async function POST(request: NextRequest) {
 
     const listResponse = await s3Client.send(listCommand);
     const jsonFiles = (listResponse.Contents || [])
-      .filter((item) => item.Key && item.Key.endsWith(".json"))
-      .filter((item) => !item.Key!.includes("_backup_"))
-      .map((item) => item.Key!)
+      .filter((item: _Object) => item.Key && item.Key.endsWith(".json"))
+      .filter((item: _Object) => !item.Key!.includes("_backup_"))
+      .map((item: _Object) => item.Key!)
       .sort();
 
     let itemFound = false;
@@ -652,7 +683,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let modifiedData = [...targetData];
+    const modifiedData = [...targetData];
 
     if (isEdit && newItem) {
       const normalizedNewItem = normalizeItem(newItem);

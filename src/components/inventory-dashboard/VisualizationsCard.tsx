@@ -65,188 +65,152 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     });
   };
 
-  // Mapeo PRECISO de nombres de colores a colores hexadecimales reales (igual que en Charts.tsx)
   const COLOR_MAP: Record<string, string> = {
-    // === COLORES PRINCIPALES ===
-    MARINO: "#000080", // Navy blue estándar
-    NEGRO: "#000000", // Negro puro
-    BLANCO: "#F5F5F5", // Blanco puro
-    REY: "#4169E1", // Royal blue
-    ROJO: "#FF0000", // Rojo puro
+    MARINO: "#000080",
+    NEGRO: "#000000",
+    BLANCO: "#F5F5F5",
+    REY: "#4169E1",
+    ROJO: "#FF0000",
 
-    // === GRISES ===
-    "GRIS OXFORD": "#4A4A4A", // Gris Oxford
-    GRIS: "#808080", // Gris estándar
-    "GRIS PERLA": "#E6E6FA", // Gris perla
-    "GRIS JASPE": "#D2B48C", // Gris jaspe
-    "GRIS JASPE OBSCURO": "#8B7D6B", // Gris jaspe oscuro
-    "GRIS JASPE CLARO": "#F5F5DC", // Gris jaspe claro
-    "GRIS JASPE OSCURO": "#696969", // Gris jaspe oscuro
-    "GRIS/NEGRO": "#2F2F2F", // Gris negro
-    GRAFITO: "#1C1C1C", // Grafito
+    "GRIS OXFORD": "#4A4A4A",
+    GRIS: "#808080",
+    "GRIS PERLA": "#E6E6FA",
+    "GRIS JASPE": "#D2B48C",
+    "GRIS JASPE OBSCURO": "#8B7D6B",
+    "GRIS JASPE CLARO": "#F5F5DC",
+    "GRIS JASPE OSCURO": "#696969",
+    "GRIS/NEGRO": "#2F2F2F",
+    GRAFITO: "#1C1C1C",
 
-    // === MARINOS ESPECÍFICOS ===
-    "MARINO MEDIO 3": "#191970", // Midnight blue
-    "MARINO MEDIO": "#1E40AF", // Marino medio
-    "MARINO OBSCURO": "#000080", // Navy blue oscuro
-    "MARINO OBSCURO 2": "#191970", // Midnight blue
-    "MARINO CLARO": "#6495ED", // Cornflower blue
-    "MARNO CLARO": "#87CEEB", // Sky blue (typo original)
-    "MARINO CLARO 1": "#87CEFA", // Light sky blue
-    "MARINO 2": "#2F4F4F", // Dark slate gray
-    "AZUL MARINO": "#000080", // Navy blue
-    "AZUL MARINO MED": "#1E40AF", // Marino medio
-    "MARINO OSCURO": "#000080", // Navy blue
-    "MARINO. ESPECIAL": "#191970", // Midnight blue
+    "MARINO MEDIO 3": "#191970",
+    "MARINO MEDIO": "#1E40AF",
+    "MARINO OBSCURO": "#000080",
+    "MARINO OBSCURO 2": "#191970",
+    "MARINO CLARO": "#6495ED",
+    "MARNO CLARO": "#87CEEB",
+    "MARINO CLARO 1": "#87CEFA",
+    "MARINO 2": "#2F4F4F",
+    "AZUL MARINO": "#000080",
+    "AZUL MARINO MED": "#1E40AF",
+    "MARINO OSCURO": "#000080",
+    "MARINO. ESPECIAL": "#191970",
 
-    // === TINTOS Y ROJOS ===
-    GUINDA: "#800020", // Burgundy (investigado)
-    "VINO. GUNIDA OBSCURO": "#722F37", // Wine
-    "GUINDA NFL": "#800020", // Burgundy
-    VINO: "#722F37", // Wine
-    "ROJO QUEMADO": "#8B0000", // Dark red
-    "ROJO (ANTRLOP SHADE)": "#CD5C5C", // Indian red
+    GUINDA: "#800020",
+    "VINO. GUNIDA OBSCURO": "#722F37",
+    "GUINDA NFL": "#800020",
+    VINO: "#722F37",
+    "ROJO QUEMADO": "#8B0000",
+    "ROJO (ANTRLOP SHADE)": "#CD5C5C",
 
-    // === VERDES ===
-    TURQUESA: "#40E0D0", // Turquoise (confirmado)
-    BOTELLA: "#006A4E", // Bottle green (investigado)
-    VERDE: "#008000", // Verde estándar
-    "VERDE NEON": "#39FF14", // Neon green
-    "VERDE NEÓN": "#39FF14", // Neon green
-    JADE: "#00A86B", // Jade
-    "VERDE MILITAR": "#4B5320", // Army green
-    "VERDE JADE": "#00A86B", // Jade
-    "VERDE AGUA": "#00FFFF", // Aqua
-    "VERDE LIMON": "#32CD32", // Lime green
-    "VERDE LIMÓN": "#32CD32", // Lime green
-    MENTA: "#98FB98", // Pale green
-    "VERDE BOSQUE": "#228B22", // Forest green
-    "VERDE BANDERA": "#009639", // Flag green
-    "JADE. NUEVO": "#00A86B", // Jade
-    CELERY: "#9ACD32", // Yellow green
+    TURQUESA: "#40E0D0",
+    BOTELLA: "#006A4E",
+    VERDE: "#008000",
+    "VERDE NEON": "#39FF14",
+    JADE: "#00A86B",
+    "VERDE MILITAR": "#4B5320",
+    "VERDE JADE": "#00A86B",
+    "VERDE AGUA": "#00FFFF",
+    "VERDE LIMON": "#32CD32",
+    "VERDE LIMÓN": "#32CD32",
+    MENTA: "#98FB98",
+    "VERDE BOSQUE": "#228B22",
+    "VERDE BANDERA": "#009639",
+    "JADE. NUEVO": "#00A86B",
+    CELERY: "#9ACD32",
 
-    // === AZULES ===
-    BANDERA: "#002868", // Flag blue
-    "AZUL INDIGO": "#4B0082", // Indigo
-    BLUE: "#0000FF", // Blue
-    "AZUL REY": "#4169E1", // Royal blue
-    AZUL: "#0000FF", // Blue
-    "AZUL CIELO MED": "#87CEEB", // Sky blue medio
-    "AZUL FRANCIA MED": "#0055A4", // French blue medio
-    "AZUL CELESTE": "#87CEEB", // Sky blue
-    "AZUL ACERO": "#4682B4", // Steel blue
-    "AZUL CEIL": "#4F94CD", // Steel blue 3
-    "AZUL CIELO": "#87CEEB", // Sky blue
-    CIELO: "#87CEEB", // Sky blue
-    "BLUE RADIANCE": "#0080FF", // Azure
-    CARIBE: "#00CED1", // Dark turquoise
-    AQUA: "#00FFFF", // Aqua
-    AGUA: "#B0E0E6", // Powder blue
+    BANDERA: "#002868",
+    "AZUL INDIGO": "#4B0082",
+    BLUE: "#0000FF",
+    "AZUL REY": "#4169E1",
+    AZUL: "#0000FF",
+    "AZUL CIELO MED": "#87CEEB",
+    "AZUL FRANCIA MED": "#0055A4",
+    "AZUL CELESTE": "#87CEEB",
+    "AZUL ACERO": "#4682B4",
+    "AZUL CEIL": "#4F94CD",
+    "AZUL CIELO": "#87CEEB",
+    CIELO: "#87CEEB",
+    "BLUE RADIANCE": "#0080FF",
+    CARIBE: "#00CED1",
+    AQUA: "#00FFFF",
+    AGUA: "#B0E0E6",
 
-    // === AMARILLOS Y NARANJAS ===
-    MANGO: "#FFCC5C", // Mango
-    "AMARILLO NEON": "#FFFF00", // Yellow neon
-    NARANJA: "#FFA500", // Orange
-    ORO: "#FFD700", // Gold (confirmado)
-    CANARIO: "#FFEF00", // Canary yellow (investigado)
-    "AMARILLO BOMBERO": "#FFD300", // Firefighter yellow
-    "AMARILLO CANARIO": "#FFEF00", // Canary yellow
-    "AMARILLO NEÓN": "#FFFF00", // Neon yellow
-    AMARILLO: "#FFFF00", // Yellow
-    "AMARILLO MEDIO": "#FFD700", // Medium yellow
-    "AMARILLO LIMÓN": "#CCFF00", // Lime yellow
-    "NARANJA NEON": "#FF6600", // Neon orange
-    NARANAJA: "#FFA500", // Orange (typo)
-    "NARANJA TEXAS": "#FF4500", // Orange red
-    "NARANJA MECANICA NEÓN": "#FF4500", // Clockwork orange neon
-    "NARANAJA NEON": "#FF6600", // Neon orange (typo)
-    LIMON: "#CCFF00", // Lime
-    "ORO - YEMA": "#FFCC00", // Golden yolk
-    DURAZNO: "#FFCBA4", // Peach
-    MELON: "#FDBCB4", // Melon
+    MANGO: "#FFCC5C",
+    "AMARILLO NEON": "#FFFF00",
+    NARANJA: "#FFA500",
+    ORO: "#FFD700",
+    CANARIO: "#FFEF00",
+    "AMARILLO BOMBERO": "#FFD300",
+    "AMARILLO CANARIO": "#FFEF00",
+    "AMARILLO NEÓN": "#FFFF00",
+    AMARILLO: "#FFFF00",
+    "AMARILLO MEDIO": "#FFD700",
+    "AMARILLO LIMÓN": "#CCFF00",
+    "NARANJA NEON": "#FF6600",
+    NARANAJA: "#FFA500",
+    "NARANJA TEXAS": "#FF4500",
+    "NARANJA MECANICA NEÓN": "#FF4500",
+    "NARANAJA NEON": "#FF6600",
+    LIMON: "#CCFF00",
+    "ORO - YEMA": "#FFCC00",
+    DURAZNO: "#FFCBA4",
+    MELON: "#FDBCB4",
 
-    // === ROSAS Y MORADOS ===
-    FIUSHA: "#FF1493", // Deep pink (fuschia)
-    "ROSA BABY": "#F4C2C2", // Baby pink
-    "ROSA PASTEL": "#FFD1DC", // Pastel pink
-    "ROSA NEON": "#FF69B4", // Hot pink
-    "ROSA BLITZ": "#FC0FC0", // Bright pink
-    "ROSA BUGAMBILIA": "#CC527A", // Bougainvillea pink
-    "ROSA MEXICANO": "#E4007C", // Mexican pink
-    ROSA: "#FFC0CB", // Pink
-    "ROSA MEDIO": "#F08080", // Light coral
-    MORADO: "#800080", // Purple
-    "MORADO BURDEOS": "#800020", // Burgundy purple
-    LILA: "#C8A2C8", // Lilac
-    "LILA SUAVE": "#E6E6FA", // Lavender
-    LILIA: "#C8A2C8", // Lilac
-    "LAVANDA DIGITAL": "#9683EC", // Digital lavender
-    "BURNISHED LILAC": "#C8A2C8", // Burnished lilac
-    "VERY PERI": "#6667AB", // Very peri (Pantone 2022)
-    FRAMBUESA: "#E30B5C", // Raspberry
+    FIUSHA: "#FF1493",
+    "ROSA BABY": "#F4C2C2",
+    "ROSA PASTEL": "#FFD1DC",
+    "ROSA NEON": "#FF69B4",
+    "ROSA BLITZ": "#FC0FC0",
+    "ROSA BUGAMBILIA": "#CC527A",
+    "ROSA MEXICANO": "#E4007C",
+    ROSA: "#FFC0CB",
+    "ROSA MEDIO": "#F08080",
+    MORADO: "#800080",
+    "MORADO BURDEOS": "#800020",
+    LILA: "#C8A2C8",
+    "LILA SUAVE": "#E6E6FA",
+    LILIA: "#C8A2C8",
+    "LAVANDA DIGITAL": "#9683EC",
+    "BURNISHED LILAC": "#C8A2C8",
+    "VERY PERI": "#6667AB",
+    FRAMBUESA: "#E30B5C",
 
-    // === MARRONES Y BEIGES ===
-    OXFORD: "#2F1B14", // Oxford brown
-    BEIGE: "#F5F5DC", // Beige
-    "PALO DE ROSA": "#E8B4B8", // Rose wood
-    COBRE: "#B87333", // Copper
-    CAFÉ: "#6F4E37", // Coffee
-    HUESO: "#F9F6EE", // Bone
-    "CAFÉ / BEIGE": "#D2B48C", // Tan
-    "CAFE / BEIGE": "#D2B48C", // Tan
-    CAFE: "#6F4E37", // Coffee
-    MIEL: "#FFC30B", // Honey
-    ARENA: "#C19A6B", // Sand
-    BRONCE: "#CD7F32", // Bronze
-    CHOCOLATE: "#7B3F00", // Chocolate
-    ANTILOPE: "#AB9482", // Antelope
-    "BEIGE. NUEVO": "#F5F5DC", // New beige
-    BEIIGE: "#F5F5DC", // Beige (typo)
-    "CAFÉ OSCURO": "#3C2415", // Dark coffee
-    KHAKY: "#C3B091", // Khaki
-    KAKI: "#C3B091", // Khaki
+    OXFORD: "#2F1B14",
+    BEIGE: "#F5F5DC",
+    "PALO DE ROSA": "#E8B4B8",
+    COBRE: "#B87333",
+    CAFÉ: "#6F4E37",
+    HUESO: "#F9F6EE",
+    "CAFÉ / BEIGE": "#D2B48C",
+    CAFE: "#6F4E37",
+    MIEL: "#FFC30B",
+    ARENA: "#C19A6B",
+    BRONCE: "#CD7F32",
+    CHOCOLATE: "#7B3F00",
+    ANTILOPE: "#AB9482",
+    "BEIGE. NUEVO": "#F5F5DC",
+    BEIIGE: "#F5F5DC",
+    "CAFÉ OSCURO": "#3C2415",
+    KAKI: "#C3B091",
 
-    // === COLORES ESPECIALES ===
-    MILITAR: "#4B5320", // Army green
-    PIZARRA: "#708090", // Slate gray
-    SALMON: "#FA8072", // Salmon
-    SALMÓN: "#FA8072", // Salmon
-    PLÚMBAGO: "#8C92AC", // Plumbago
-    PLUMBAGO: "#8C92AC", // Plumbago
-    BUGAMBILIA: "#CC527A", // Bougainvillea
-    PETRÓLEO: "#003366", // Petroleum
-    PETROLEO: "#003366", // Petroleum
-    JASPE: "#D73B3E", // Jasper
-    CORAL: "#FF7F50", // Coral
-    FRESA: "#FF5757", // Strawberry
-    SHEDRON: "#E34234", // Cedron
-    PERLA: "#F8F6F0", // Pearl
-    BLITZ: "#F0F8FF", // Alice blue
-    NEUTRO: "#F5F5F5", // Neutral
-
-    // === PATRONES ANIMALES ===
-    "J-0248-3. LEOPARD": "#FFCC5C", // Leopard pattern
-    COW: "#000000", // Cow pattern (black base)
-    OCELOTE: "#FFCC5C", // Ocelot
-    TIGER: "#FF8C00", // Tiger orange
-    "J-0135-2. GIRAFFE": "#DEB887", // Giraffe pattern
-    "J-0026-2. ZEBRA": "#000000", // Zebra pattern
-    ZEBRA: "#000000", // Zebra
-    VACA: "#000000", // Cow
-    HIENA: "#8B7355", // Hyena
-    LEOPARD: "#FFCC5C", // Leopard
-    DALMATA: "#000000", // Dalmatian
-
-    // === CÓDIGOS ESPECIALES ===
-    C4: "#C4C4C4", // Gray code
-    C2: "#C2C2C2", // Gray code
-    C3: "#C3C3C3", // Gray code
-    "Sin Color": "#D3D3D3", // Light gray for no color
-    "BLANCO #1": "#FFFFFF", // White #1
-    BLAN: "#FFFFFF", // White (truncated)
+    MILITAR: "#4B5320",
+    PIZARRA: "#708090",
+    SALMON: "#FA8072",
+    SALMÓN: "#FA8072",
+    PLÚMBAGO: "#8C92AC",
+    PLUMBAGO: "#8C92AC",
+    BUGAMBILIA: "#CC527A",
+    PETRÓLEO: "#003366",
+    PETROLEO: "#003366",
+    JASPE: "#D73B3E",
+    CORAL: "#FF7F50",
+    FRESA: "#FF5757",
+    SHEDRON: "#E34234",
+    PERLA: "#F8F6F0",
+    BLITZ: "#F0F8FF",
+    NEUTRO: "#F5F5F5",
   };
 
-  // Lista de colores que necesitan texto negro para legibilidad
   const lightColors = [
     "BLANCO",
     "BEIGE",
@@ -289,25 +253,20 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     "C3",
   ];
 
-  // Función mejorada para obtener el color basado en el nombre (igual que en Charts.tsx)
   const getColorForName = (
     colorName: string,
     fallbackIndex: number
   ): string => {
     const normalizedName = colorName.toUpperCase().trim();
 
-    // Buscar coincidencia exacta primero
     if (COLOR_MAP[normalizedName]) {
       return COLOR_MAP[normalizedName];
     }
 
-    // Búsqueda fuzzy para variaciones
     for (const [key, value] of Object.entries(COLOR_MAP)) {
-      // Buscar si el nombre contiene palabras clave del mapeo
       const keyWords = key.split(" ");
       const nameWords = normalizedName.split(" ");
 
-      // Si hay coincidencia de al menos 2 palabras o una palabra principal
       const matches = keyWords.filter((word) =>
         nameWords.some(
           (nameWord) => nameWord.includes(word) || word.includes(nameWord)
@@ -324,11 +283,9 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       }
     }
 
-    // Si no encuentra coincidencia, usar color por defecto
     return COLORS[fallbackIndex % COLORS.length];
   };
 
-  // Función para calcular porcentajes con decimales apropiados (igual que en Charts.tsx)
   const calculatePercentage = (value: number, total: number): string => {
     const percentage = (value / total) * 100;
 
@@ -483,24 +440,23 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
   }, [filteredInventory]);
 
   const COLORS = [
-    "#4299E1", // azul
-    "#48BB78", // verde
-    "#F6AD55", // naranja
-    "#F56565", // rojo
-    "#9F7AEA", // morado
-    "#38B2AC", // turquesa
-    "#667EEA", // indigo
-    "#ED64A6", // rosa
-    "#ECC94B", // amarillo
-    "#81E6D9", // teal claro
-    "#D53F8C", // rosa fuerte
-    "#2B6CB0", // azul oscuro
-    "#68D391", // verde claro
-    "#FC8181", // rosa salmón
-    "#B794F4", // lavanda
+    "#4299E1",
+    "#48BB78",
+    "#F6AD55",
+    "#F56565",
+    "#9F7AEA",
+    "#38B2AC",
+    "#667EEA",
+    "#ED64A6",
+    "#ECC94B",
+    "#81E6D9",
+    "#D53F8C",
+    "#2B6CB0",
+    "#68D391",
+    "#FC8181",
+    "#B794F4",
   ];
 
-  // Verificar si algún filtro está activo
   const isFilterActive =
     filters.searchTerm !== "" ||
     filters.unitFilter !== "all" ||
@@ -508,7 +464,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     filters.telaFilter !== "all" ||
     filters.colorFilter !== "all";
 
-  // Obtener filtros activos como texto
   const getActiveFiltersText = (): string[] => {
     const activeFilters: string[] = [];
 
@@ -535,7 +490,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     return activeFilters;
   };
 
-  // Función para obtener el nombre de la pestaña
   const getTabLabel = (tab: string): string => {
     switch (tab) {
       case "units":
@@ -553,12 +507,10 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     }
   };
 
-  // Función para generar PDF específico para la visualización de Telas
   const handleDownloadFabricPDF = async () => {
     try {
       const toastId = toast.loading("Generando PDF de Telas...");
 
-      // Crear un contenedor temporal para la visualización de telas
       const tempContainer = document.createElement("div");
       tempContainer.style.position = "absolute";
       tempContainer.style.left = "-9999px";
@@ -566,7 +518,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.style.backgroundColor = "white";
       tempContainer.style.padding = "30px";
 
-      // Añadir título y fecha
       const titleElement = document.createElement("h1");
       titleElement.style.fontSize = "28px";
       titleElement.style.marginBottom = "10px";
@@ -591,7 +542,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.appendChild(titleElement);
       tempContainer.appendChild(dateElement);
 
-      // Añadir filtros activos si existen
       if (isFilterActive) {
         const activeFilters = getActiveFiltersText();
         const filtersText = document.createElement("p");
@@ -604,20 +554,16 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         tempContainer.appendChild(filtersText);
       }
 
-      // Crear contenedor para las barras
       const barsContainer = document.createElement("div");
       barsContainer.style.marginTop = "20px";
 
-      // Ordenar los datos por valor
       const sortedData = [...visualizationData.fabricValueData].sort(
         (a, b) => b.value - a.value
       );
 
-      // Obtener el valor máximo para calcular porcentajes
       const maxValue = Math.max(...sortedData.map((item) => item.value));
       const totalValue = sortedData.reduce((sum, item) => sum + item.value, 0);
 
-      // Generar las barras para el PDF
       sortedData.forEach((item, index) => {
         const itemContainer = document.createElement("div");
         itemContainer.style.marginBottom = "15px";
@@ -678,10 +624,8 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.appendChild(barsContainer);
       document.body.appendChild(tempContainer);
 
-      // Esperar a que los elementos se rendericen
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Capturar como imagen
       const canvas = await html2canvas(tempContainer, {
         scale: 2,
         logging: false,
@@ -690,22 +634,18 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         allowTaint: true,
       });
 
-      // Eliminar el contenedor temporal
       document.body.removeChild(tempContainer);
 
-      // Crear PDF
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
       });
 
-      // Calcular proporciones para mantener el aspecto
       const pageWidth = pdf.internal.pageSize.getWidth();
       const imgWidth = pageWidth - 20;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Añadir la imagen al PDF
       pdf.addImage(
         canvas.toDataURL("image/jpeg", 1.0),
         "JPEG",
@@ -715,7 +655,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         imgHeight
       );
 
-      // Añadir paginación si es necesario
       if (imgHeight > pdf.internal.pageSize.getHeight() - 20) {
         let heightLeft = imgHeight;
         let position = 10;
@@ -739,7 +678,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         }
       }
 
-      // Descargar PDF
       const fileName = `telas_valor_${date.getFullYear()}${(date.getMonth() + 1)
         .toString()
         .padStart(2, "0")}${date.getDate().toString().padStart(2, "0")}.pdf`;
@@ -752,12 +690,10 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     }
   };
 
-  // Función para generar PDF específico para la visualización de Colores
   const handleDownloadColorPDF = async () => {
     try {
       const toastId = toast.loading("Generando PDF de Colores...");
 
-      // Crear un contenedor temporal para la visualización de colores
       const tempContainer = document.createElement("div");
       tempContainer.style.position = "absolute";
       tempContainer.style.left = "-9999px";
@@ -765,7 +701,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.style.backgroundColor = "white";
       tempContainer.style.padding = "30px";
 
-      // Añadir título y fecha
       const titleElement = document.createElement("h1");
       titleElement.style.fontSize = "28px";
       titleElement.style.marginBottom = "10px";
@@ -790,7 +725,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.appendChild(titleElement);
       tempContainer.appendChild(dateElement);
 
-      // Añadir filtros activos si existen
       if (isFilterActive) {
         const activeFilters = getActiveFiltersText();
         const filtersText = document.createElement("p");
@@ -803,23 +737,19 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         tempContainer.appendChild(filtersText);
       }
 
-      // Crear contenedor para las barras
       const barsContainer = document.createElement("div");
       barsContainer.style.marginTop = "20px";
 
-      // Ordenar los datos por valor (cantidad)
       const sortedColorData = [...visualizationData.colorQuantityData].sort(
         (a, b) => b.value - a.value
       );
 
-      // Obtener el valor máximo para calcular porcentajes
       const maxValue = Math.max(...sortedColorData.map((item) => item.value));
       const totalValue = sortedColorData.reduce(
         (sum, item) => sum + item.value,
         0
       );
 
-      // Generar las barras para el PDF
       sortedColorData.forEach((item, index) => {
         const itemContainer = document.createElement("div");
         itemContainer.style.marginBottom = "15px";
@@ -883,10 +813,8 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.appendChild(barsContainer);
       document.body.appendChild(tempContainer);
 
-      // Esperar a que los elementos se rendericen
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Capturar como imagen
       const canvas = await html2canvas(tempContainer, {
         scale: 2,
         logging: false,
@@ -895,22 +823,18 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         allowTaint: true,
       });
 
-      // Eliminar el contenedor temporal
       document.body.removeChild(tempContainer);
 
-      // Crear PDF
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
       });
 
-      // Calcular proporciones para mantener el aspecto
       const pageWidth = pdf.internal.pageSize.getWidth();
       const imgWidth = pageWidth - 20;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Añadir la imagen al PDF
       pdf.addImage(
         canvas.toDataURL("image/jpeg", 1.0),
         "JPEG",
@@ -920,7 +844,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         imgHeight
       );
 
-      // Añadir paginación si es necesario
       if (imgHeight > pdf.internal.pageSize.getHeight() - 20) {
         let heightLeft = imgHeight;
         let position = 10;
@@ -944,7 +867,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         }
       }
 
-      // Descargar PDF
       const fileName = `colores_cantidad_${date.getFullYear()}${(
         date.getMonth() + 1
       )
@@ -959,27 +881,22 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     }
   };
 
-  // Función para descargar PDF para las pestañas regulares
   const handleDownloadPDF = async () => {
     if (!chartRef.current) return;
 
-    // Si estamos en la pestaña de telas, usar la función especializada
     if (activeTab === "fabric") {
       handleDownloadFabricPDF();
       return;
     }
 
-    // Si estamos en la pestaña de colores, usar la función especializada
     if (activeTab === "color") {
       handleDownloadColorPDF();
       return;
     }
 
     try {
-      // Mostrar notificación de inicio
       const toastId = toast.loading("Generando PDF...");
 
-      // Encontrar el contenido específico de la pestaña activa
       const activeTabContent = chartRef.current.querySelector(
         `[data-state="active"] .h-\\[400px\\]`
       );
@@ -991,10 +908,8 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         return;
       }
 
-      // Crear un clon del elemento para manipularlo sin afectar la UI
       const clonedElement = activeTabContent.cloneNode(true) as HTMLElement;
 
-      // Eliminar tooltips y elementos no necesarios para el PDF
       const tooltips = clonedElement.querySelectorAll('[role="tooltip"]');
       tooltips.forEach((tooltip) => {
         if (tooltip.parentNode) {
@@ -1002,13 +917,11 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         }
       });
 
-      // Asegurar que el contenedor del gráfico tenga altura adecuada
       clonedElement.style.height = "500px";
       clonedElement.style.width = "900px";
       clonedElement.style.paddingTop = "20px";
       clonedElement.style.overflow = "visible";
 
-      // Crear un contenedor temporal para el clon
       const tempContainer = document.createElement("div");
       tempContainer.style.position = "absolute";
       tempContainer.style.left = "-9999px";
@@ -1016,14 +929,12 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.style.backgroundColor = "white";
       tempContainer.style.padding = "30px";
 
-      // Añadir título con el nombre de la pestaña activa
       const titleElement = document.createElement("h1");
       titleElement.style.fontSize = "28px";
       titleElement.style.marginBottom = "10px";
       titleElement.style.fontFamily = "Arial, sans-serif";
       titleElement.textContent = getTabLabel(activeTab);
 
-      // Añadir fecha de generación
       const dateElement = document.createElement("p");
       dateElement.style.fontSize = "14px";
       dateElement.style.marginBottom = "10px";
@@ -1039,7 +950,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         .padStart(2, "0")}/${date.getFullYear()}`;
       dateElement.textContent = dateStr;
 
-      // Añadir información de filtros activos para el PDF
       if (isFilterActive) {
         const activeFilters = getActiveFiltersText();
         const filtersText = document.createElement("p");
@@ -1061,10 +971,8 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       tempContainer.appendChild(clonedElement);
       document.body.appendChild(tempContainer);
 
-      // Dar tiempo a que los elementos se rendericen correctamente
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Capturar el elemento clonado como imagen
       const canvas = await html2canvas(tempContainer, {
         scale: 2,
         logging: false,
@@ -1073,17 +981,14 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         allowTaint: true,
       });
 
-      // Eliminar el contenedor temporal
       document.body.removeChild(tempContainer);
 
-      // Crear un nuevo documento PDF
       const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
         format: "a4",
       });
 
-      // Calcular proporciones para mantener el aspecto y centrar en la página
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth - 20;
@@ -1091,7 +996,6 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       const xPosition = 10;
       const yPosition = Math.max(5, (pageHeight - imgHeight) / 2);
 
-      // Añadir la imagen del gráfico al PDF
       pdf.addImage(
         canvas.toDataURL("image/jpeg", 1.0),
         "JPEG",
@@ -1101,17 +1005,14 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         imgHeight
       );
 
-      // Obtener nombre del archivo basado en la pestaña activa
       const fileName = `inventario_${activeTab}_${date.getFullYear()}${(
         date.getMonth() + 1
       )
         .toString()
         .padStart(2, "0")}${date.getDate().toString().padStart(2, "0")}.pdf`;
 
-      // Descargar el PDF
       pdf.save(fileName);
 
-      // Actualizar notificación con éxito
       toast.success("PDF descargado correctamente", { id: toastId });
     } catch (error) {
       console.error("Error al generar el PDF:", error);
@@ -1490,18 +1391,22 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
                             formatter={(
                               value: number,
                               name: string,
-                              props: any
+                              props: unknown
                             ) => {
-                              if (props.dataKey === "x")
+                              const typedProps = props as { dataKey?: string };
+                              if (typedProps.dataKey === "x")
                                 return [
                                   `${formatNumber(value)}`,
                                   "Costo Unitario",
                                 ];
-                              if (props.dataKey === "y")
+                              if (typedProps.dataKey === "y")
                                 return [formatNumber(value), "Cantidad"];
                               return [formatNumber(value), name];
                             }}
-                            labelFormatter={(label: any) => `Tela: ${label.z}`}
+                            labelFormatter={(label: unknown) => {
+                              const typedLabel = label as { z?: string };
+                              return `Tela: ${typedLabel.z || "Sin nombre"}`;
+                            }}
                           />
                           <Legend />
                           <Scatter

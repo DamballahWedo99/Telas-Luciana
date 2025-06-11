@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -12,8 +12,6 @@ import {
   Line,
   ScatterChart,
   Scatter,
-  Cell,
-  TooltipProps,
 } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -24,7 +22,7 @@ interface ChartDataItem {
 
 interface BarChartDataItem {
   name: string;
-  fullName?: string; // Campo opcional para nombre completo
+  fullName?: string;
   total: number;
 }
 
@@ -48,6 +46,27 @@ interface PedidosChartsProps {
   onTabChange?: (value: string) => void;
 }
 
+interface TooltipPayload {
+  value: number;
+  payload: BarChartDataItem;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+}
+
+interface TimelineTooltipPayload {
+  value: number;
+}
+
+interface TimelineCustomTooltipProps {
+  active?: boolean;
+  payload?: TimelineTooltipPayload[];
+  label?: string;
+}
+
 export const PedidosCharts: React.FC<PedidosChartsProps> = ({
   pieChartData,
   barChartData,
@@ -55,14 +74,10 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
   deliveryData,
   onTabChange,
 }) => {
-  const [activeTab, setActiveTab] = useState("orders");
-
   const handleTabChange = (value: string) => {
-    setActiveTab(value);
     if (onTabChange) onTabChange(value);
   };
 
-  // Chart colors (para gráficos que no son de colores)
   const COLORS = [
     "#0088FE",
     "#00C49F",
@@ -73,206 +88,188 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     "#ffc658",
   ];
 
-  // Mapeo PRECISO de nombres de colores a colores hexadecimales reales (basado en investigación web)
   const COLOR_MAP: Record<string, string> = {
-    // === COLORES PRINCIPALES ===
-    MARINO: "#000080", // Navy blue estándar
-    NEGRO: "#000000", // Negro puro
-    BLANCO: "#FFFFFF", // Blanco puro
-    REY: "#4169E1", // Royal blue
-    ROJO: "#FF0000", // Rojo puro
+    MARINO: "#000080",
+    NEGRO: "#000000",
+    BLANCO: "#FFFFFF",
+    REY: "#4169E1",
+    ROJO: "#FF0000",
 
-    // === GRISES ===
-    "GRIS OXFORD": "#4A4A4A", // Gris Oxford
-    GRIS: "#808080", // Gris estándar
-    "GRIS PERLA": "#E6E6FA", // Gris perla
-    "GRIS JASPE": "#D2B48C", // Gris jaspe
-    "GRIS JASPE OBSCURO": "#8B7D6B", // Gris jaspe oscuro
-    "GRIS JASPE CLARO": "#F5F5DC", // Gris jaspe claro
-    "GRIS JASPE OSCURO": "#696969", // Gris jaspe oscuro
-    "GRIS/NEGRO": "#2F2F2F", // Gris negro
-    GRAFITO: "#1C1C1C", // Grafito
+    "GRIS OXFORD": "#4A4A4A",
+    GRIS: "#808080",
+    "GRIS PERLA": "#E6E6FA",
+    "GRIS JASPE": "#D2B48C",
+    "GRIS JASPE OBSCURO": "#8B7D6B",
+    "GRIS JASPE CLARO": "#F5F5DC",
+    "GRIS JASPE OSCURO": "#696969",
+    "GRIS/NEGRO": "#2F2F2F",
+    GRAFITO: "#1C1C1C",
 
-    // === MARINOS ESPECÍFICOS ===
-    "MARINO MEDIO 3": "#191970", // Midnight blue
-    "MARINO MEDIO": "#1E40AF", // Marino medio
-    "MARINO OBSCURO": "#000080", // Navy blue oscuro
-    "MARINO OBSCURO 2": "#191970", // Midnight blue
-    "MARINO CLARO": "#6495ED", // Cornflower blue
-    "MARNO CLARO": "#87CEEB", // Sky blue (typo original)
-    "MARINO CLARO 1": "#87CEFA", // Light sky blue
-    "MARINO 2": "#2F4F4F", // Dark slate gray
-    "AZUL MARINO": "#000080", // Navy blue
-    "AZUL MARINO MED": "#1E40AF", // Marino medio
-    "MARINO OSCURO": "#000080", // Navy blue
-    "MARINO. ESPECIAL": "#191970", // Midnight blue
+    "MARINO MEDIO 3": "#191970",
+    "MARINO MEDIO": "#1E40AF",
+    "MARINO OBSCURO": "#000080",
+    "MARINO OBSCURO 2": "#191970",
+    "MARINO CLARO": "#6495ED",
+    "MARNO CLARO": "#87CEEB",
+    "MARINO CLARO 1": "#87CEFA",
+    "MARINO 2": "#2F4F4F",
+    "AZUL MARINO": "#000080",
+    "AZUL MARINO MED": "#1E40AF",
+    "MARINO OSCURO": "#000080",
+    "MARINO. ESPECIAL": "#191970",
 
-    // === TINTOS Y ROJOS ===
-    GUINDA: "#800020", // Burgundy (investigado)
-    "VINO. GUNIDA OBSCURO": "#722F37", // Wine
-    "GUINDA NFL": "#800020", // Burgundy
-    VINO: "#722F37", // Wine
-    "ROJO QUEMADO": "#8B0000", // Dark red
-    "ROJO (ANTRLOP SHADE)": "#CD5C5C", // Indian red
+    GUINDA: "#800020",
+    "VINO. GUNIDA OBSCURO": "#722F37",
+    "GUINDA NFL": "#800020",
+    VINO: "#722F37",
+    "ROJO QUEMADO": "#8B0000",
+    "ROJO (ANTRLOP SHADE)": "#CD5C5C",
 
-    // === VERDES ===
-    TURQUESA: "#40E0D0", // Turquoise (confirmado)
-    BOTELLA: "#006A4E", // Bottle green (investigado)
-    VERDE: "#008000", // Verde estándar
-    "VERDE NEON": "#39FF14", // Neon green
-    "VERDE NEÓN": "#39FF14", // Neon green
-    JADE: "#00A86B", // Jade
-    "VERDE MILITAR": "#4B5320", // Army green
-    "VERDE JADE": "#00A86B", // Jade
-    "VERDE AGUA": "#00FFFF", // Aqua
-    "VERDE LIMON": "#32CD32", // Lime green
-    "VERDE LIMÓN": "#32CD32", // Lime green
-    MENTA: "#98FB98", // Pale green
-    "VERDE BOSQUE": "#228B22", // Forest green
-    "VERDE BANDERA": "#009639", // Flag green
-    "JADE. NUEVO": "#00A86B", // Jade
-    CELERY: "#9ACD32", // Yellow green
+    TURQUESA: "#40E0D0",
+    BOTELLA: "#006A4E",
+    VERDE: "#008000",
+    "VERDE NEON": "#39FF14",
+    "VERDE NEÓN": "#39FF14",
+    JADE: "#00A86B",
+    "VERDE MILITAR": "#4B5320",
+    "VERDE JADE": "#00A86B",
+    "VERDE AGUA": "#00FFFF",
+    "VERDE LIMON": "#32CD32",
+    "VERDE LIMÓN": "#32CD32",
+    MENTA: "#98FB98",
+    "VERDE BOSQUE": "#228B22",
+    "VERDE BANDERA": "#009639",
+    "JADE. NUEVO": "#00A86B",
+    CELERY: "#9ACD32",
 
-    // === AZULES ===
-    BANDERA: "#002868", // Flag blue
-    "AZUL INDIGO": "#4B0082", // Indigo
-    BLUE: "#0000FF", // Blue
-    "AZUL REY": "#4169E1", // Royal blue
-    AZUL: "#0000FF", // Blue
-    "AZUL CIELO MED": "#87CEEB", // Sky blue medio
-    "AZUL FRANCIA MED": "#0055A4", // French blue medio
-    "AZUL CELESTE": "#87CEEB", // Sky blue
-    "AZUL ACERO": "#4682B4", // Steel blue
-    "AZUL CEIL": "#4F94CD", // Steel blue 3
-    "AZUL CIELO": "#87CEEB", // Sky blue
-    CIELO: "#87CEEB", // Sky blue
-    "BLUE RADIANCE": "#0080FF", // Azure
-    CARIBE: "#00CED1", // Dark turquoise
-    AQUA: "#00FFFF", // Aqua
-    AGUA: "#B0E0E6", // Powder blue
+    BANDERA: "#002868",
+    "AZUL INDIGO": "#4B0082",
+    BLUE: "#0000FF",
+    "AZUL REY": "#4169E1",
+    AZUL: "#0000FF",
+    "AZUL CIELO MED": "#87CEEB",
+    "AZUL FRANCIA MED": "#0055A4",
+    "AZUL CELESTE": "#87CEEB",
+    "AZUL ACERO": "#4682B4",
+    "AZUL CEIL": "#4F94CD",
+    "AZUL CIELO": "#87CEEB",
+    CIELO: "#87CEEB",
+    "BLUE RADIANCE": "#0080FF",
+    CARIBE: "#00CED1",
+    AQUA: "#00FFFF",
+    AGUA: "#B0E0E6",
 
-    // === AMARILLOS Y NARANJAS ===
-    MANGO: "#FFCC5C", // Mango
-    "AMARILLO NEON": "#FFFF00", // Yellow neon
-    NARANJA: "#FFA500", // Orange
-    ORO: "#FFD700", // Gold (confirmado)
-    CANARIO: "#FFEF00", // Canary yellow (investigado)
-    "AMARILLO BOMBERO": "#FFD300", // Firefighter yellow
-    "AMARILLO CANARIO": "#FFEF00", // Canary yellow
-    "AMARILLO NEÓN": "#FFFF00", // Neon yellow
-    AMARILLO: "#FFFF00", // Yellow
-    "AMARILLO MEDIO": "#FFD700", // Medium yellow
-    "AMARILLO LIMÓN": "#CCFF00", // Lime yellow
-    "NARANJA NEON": "#FF6600", // Neon orange
-    NARANAJA: "#FFA500", // Orange (typo)
-    "NARANJA TEXAS": "#FF4500", // Orange red
-    "NARANJA MECANICA NEÓN": "#FF4500", // Clockwork orange neon
-    "NARANAJA NEON": "#FF6600", // Neon orange (typo)
-    LIMON: "#CCFF00", // Lime
-    "ORO - YEMA": "#FFCC00", // Golden yolk
-    DURAZNO: "#FFCBA4", // Peach
-    MELON: "#FDBCB4", // Melon
+    MANGO: "#FFCC5C",
+    "AMARILLO NEON": "#FFFF00",
+    NARANJA: "#FFA500",
+    ORO: "#FFD700",
+    CANARIO: "#FFEF00",
+    "AMARILLO BOMBERO": "#FFD300",
+    "AMARILLO CANARIO": "#FFEF00",
+    "AMARILLO NEÓN": "#FFFF00",
+    AMARILLO: "#FFFF00",
+    "AMARILLO MEDIO": "#FFD700",
+    "AMARILLO LIMÓN": "#CCFF00",
+    "NARANJA NEON": "#FF6600",
+    NARANAJA: "#FFA500",
+    "NARANJA TEXAS": "#FF4500",
+    "NARANJA MECANICA NEÓN": "#FF4500",
+    "NARANAJA NEON": "#FF6600",
+    LIMON: "#CCFF00",
+    "ORO - YEMA": "#FFCC00",
+    DURAZNO: "#FFCBA4",
+    MELON: "#FDBCB4",
 
-    // === ROSAS Y MORADOS ===
-    FIUSHA: "#FF1493", // Deep pink (fuschia)
-    "ROSA BABY": "#F4C2C2", // Baby pink
-    "ROSA PASTEL": "#FFD1DC", // Pastel pink
-    "ROSA NEON": "#FF69B4", // Hot pink
-    "ROSA BLITZ": "#FC0FC0", // Bright pink
-    "ROSA BUGAMBILIA": "#CC527A", // Bougainvillea pink
-    "ROSA MEXICANO": "#E4007C", // Mexican pink
-    ROSA: "#FFC0CB", // Pink
-    "ROSA MEDIO": "#F08080", // Light coral
-    MORADO: "#800080", // Purple
-    "MORADO BURDEOS": "#800020", // Burgundy purple
-    LILA: "#C8A2C8", // Lilac
-    "LILA SUAVE": "#E6E6FA", // Lavender
-    LILIA: "#C8A2C8", // Lilac
-    "LAVANDA DIGITAL": "#9683EC", // Digital lavender
-    "BURNISHED LILAC": "#C8A2C8", // Burnished lilac
-    "VERY PERI": "#6667AB", // Very peri (Pantone 2022)
-    FRAMBUESA: "#E30B5C", // Raspberry
+    FIUSHA: "#FF1493",
+    "ROSA BABY": "#F4C2C2",
+    "ROSA PASTEL": "#FFD1DC",
+    "ROSA NEON": "#FF69B4",
+    "ROSA BLITZ": "#FC0FC0",
+    "ROSA BUGAMBILIA": "#CC527A",
+    "ROSA MEXICANO": "#E4007C",
+    ROSA: "#FFC0CB",
+    "ROSA MEDIO": "#F08080",
+    MORADO: "#800080",
+    "MORADO BURDEOS": "#800020",
+    LILA: "#C8A2C8",
+    "LILA SUAVE": "#E6E6FA",
+    LILIA: "#C8A2C8",
+    "LAVANDA DIGITAL": "#9683EC",
+    "BURNISHED LILAC": "#C8A2C8",
+    "VERY PERI": "#6667AB",
+    FRAMBUESA: "#E30B5C",
 
-    // === MARRONES Y BEIGES ===
-    OXFORD: "#2F1B14", // Oxford brown
-    BEIGE: "#F5F5DC", // Beige
-    "PALO DE ROSA": "#E8B4B8", // Rose wood
-    COBRE: "#B87333", // Copper
-    CAFÉ: "#6F4E37", // Coffee
-    HUESO: "#F9F6EE", // Bone
-    "CAFÉ / BEIGE": "#D2B48C", // Tan
-    "CAFE / BEIGE": "#D2B48C", // Tan
-    CAFE: "#6F4E37", // Coffee
-    MIEL: "#FFC30B", // Honey
-    ARENA: "#C19A6B", // Sand
-    BRONCE: "#CD7F32", // Bronze
-    CHOCOLATE: "#7B3F00", // Chocolate
-    ANTILOPE: "#AB9482", // Antelope
-    "BEIGE. NUEVO": "#F5F5DC", // New beige
-    BEIIGE: "#F5F5DC", // Beige (typo)
-    "CAFÉ OSCURO": "#3C2415", // Dark coffee
-    KHAKY: "#C3B091", // Khaki
-    KAKI: "#C3B091", // Khaki
+    OXFORD: "#2F1B14",
+    BEIGE: "#F5F5DC",
+    "PALO DE ROSA": "#E8B4B8",
+    COBRE: "#B87333",
+    CAFÉ: "#6F4E37",
+    HUESO: "#F9F6EE",
+    "CAFÉ / BEIGE": "#D2B48C",
+    "CAFE / BEIGE": "#D2B48C",
+    CAFE: "#6F4E37",
+    MIEL: "#FFC30B",
+    ARENA: "#C19A6B",
+    BRONCE: "#CD7F32",
+    CHOCOLATE: "#7B3F00",
+    ANTILOPE: "#AB9482",
+    "BEIGE. NUEVO": "#F5F5DC",
+    BEIIGE: "#F5F5DC",
+    "CAFÉ OSCURO": "#3C2415",
+    KHAKY: "#C3B091",
+    KAKI: "#C3B091",
 
-    // === COLORES ESPECIALES ===
-    MILITAR: "#4B5320", // Army green
-    PIZARRA: "#708090", // Slate gray
-    SALMON: "#FA8072", // Salmon
-    SALMÓN: "#FA8072", // Salmon
-    PLÚMBAGO: "#8C92AC", // Plumbago
-    PLUMBAGO: "#8C92AC", // Plumbago
-    BUGAMBILIA: "#CC527A", // Bougainvillea
-    PETRÓLEO: "#003366", // Petroleum
-    PETROLEO: "#003366", // Petroleum
-    JASPE: "#D73B3E", // Jasper
-    CORAL: "#FF7F50", // Coral
-    FRESA: "#FF5757", // Strawberry
-    SHEDRON: "#E34234", // Cedron
-    PERLA: "#F8F6F0", // Pearl
-    BLITZ: "#F0F8FF", // Alice blue
-    NEUTRO: "#F5F5F5", // Neutral
+    MILITAR: "#4B5320",
+    PIZARRA: "#708090",
+    SALMON: "#FA8072",
+    SALMÓN: "#FA8072",
+    PLÚMBAGO: "#8C92AC",
+    PLUMBAGO: "#8C92AC",
+    BUGAMBILIA: "#CC527A",
+    PETRÓLEO: "#003366",
+    PETROLEO: "#003366",
+    JASPE: "#D73B3E",
+    CORAL: "#FF7F50",
+    FRESA: "#FF5757",
+    SHEDRON: "#E34234",
+    PERLA: "#F8F6F0",
+    BLITZ: "#F0F8FF",
+    NEUTRO: "#F5F5F5",
 
-    // === PATRONES ANIMALES ===
-    "J-0248-3. LEOPARD": "#FFCC5C", // Leopard pattern
-    COW: "#000000", // Cow pattern (black base)
-    OCELOTE: "#FFCC5C", // Ocelot
-    TIGER: "#FF8C00", // Tiger orange
-    "J-0135-2. GIRAFFE": "#DEB887", // Giraffe pattern
-    "J-0026-2. ZEBRA": "#000000", // Zebra pattern
-    ZEBRA: "#000000", // Zebra
-    VACA: "#000000", // Cow
-    HIENA: "#8B7355", // Hyena
-    LEOPARD: "#FFCC5C", // Leopard
-    DALMATA: "#000000", // Dalmatian
+    "J-0248-3. LEOPARD": "#FFCC5C",
+    COW: "#000000",
+    OCELOTE: "#FFCC5C",
+    TIGER: "#FF8C00",
+    "J-0135-2. GIRAFFE": "#DEB887",
+    "J-0026-2. ZEBRA": "#000000",
+    ZEBRA: "#000000",
+    VACA: "#000000",
+    HIENA: "#8B7355",
+    LEOPARD: "#FFCC5C",
+    DALMATA: "#000000",
 
-    // === CÓDIGOS ESPECIALES ===
-    C4: "#C4C4C4", // Gray code
-    C2: "#C2C2C2", // Gray code
-    C3: "#C3C3C3", // Gray code
-    "Sin Color": "#D3D3D3", // Light gray for no color
-    "BLANCO #1": "#FFFFFF", // White #1
-    BLAN: "#FFFFFF", // White (truncated)
+    C4: "#C4C4C4",
+    C2: "#C2C2C2",
+    C3: "#C3C3C3",
+    "Sin Color": "#D3D3D3",
+    "BLANCO #1": "#FFFFFF",
+    BLAN: "#FFFFFF",
   };
 
-  // Función mejorada para obtener el color basado en el nombre
   const getColorForName = (
     colorName: string,
     fallbackIndex: number
   ): string => {
     const normalizedName = colorName.toUpperCase().trim();
 
-    // Buscar coincidencia exacta primero
     if (COLOR_MAP[normalizedName]) {
       return COLOR_MAP[normalizedName];
     }
 
-    // Búsqueda fuzzy para variaciones
     for (const [key, value] of Object.entries(COLOR_MAP)) {
-      // Buscar si el nombre contiene palabras clave del mapeo
       const keyWords = key.split(" ");
       const nameWords = normalizedName.split(" ");
 
-      // Si hay coincidencia de al menos 2 palabras o una palabra principal
       const matches = keyWords.filter((word) =>
         nameWords.some(
           (nameWord) => nameWord.includes(word) || word.includes(nameWord)
@@ -289,11 +286,9 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
       }
     }
 
-    // Si no encuentra coincidencia, usar color por defecto
     return COLORS[fallbackIndex % COLORS.length];
   };
 
-  // Función mejorada para formatear números con decimales apropiados
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
       return new Intl.NumberFormat("es-MX", {
@@ -318,7 +313,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     }
   };
 
-  // Función para calcular porcentajes con decimales apropiados
   const calculatePercentage = (value: number, total: number): string => {
     const percentage = (value / total) * 100;
 
@@ -340,7 +334,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     }).format(value);
   };
 
-  // Función para formatear la fecha en el tooltip (mantener el formato original)
   const formatDateLabel = (dateStr: string): string => {
     const [year, month] = dateStr.split("-");
     const monthNames = [
@@ -361,13 +354,16 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     return `${monthName} ${year}`;
   };
 
-  // Custom tooltip component for Timeline Tab
-  const TimelineCustomTooltip = ({ active, payload, label }: any) => {
+  const TimelineCustomTooltip = ({
+    active,
+    payload,
+    label,
+  }: TimelineCustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
           <p className="font-medium text-gray-900 mb-2">
-            {formatDateLabel(label)}
+            {formatDateLabel(label || "")}
           </p>
           <p className="text-purple-600 mb-1">
             Cantidad de Pedidos: {payload[0].value}
@@ -381,8 +377,7 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     return null;
   };
 
-  // Tooltip personalizado para las órdenes
-  const OrdersCustomTooltip = ({ active, payload }: any) => {
+  const OrdersCustomTooltip = ({ active, payload }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -399,15 +394,12 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     return null;
   };
 
-  // Ordenar los datos para "Órdenes de Compra" por total (de mayor a menor)
   const sortedBarChartData = [...barChartData].sort(
     (a, b) => b.total - a.total
   );
 
-  // Ordenar los datos de colores por valor (de mayor a menor)
   const sortedColorData = [...pieChartData].sort((a, b) => b.value - a.value);
 
-  // Genera ticks personalizados para mostrar solo los años cuando cambian
   const generateCustomTicks = (data: TimelineDataItem[]) => {
     if (!data || data.length === 0) return [];
 
@@ -425,17 +417,14 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     return customTicks;
   };
 
-  // Calcular la altura dinámica para el gráfico de órdenes basado en la cantidad de datos
   const calculateOrdersChartHeight = () => {
     const minHeight = 400;
     const heightPerItem = 50;
     return Math.max(minHeight, sortedBarChartData.length * heightPerItem);
   };
 
-  // Altura dinámica para el gráfico de órdenes
   const ordersChartHeight = calculateOrdersChartHeight();
 
-  // Mensaje cuando no hay datos
   const NoDataMessage = () => (
     <div className="flex items-center justify-center w-full h-full p-8">
       <p className="text-muted-foreground text-center">
@@ -444,7 +433,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
     </div>
   );
 
-  // Lista de colores que necesitan texto negro para legibilidad
   const lightColors = [
     "BLANCO",
     "BEIGE",
@@ -478,7 +466,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         <TabsTrigger value="delivery">Tiempos de Entrega</TabsTrigger>
       </TabsList>
 
-      {/* Tab: Órdenes de Compra */}
       <TabsContent value="orders" className="mt-4">
         <div
           className="w-full bg-white p-4 rounded-lg shadow-sm overflow-y-auto"
@@ -524,7 +511,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         </div>
       </TabsContent>
 
-      {/* Tab: Distribución por Color - VISUALIZACIÓN ESTILO TELAS CON COLORES REALES */}
       <TabsContent value="colors" className="mt-4">
         <div
           className={`w-full bg-white p-4 rounded-lg shadow-sm overflow-y-auto pr-4 ${
@@ -595,7 +581,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         </div>
       </TabsContent>
 
-      {/* Tab: Evolución Mensual */}
       <TabsContent value="timeline" className="mt-4">
         <div
           className="w-full bg-white p-4 rounded-lg shadow-sm"
@@ -650,7 +635,6 @@ export const PedidosCharts: React.FC<PedidosChartsProps> = ({
         </div>
       </TabsContent>
 
-      {/* Tab: Tiempos de Entrega */}
       <TabsContent value="delivery" className="mt-4">
         <div
           className="w-full bg-white p-4 rounded-lg shadow-sm"
