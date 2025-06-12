@@ -2,11 +2,9 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Configuración de entorno con fallbacks seguros
 const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
 const nextAuthUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL;
 
-// Rutas públicas que no requieren autenticación
 const publicRoutes = [
   "/",
   "/login",
@@ -45,7 +43,6 @@ const protectedApiRoutes = [
   "/api/s3/fichas-tecnicas/download",
 ];
 
-// Configuración de rate limiting (con try-catch para fallos)
 const rateLimitConfig: Record<
   string,
   { type: "auth" | "api" | "contact"; message?: string }
@@ -118,12 +115,10 @@ async function safeRateLimit(
   config: { type: "auth" | "api" | "contact"; message?: string }
 ): Promise<NextResponse | null> {
   try {
-    // Importación dinámica para evitar errores de build
     const { rateLimit } = await import("./lib/rate-limit");
     return await rateLimit(req, config);
   } catch (error) {
     console.error("Rate limiting failed:", error);
-    // En caso de error, permitir la request (fail open)
     return null;
   }
 }
@@ -177,7 +172,6 @@ export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   try {
-    // Verificar si la ruta necesita rate limiting
     const rateLimitConfigItem = needsRateLimit(pathname);
     if (rateLimitConfigItem) {
       try {
@@ -187,31 +181,25 @@ export default async function middleware(req: NextRequest) {
         }
       } catch (error) {
         console.error("Rate limit error:", error);
-        // Continuar sin rate limiting en caso de error
       }
     }
 
-    // Permitir rutas públicas sin más validaciones
     if (isPublicRoute(pathname)) {
       return NextResponse.next();
     }
 
-    // Permitir APIs públicas
     if (isPublicApiRoute(pathname)) {
       return NextResponse.next();
     }
 
-    // Verificar variables de entorno críticas
     if (!secret) {
       console.error("Missing NEXTAUTH_SECRET/AUTH_SECRET environment variable");
-      // En producción, permitir acceso en lugar de fallar
       if (process.env.NODE_ENV === "production") {
         return NextResponse.next();
       }
       throw new Error("Missing NEXTAUTH_SECRET environment variable.");
     }
 
-    // Obtener token de forma segura
     let token;
     try {
       token = await getToken({
@@ -227,7 +215,6 @@ export default async function middleware(req: NextRequest) {
       });
     } catch (error) {
       console.error("getToken failed:", error);
-      // Si falla obtener el token, redirigir a login para rutas protegidas
       if (pathname.startsWith("/api/")) {
         return NextResponse.json(
           { error: "Authentication error", message: "Token validation failed" },
@@ -239,7 +226,6 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Si no hay token, manejar según el tipo de ruta
     if (!token) {
       if (pathname.startsWith("/login")) {
         return NextResponse.next();
@@ -259,7 +245,6 @@ export default async function middleware(req: NextRequest) {
 
     const userRole = token.role as string;
 
-    // Validar rutas de admin
     if (
       isAdminRoute(pathname) &&
       userRole !== "admin" &&
@@ -268,7 +253,6 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 
-    // Validar APIs de admin
     if (
       isAdminApiRoute(pathname) &&
       userRole !== "admin" &&
@@ -280,7 +264,6 @@ export default async function middleware(req: NextRequest) {
       );
     }
 
-    // Validar APIs protegidas
     if (isProtectedApiRoute(pathname) || pathname.startsWith("/api/")) {
       if (!hasRoleAccess(pathname, userRole)) {
         return NextResponse.json(
@@ -293,7 +276,6 @@ export default async function middleware(req: NextRequest) {
       }
     }
 
-    // Validar rutas de dashboard
     if (
       pathname.startsWith("/dashboard/") &&
       !hasRoleAccess(pathname, userRole)
@@ -305,19 +287,16 @@ export default async function middleware(req: NextRequest) {
   } catch (error) {
     console.error("Middleware error:", error);
 
-    // En caso de error crítico, permitir acceso a rutas públicas
     if (isPublicRoute(pathname) || isPublicApiRoute(pathname)) {
       return NextResponse.next();
     }
 
-    // Para rutas protegidas, redirigir a login
     if (!pathname.startsWith("/api/")) {
       const redirectUrl = new URL("/login", req.url);
       redirectUrl.searchParams.set("callbackUrl", req.url);
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Para APIs, retornar error
     return NextResponse.json(
       {
         error: "Internal Server Error",

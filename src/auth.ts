@@ -7,6 +7,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
   ...authConfig,
   session: { strategy: "jwt" },
+  trustHost: true,
+  secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -24,6 +26,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.name = (token.name as string) ?? session.user.name ?? null;
 
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      if (process.env.NODE_ENV === "production") {
+        const productionBaseUrl = "https://telasytejidosluciana.com";
+
+        if (url.startsWith("/")) {
+          return `${productionBaseUrl}${url}`;
+        }
+
+        if (url.includes("localhost:3000")) {
+          return url
+            .replace("localhost:3000", "telasytejidosluciana.com")
+            .replace("http://", "https://");
+        }
+
+        if (url.startsWith(productionBaseUrl)) {
+          return url;
+        }
+
+        return `${productionBaseUrl}/dashboard`;
+      }
+
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
     },
   },
 });
