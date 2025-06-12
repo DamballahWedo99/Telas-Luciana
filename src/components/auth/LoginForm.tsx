@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -24,7 +24,7 @@ import {
 
 import { loginSchema, LoginFormValues } from "@/lib/zod";
 
-export default function LoginForm() {
+function LoginFormContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
@@ -188,5 +188,35 @@ export default function LoginForm() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+function LoginFormFallback() {
+  return (
+    <div className="flex min-h-[100dvh] sm:min-h-screen flex-col items-center justify-center bg-gray-100 p-4 sm:p-8">
+      <div className="mb-4 sm:mb-8 flex flex-col items-center">
+        <Image
+          src="/images/logo.svg"
+          alt="Logo de la empresa"
+          width={180}
+          height={60}
+          priority
+          className="mb-4"
+        />
+      </div>
+      <Card className="w-full max-w-md">
+        <CardContent className="flex items-center justify-center p-6">
+          <Loader2Icon className="h-6 w-6 animate-spin" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function LoginForm() {
+  return (
+    <Suspense fallback={<LoginFormFallback />}>
+      <LoginFormContent />
+    </Suspense>
   );
 }
