@@ -233,6 +233,22 @@ export default async function middleware(req: NextRequest) {
             ? "__Secure-next-auth.session-token"
             : "next-auth.session-token",
       });
+
+      if (pathname === "/dashboard") {
+        console.log("🔍 Dashboard access attempt:", {
+          hasToken: !!token,
+          env: process.env.NODE_ENV,
+          secureCookie:
+            nextAuthUrl?.startsWith("https://") ||
+            process.env.NODE_ENV === "production",
+          cookieName:
+            process.env.NODE_ENV === "production"
+              ? "__Secure-next-auth.session-token"
+              : "next-auth.session-token",
+          cookies: req.cookies.getAll().map((c) => c.name),
+          nextAuthUrl: process.env.NEXTAUTH_URL,
+        });
+      }
     } catch (error) {
       console.error("getToken failed:", error);
       if (pathname.startsWith("/api/")) {

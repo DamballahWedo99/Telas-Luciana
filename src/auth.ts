@@ -9,6 +9,57 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
   secret: process.env.NEXTAUTH_SECRET,
+
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        domain:
+          process.env.NODE_ENV === "production"
+            ? ".telasytejidosluciana.com"
+            : undefined,
+      },
+    },
+    callbackUrl: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.callback-url"
+          : "next-auth.callback-url",
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        domain:
+          process.env.NODE_ENV === "production"
+            ? ".telasytejidosluciana.com"
+            : undefined,
+      },
+    },
+    csrfToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Host-next-auth.csrf-token"
+          : "next-auth.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        domain:
+          process.env.NODE_ENV === "production"
+            ? ".telasytejidosluciana.com"
+            : undefined,
+      },
+    },
+  },
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -18,6 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return token;
     },
+
     async session({ session, token }) {
       if (!token) return session;
 
@@ -27,15 +79,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return session;
     },
+
     async redirect({ url, baseUrl }) {
       if (process.env.NODE_ENV === "production") {
         const productionBaseUrl = "https://telasytejidosluciana.com";
-
-        if (url.includes("localhost")) {
-          return url
-            .replace(/localhost:?\d*/g, "telasytejidosluciana.com")
-            .replace("http://", "https://");
-        }
 
         if (url.startsWith("/")) {
           return `${productionBaseUrl}${url}`;
