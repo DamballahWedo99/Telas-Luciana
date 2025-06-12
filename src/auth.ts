@@ -28,11 +28,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
-      const isProduction =
-        process.env.NODE_ENV === "production" ||
-        process.env.NEXTAUTH_URL?.includes("telasytejidosluciana.com");
-
-      if (isProduction) {
+      if (process.env.NODE_ENV === "production") {
         const productionBaseUrl = "https://telasytejidosluciana.com";
 
         if (url.includes("localhost")) {
@@ -43,25 +39,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (url.startsWith("/")) {
           return `${productionBaseUrl}${url}`;
-        }
-
-        if (url.startsWith(productionBaseUrl)) {
-          return url;
-        }
-
-        return `${productionBaseUrl}/dashboard`;
-      }
-      if (process.env.NODE_ENV === "production") {
-        const productionBaseUrl = "https://telasytejidosluciana.com";
-
-        if (url.startsWith("/")) {
-          return `${productionBaseUrl}${url}`;
-        }
-
-        if (url.includes("localhost:3000")) {
-          return url
-            .replace("localhost:3000", "telasytejidosluciana.com")
-            .replace("http://", "https://");
         }
 
         if (url.startsWith(productionBaseUrl)) {

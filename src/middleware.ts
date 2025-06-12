@@ -12,7 +12,6 @@ function getBaseUrl(req: NextRequest): string {
   ) {
     return "https://telasytejidosluciana.com";
   }
-
   return `${req.nextUrl.protocol}//${req.nextUrl.host}`;
 }
 
@@ -315,7 +314,6 @@ export default async function middleware(req: NextRequest) {
     }
 
     if (!pathname.startsWith("/api/")) {
-      // CAMBIO: Usar baseUrl correcto
       const redirectUrl = new URL("/login", baseUrl);
       const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
       redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);

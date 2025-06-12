@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { loginAction } from "@/actions/auth";
@@ -28,6 +28,9 @@ export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   const {
     register,
@@ -69,7 +72,7 @@ export default function LoginForm() {
         duration: 2000,
       });
 
-      router.push("/dashboard");
+      router.push(callbackUrl);
       router.refresh();
     } catch (error) {
       toast.error("Error de conexión", {
