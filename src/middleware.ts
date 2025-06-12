@@ -5,6 +5,26 @@ import type { NextRequest } from "next/server";
 const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
 const nextAuthUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL;
 
+function getBaseUrl(req: NextRequest): string {
+  if (
+    process.env.NODE_ENV === "production" ||
+    req.nextUrl.hostname === "telasytejidosluciana.com"
+  ) {
+    return "https://telasytejidosluciana.com";
+  }
+
+  return `${req.nextUrl.protocol}//${req.nextUrl.host}`;
+}
+
+function cleanUrl(url: string): string {
+  if (url.includes("localhost:3000")) {
+    return url
+      .replace("localhost:3000", "telasytejidosluciana.com")
+      .replace("http://", "https://");
+  }
+  return url;
+}
+
 const publicRoutes = [
   "/",
   "/login",
@@ -170,6 +190,7 @@ function hasRoleAccess(pathname: string, userRole: string): boolean {
 
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const baseUrl = getBaseUrl(req);
 
   try {
     const rateLimitConfigItem = needsRateLimit(pathname);
@@ -221,8 +242,9 @@ export default async function middleware(req: NextRequest) {
           { status: 401 }
         );
       }
-      const redirectUrl = new URL("/login", req.url);
-      redirectUrl.searchParams.set("callbackUrl", req.url);
+      const redirectUrl = new URL("/login", baseUrl);
+      const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
+      redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -238,8 +260,9 @@ export default async function middleware(req: NextRequest) {
         );
       }
 
-      const redirectUrl = new URL("/login", req.url);
-      redirectUrl.searchParams.set("callbackUrl", req.url);
+      const redirectUrl = new URL("/login", baseUrl);
+      const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
+      redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -250,7 +273,7 @@ export default async function middleware(req: NextRequest) {
       userRole !== "admin" &&
       userRole !== "major_admin"
     ) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      return NextResponse.redirect(new URL("/dashboard", baseUrl));
     }
 
     if (
@@ -280,7 +303,7 @@ export default async function middleware(req: NextRequest) {
       pathname.startsWith("/dashboard/") &&
       !hasRoleAccess(pathname, userRole)
     ) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      return NextResponse.redirect(new URL("/dashboard", baseUrl));
     }
 
     return NextResponse.next();
@@ -292,8 +315,10 @@ export default async function middleware(req: NextRequest) {
     }
 
     if (!pathname.startsWith("/api/")) {
-      const redirectUrl = new URL("/login", req.url);
-      redirectUrl.searchParams.set("callbackUrl", req.url);
+      // CAMBIO: Usar baseUrl correcto
+      const redirectUrl = new URL("/login", baseUrl);
+      const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
+      redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
       return NextResponse.redirect(redirectUrl);
     }
 

@@ -28,6 +28,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
+      const isProduction =
+        process.env.NODE_ENV === "production" ||
+        process.env.NEXTAUTH_URL?.includes("telasytejidosluciana.com");
+
+      if (isProduction) {
+        const productionBaseUrl = "https://telasytejidosluciana.com";
+
+        if (url.includes("localhost")) {
+          return url
+            .replace(/localhost:?\d*/g, "telasytejidosluciana.com")
+            .replace("http://", "https://");
+        }
+
+        if (url.startsWith("/")) {
+          return `${productionBaseUrl}${url}`;
+        }
+
+        if (url.startsWith(productionBaseUrl)) {
+          return url;
+        }
+
+        return `${productionBaseUrl}/dashboard`;
+      }
       if (process.env.NODE_ENV === "production") {
         const productionBaseUrl = "https://telasytejidosluciana.com";
 
