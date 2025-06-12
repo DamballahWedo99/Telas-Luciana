@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
@@ -112,10 +112,9 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
   });
 
   const userRole = session?.user?.role;
-  const isAdmin = userRole === "admin" || userRole === "major_admin";
   const isSeller = userRole === "seller";
 
-  const loadFichas = async () => {
+  const loadFichas = useCallback(async () => {
     if (!session?.user) return;
 
     setIsLoadingFichas(true);
@@ -133,13 +132,13 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
     } finally {
       setIsLoadingFichas(false);
     }
-  };
+  }, [session?.user]);
 
   useEffect(() => {
     if (open && session?.user) {
       loadFichas();
     }
-  }, [open, session?.user]);
+  }, [open, session?.user, loadFichas]);
 
   const handleDownload = async (fichaKey?: string) => {
     const keyToDownload = fichaKey || fichaSeleccionada;
@@ -766,8 +765,8 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
             <AlertDialogHeader>
               <AlertDialogTitle>¿Eliminar ficha técnica?</AlertDialogTitle>
               <AlertDialogDescription>
-                Esta acción no se puede deshacer. La ficha técnica "
-                {fichaToDelete?.name}" será eliminada permanentemente.
+                Esta acción no se puede deshacer. La ficha técnica &ldquo;
+                {fichaToDelete?.name}&rdquo; será eliminada permanentemente.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

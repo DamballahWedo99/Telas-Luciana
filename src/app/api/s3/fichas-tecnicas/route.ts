@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
               if (headResponse.Metadata?.allowedroles) {
                 allowedRoles = headResponse.Metadata.allowedroles.split("-");
               }
-            } catch (error) {
+            } catch {
               console.log(
                 `No metadata found for ${obj.Key}, using default roles`
               );

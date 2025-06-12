@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       } else {
         allowedRoles = ["major_admin", "admin", "seller"];
       }
-    } catch (headError) {
+    } catch {
       if (key.includes("_roles_")) {
         const rolesMatch = key.match(/_roles_([^_]+)/);
         if (rolesMatch) {
