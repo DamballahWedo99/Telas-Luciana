@@ -215,6 +215,7 @@ interface InventoryCardProps {
   openNewOrder: boolean;
   isAdmin: boolean;
   isLoading: boolean;
+  onLoadingChange?: (isLoading: boolean) => void;
 }
 
 interface UploadResult {
@@ -525,6 +526,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   setUbicacionFilter,
   isAdmin,
   isLoading,
+  onLoadingChange,
 }) => {
   const [inventoryCollapsed, setInventoryCollapsed] = useState(false);
   const [openSellDialog, setOpenSellDialog] = useState(false);
@@ -1294,6 +1296,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
   const handleReloadInventory = async () => {
     try {
+      if (onLoadingChange) {
+        onLoadingChange(true);
+      }
+
       const now = new Date();
       const currentYear = now.getFullYear().toString();
       const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
@@ -1314,6 +1320,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     } catch (error) {
       console.error("Error recargando inventario:", error);
       toast.error("Error recargando inventario");
+    } finally {
+      if (onLoadingChange) {
+        onLoadingChange(false);
+      }
     }
   };
 
@@ -2190,13 +2200,70 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
+  const generateFileName = (): string => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${(now.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}`;
+    const timeStr = `${now.getHours().toString().padStart(2, "0")}${now
+      .getMinutes()
+      .toString()
+      .padStart(2, "0")}`;
+
+    let baseFileName = isAdmin ? "inventario" : "inventario_resumido";
+
+    if (!isCurrentMonthAndYear()) {
+      baseFileName += `_${getMonthName(
+        currentViewingMonth
+      ).toLowerCase()}_${currentViewingYear}`;
+    }
+
+    const filterParts: string[] = [];
+
+    if (searchTerm) {
+      filterParts.push(
+        `busqueda_${searchTerm.replace(/\s+/g, "_").toLowerCase()}`
+      );
+    }
+
+    if (unitFilter !== "all") {
+      filterParts.push(`${unitFilter.toLowerCase()}`);
+    }
+
+    if (isAdmin && ocFilter !== "all") {
+      filterParts.push(`oc_${ocFilter.replace(/[\s-]/g, "_").toLowerCase()}`);
+    }
+
+    if (telaFilter !== "all") {
+      filterParts.push(`tela_${telaFilter.replace(/\s+/g, "_").toLowerCase()}`);
+    }
+
+    if (colorFilter !== "all") {
+      filterParts.push(
+        `color_${colorFilter.replace(/\s+/g, "_").toLowerCase()}`
+      );
+    }
+
+    if (ubicacionFilter !== "all") {
+      filterParts.push(`ubicacion_${ubicacionFilter.toLowerCase()}`);
+    }
+
+    let fileName = baseFileName;
+
+    if (filterParts.length > 0) {
+      fileName += `_filtrado_${filterParts.join("_")}`;
+    }
+
+    fileName += `_${dateStr}_${timeStr}`;
+
+    return fileName;
+  };
+
   const handleExportCSV = () => {
     let csvData;
-    let filename = "inventario";
 
     if (isAdmin) {
       csvData = Papa.unparse(inventory);
-      filename = "inventario_completo";
     } else {
       const filteredData = inventory.map((item) => ({
         Tela: item.Tela,
@@ -2206,18 +2273,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       }));
 
       csvData = Papa.unparse(filteredData);
-      filename = "inventario_resumido";
     }
 
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}${(now.getMonth() + 1)
-      .toString()
-      .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}`;
+    const fileName = generateFileName();
 
     const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `${filename}_${dateStr}.csv`;
+    link.download = `${fileName}.csv`;
     link.click();
   };
 
@@ -2239,8 +2302,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       )
         .toString()
         .padStart(2, "0")}/${now.getFullYear()}`;
+      const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}`;
       doc.setFontSize(11);
-      doc.text(`Fecha: ${dateStr}`, 14, 30);
+      doc.text(`Fecha: ${dateStr} ${timeStr}`, 14, 30);
 
       let columns = [];
       let rows = [];
@@ -2358,12 +2425,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         }
       }
 
-      const filename = isAdmin ? "inventario_completo" : "inventario_resumido";
-      const dateForFilename = `${now.getFullYear()}${(now.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}`;
-
-      doc.save(`${filename}_${dateForFilename}.pdf`);
+      const fileName = generateFileName();
+      doc.save(`${fileName}.pdf`);
 
       toast.success("PDF exportado exitosamente");
     } catch (error) {
@@ -2393,6 +2456,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
   const handleLoadHistoricalInventory = async (year: string, month: string) => {
     try {
+      if (onLoadingChange) {
+        onLoadingChange(true);
+      }
+
       setIsLoadingHistorical(true);
       toast.info(`Cargando inventario de ${getMonthName(month)} ${year}...`);
 
@@ -2432,6 +2499,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       );
     } finally {
       setIsLoadingHistorical(false);
+      if (onLoadingChange) {
+        onLoadingChange(false);
+      }
     }
   };
 

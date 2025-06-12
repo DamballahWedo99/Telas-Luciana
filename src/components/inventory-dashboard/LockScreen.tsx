@@ -312,8 +312,8 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
   };
 
   return (
-    <div className="h-screen flex items-center justify-center bg-gray-50 p-4 overflow-hidden">
-      <div className="max-w-lg w-full">
+    <div className="min-h-full flex flex-col bg-gray-50 p-4">
+      <div className="max-w-lg w-full mx-auto">
         {/* Tarjeta de filtros */}
         <Card className="bg-white shadow-sm">
           <CardHeader className="pb-2">

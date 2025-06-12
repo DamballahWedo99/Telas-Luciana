@@ -17,7 +17,9 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthProvider>
-      <main className={`${inter.className} min-h-screen flex-grow`}>
+      <main
+        className={`${inter.className} min-h-[100dvh] sm:min-h-screen flex-grow`}
+      >
         {children}
       </main>
     </AuthProvider>

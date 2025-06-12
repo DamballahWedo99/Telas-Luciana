@@ -82,8 +82,8 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4">
-      <div className="mb-8 flex flex-col items-center">
+    <div className="flex min-h-[100dvh] sm:min-h-screen flex-col items-center justify-center bg-gray-100 p-4 sm:p-8">
+      <div className="mb-4 sm:mb-8 flex flex-col items-center">
         <Image
           src="/images/logo.svg"
           alt="Logo de la empresa"

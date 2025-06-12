@@ -569,7 +569,6 @@ const Dashboard = () => {
   const [openNewRow, setOpenNewRow] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
-
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [openNewUser, setOpenNewUser] = useState(false);
@@ -577,6 +576,10 @@ const Dashboard = () => {
   const inventoryLoadedRef = useRef(false);
 
   const { data: session } = useSession();
+
+  const handleInventoryLoadingChange = (isLoading: boolean) => {
+    setIsLoadingInventory(isLoading);
+  };
 
   const setSuccess = (message: string | ((prev: string) => string)) => {
     const messageText = typeof message === "function" ? message("") : message;
@@ -872,20 +875,33 @@ const Dashboard = () => {
 
   if (isMobile) {
     return (
-      <div className="relative">
-        <div className="fixed top-4 right-4 z-50">
-          <Button
-            onClick={() => setOpenFichasTecnicas(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
-            size="lg"
-          >
-            <FileText className="h-5 w-5" />
-            Fichas Técnicas
-          </Button>
+      <div className="fixed inset-0 overflow-hidden">
+        <div className="h-full flex flex-col items-center justify-center p-4">
+          {/* Contenedor para botón + LockScreen centrados */}
+          <div className="w-full space-y-4">
+            {/* Botón de Fichas Técnicas con padding igual al LockScreen */}
+            <div className="max-w-lg mx-auto px-4">
+              <Button
+                onClick={() => setOpenFichasTecnicas(true)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
+              >
+                <FileText className="h-4 w-4" />
+                Fichas Técnicas
+              </Button>
+            </div>
+
+            {/* LockScreen */}
+            <div>
+              <LockScreen
+                inventory={inventory}
+                filters={filters}
+                isAdmin={isAdmin}
+              />
+            </div>
+          </div>
         </div>
 
-        <LockScreen inventory={inventory} filters={filters} isAdmin={isAdmin} />
-
+        {/* Loading overlay */}
         {isLoadingInventory && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-6 mx-4 max-w-sm w-full shadow-xl">
@@ -954,6 +970,7 @@ const Dashboard = () => {
         openNewOrder={openNewOrder}
         isAdmin={isAdmin}
         isLoading={isLoadingInventory}
+        onLoadingChange={handleInventoryLoadingChange}
       />
 
       {isAdmin && (

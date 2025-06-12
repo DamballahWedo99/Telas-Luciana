@@ -2,7 +2,7 @@ import React from "react";
 
 export const LoadingScreen: React.FC = () => {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+    <div className="min-h-[100dvh] sm:min-h-screen flex flex-col items-center justify-center bg-gray-50">
       <div className="text-center">
         <div className="mb-4">
           <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-black"></div>
