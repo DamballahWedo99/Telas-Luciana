@@ -10,8 +10,8 @@ import { rateLimit } from "@/lib/rate-limit";
 const s3Client = new S3Client({
   region: "us-west-2",
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
   },
 });
 
