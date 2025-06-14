@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
@@ -27,22 +28,44 @@ type ViewType = "inventory" | "orders";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useUserVerification();
 
   const isMajorAdmin = session?.user?.role === "major_admin";
 
+  // Validación robusta de autenticación
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+    if (status === "loading") {
+      // Aún cargando, no hacer nada
+      return;
+    }
 
-    return () => clearTimeout(timer);
-  }, []);
+    if (status === "unauthenticated" || !session?.user) {
+      // No autenticado, redirigir inmediatamente
+      console.log("🚫 No hay sesión válida, redirigiendo...");
+      router.replace("/login");
+      return;
+    }
+
+    if (status === "authenticated" && session?.user) {
+      // Sesión válida, permitir acceso
+      console.log("✅ Sesión válida, permitiendo acceso", session.user);
+      setIsAuthenticated(true);
+
+      // Delay mínimo para UX suave
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 800);
+
+      return () => clearTimeout(timer);
+    }
+  }, [status, session, router]);
 
   const handleLogout = async () => {
     try {
@@ -67,10 +90,12 @@ export default function DashboardPage() {
     setOpenFichasTecnicas(true);
   };
 
-  if (status === "loading" || isLoading) {
+  // Mostrar loading mientras se valida la sesión O mientras isLoading es true
+  if (status === "loading" || isLoading || !isAuthenticated) {
     return <LoadingScreen />;
   }
 
+  // Si llegamos aquí, tenemos una sesión válida
   const getNavigationTitle = () => {
     switch (currentView) {
       case "inventory":
