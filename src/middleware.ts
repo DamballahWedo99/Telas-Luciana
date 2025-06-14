@@ -5,9 +5,6 @@ import type { NextRequest } from "next/server";
 const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
 const nextAuthUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL;
 
-// Agregar debugging
-const DEBUG = true; // Cambiar a false cuando esté funcionando
-
 function getBaseUrl(req: NextRequest): string {
   if (
     process.env.NODE_ENV === "production" ||
@@ -27,12 +24,37 @@ function cleanUrl(url: string): string {
   return url;
 }
 
-// Función para detectar si es una solicitud de recurso estático
-function isStaticResource(pathname: string): boolean {
+function isDirectBrowserAccess(req: NextRequest): boolean {
+  const referer = req.headers.get("referer");
+  const acceptHeader = req.headers.get("accept") || "";
+
+  if (!referer && acceptHeader.includes("text/html")) {
+    return true;
+  }
+
+  if (referer && process.env.NODE_ENV === "production") {
+    const refererUrl = new URL(referer);
+    if (
+      !refererUrl.hostname.includes("telasytejidosluciana.com") &&
+      !refererUrl.hostname.includes("localhost")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isLegitimateApiRequest(req: NextRequest): boolean {
+  const acceptHeader = req.headers.get("accept") || "";
+  const contentType = req.headers.get("content-type") || "";
+  const xRequestedWith = req.headers.get("x-requested-with");
+
   return (
-    pathname.startsWith("/_next") ||
-    pathname.includes(".") ||
-    pathname.startsWith("/api/auth")
+    acceptHeader.includes("application/json") ||
+    contentType.includes("application/json") ||
+    xRequestedWith === "XMLHttpRequest" ||
+    req.method !== "GET"
   );
 }
 
@@ -50,13 +72,81 @@ const publicApiRoutes = [
   "/api/auth/callback",
   "/api/auth/signin",
   "/api/auth/signout",
-  "/api/auth/session",
-  "/api/auth/csrf",
-  "/api/auth/providers",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
   "/api/contact",
 ];
+
+const adminRoutes = ["/dashboard/admin", "/dashboard/settings"];
+
+const adminApiRoutes = [
+  "/api/s3/inventario/create-row",
+  "/api/s3/inventario/update",
+  "/api/s3/fichas-tecnicas/upload",
+  "/api/s3/fichas-tecnicas/delete",
+];
+
+const protectedApiRoutes = [
+  "/api/packing-list",
+  "/api/returns",
+  "/api/sales",
+  "/api/users",
+  "/api/s3/inventario",
+  "/api/s3/fichas-tecnicas",
+  "/api/s3/fichas-tecnicas/download",
+];
+
+const rateLimitConfig: Record<
+  string,
+  { type: "auth" | "api" | "contact"; message?: string }
+> = {
+  "/api/auth/forgot-password": {
+    type: "auth",
+    message:
+      "Demasiados intentos de recuperación. Espera antes de intentar nuevamente.",
+  },
+  "/api/auth/reset-password": {
+    type: "auth",
+    message:
+      "Demasiados intentos de reset. Espera antes de intentar nuevamente.",
+  },
+  "/api/contact": {
+    type: "contact",
+    message: "Demasiados mensajes de contacto. Espera antes de enviar otro.",
+  },
+  "/api/s3/fichas-tecnicas/upload": {
+    type: "api",
+    message:
+      "Demasiadas solicitudes de subida. Espera antes de intentar nuevamente.",
+  },
+  "/api/s3/fichas-tecnicas/delete": {
+    type: "api",
+    message:
+      "Demasiadas solicitudes de eliminación. Espera antes de intentar nuevamente.",
+  },
+};
+
+const roleBasedAccess: Record<string, string[]> = {
+  admin_only: [
+    "/api/s3/inventario/create-row",
+    "/api/s3/inventario/update",
+    "/api/s3/fichas-tecnicas/upload",
+    "/api/s3/fichas-tecnicas/delete",
+    "/dashboard/admin",
+    "/dashboard/settings",
+  ],
+  authenticated: [
+    "/api/packing-list",
+    "/api/returns",
+    "/api/sales",
+    "/api/users",
+    "/api/s3/inventario",
+    "/api/s3/fichas-tecnicas",
+    "/api/s3/fichas-tecnicas/download",
+    "/api/users/verify",
+    "/dashboard",
+  ],
+};
 
 function isPublicRoute(pathname: string): boolean {
   const normalizedPath =
@@ -73,144 +163,158 @@ function isPublicApiRoute(pathname: string): boolean {
   return publicApiRoutes.some((route) => pathname.startsWith(route));
 }
 
+async function safeRateLimit(
+  req: NextRequest,
+  config: { type: "auth" | "api" | "contact"; message?: string }
+): Promise<NextResponse | null> {
+  try {
+    const { rateLimit } = await import("./lib/rate-limit");
+    return await rateLimit(req, config);
+  } catch (error) {
+    console.error("Rate limiting failed:", error);
+    return null;
+  }
+}
+
+function needsRateLimit(
+  pathname: string
+): { type: "auth" | "api" | "contact"; message?: string } | null {
+  for (const [route, config] of Object.entries(rateLimitConfig)) {
+    if (pathname.startsWith(route)) {
+      return config;
+    }
+  }
+  return null;
+}
+
+function isAdminRoute(pathname: string): boolean {
+  return adminRoutes.some((route) => pathname.startsWith(route));
+}
+
+function isAdminApiRoute(pathname: string): boolean {
+  return adminApiRoutes.some((route) => pathname.startsWith(route));
+}
+
+function isProtectedApiRoute(pathname: string): boolean {
+  return protectedApiRoutes.some((route) => pathname.startsWith(route));
+}
+
+function hasRoleAccess(pathname: string, userRole: string): boolean {
+  if (userRole === "admin" || userRole === "major_admin") {
+    return true;
+  }
+
+  const adminOnlyRoutes = roleBasedAccess["admin_only"];
+  if (adminOnlyRoutes.some((route) => pathname.startsWith(route))) {
+    return false;
+  }
+
+  const authenticatedRoutes = roleBasedAccess["authenticated"];
+  if (authenticatedRoutes.some((route) => pathname.startsWith(route))) {
+    return true;
+  }
+
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+    return true;
+  }
+
+  return false;
+}
+
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const baseUrl = getBaseUrl(req);
 
   try {
-    // Ignorar recursos estáticos
-    if (isStaticResource(pathname)) {
+    if (pathname.startsWith("/api/") && !isPublicApiRoute(pathname)) {
+      if (isDirectBrowserAccess(req) && !isLegitimateApiRequest(req)) {
+        return NextResponse.json(
+          {
+            error: "Forbidden",
+            message:
+              "Direct API access not allowed. Use the application interface.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    const rateLimitConfigItem = needsRateLimit(pathname);
+    if (rateLimitConfigItem) {
+      try {
+        const rateLimitResponse = await safeRateLimit(req, rateLimitConfigItem);
+        if (rateLimitResponse) {
+          return rateLimitResponse;
+        }
+      } catch (error) {
+        console.error("Rate limit error:", error);
+      }
+    }
+
+    if (isPublicRoute(pathname)) {
       return NextResponse.next();
     }
 
-    // Permitir rutas públicas
-    if (isPublicRoute(pathname) || isPublicApiRoute(pathname)) {
+    if (isPublicApiRoute(pathname)) {
       return NextResponse.next();
-    }
-
-    // Logging para debugging
-    if (DEBUG && pathname === "/dashboard") {
-      console.log("🔍 [Middleware] Dashboard request:", {
-        pathname,
-        method: req.method,
-        cookies: req.cookies.getAll().map((c) => ({
-          name: c.name,
-          hasValue: !!c.value,
-          valueLength: c.value?.length,
-        })),
-        headers: {
-          referer: req.headers.get("referer"),
-          cookie: req.headers.get("cookie")?.substring(0, 100) + "...",
-        },
-      });
     }
 
     if (!secret) {
-      console.error("❌ [Middleware] Missing NEXTAUTH_SECRET");
+      console.error("Missing NEXTAUTH_SECRET/AUTH_SECRET environment variable");
       if (process.env.NODE_ENV === "production") {
-        // En producción, permitir el paso pero loggear el error
         return NextResponse.next();
       }
       throw new Error("Missing NEXTAUTH_SECRET environment variable.");
     }
 
-    // Intentar obtener el token con múltiples estrategias
-    let token = null;
-    const cookieNames = [
-      "__Secure-next-auth.session-token",
-      "next-auth.session-token",
-      "__Host-next-auth.session-token",
-      "authjs.session-token",
-    ];
-
-    // Intentar con cada nombre de cookie
-    for (const cookieName of cookieNames) {
-      if (req.cookies.has(cookieName)) {
-        try {
-          token = await getToken({
-            req,
-            secret,
-            cookieName,
-            secureCookie:
-              cookieName.startsWith("__Secure") ||
-              cookieName.startsWith("__Host"),
-          });
-
-          if (token) {
-            if (DEBUG) {
-              console.log(
-                "✅ [Middleware] Token found with cookie:",
-                cookieName
-              );
-            }
-            break;
-          }
-        } catch (error) {
-          if (DEBUG) {
-            console.log("⚠️ [Middleware] Error with cookie", cookieName, error);
-          }
-        }
-      }
-    }
-
-    // Si no encontramos token con nombres específicos, intentar con la configuración por defecto
-    if (!token) {
-      try {
-        token = await getToken({
-          req,
-          secret,
-        });
-      } catch (error) {
-        console.error("❌ [Middleware] Default getToken failed:", error);
-      }
-    }
-
-    if (DEBUG && pathname === "/dashboard") {
-      console.log("🔐 [Middleware] Token result:", {
-        hasToken: !!token,
-        tokenData: token
-          ? {
-              id: token.id,
-              role: token.role,
-              email: token.email,
-            }
-          : null,
+    let token;
+    try {
+      token = await getToken({
+        req,
+        secret,
+        secureCookie:
+          nextAuthUrl?.startsWith("https://") ||
+          process.env.NODE_ENV === "production",
+        cookieName:
+          process.env.NODE_ENV === "production"
+            ? "__Secure-next-auth.session-token"
+            : "next-auth.session-token",
       });
+
+      if (pathname === "/dashboard") {
+        console.log("🔍 Dashboard access attempt:", {
+          hasToken: !!token,
+          env: process.env.NODE_ENV,
+          secureCookie:
+            nextAuthUrl?.startsWith("https://") ||
+            process.env.NODE_ENV === "production",
+          cookieName:
+            process.env.NODE_ENV === "production"
+              ? "__Secure-next-auth.session-token"
+              : "next-auth.session-token",
+          cookies: req.cookies.getAll().map((c) => c.name),
+          nextAuthUrl: process.env.NEXTAUTH_URL,
+        });
+      }
+    } catch (error) {
+      console.error("getToken failed:", error);
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Authentication error", message: "Token validation failed" },
+          { status: 401 }
+        );
+      }
+      const redirectUrl = new URL("/login", baseUrl);
+      const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
+      redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
+      return NextResponse.redirect(redirectUrl);
     }
 
-    // Si no hay token
     if (!token) {
-      // Para el dashboard, verificar si hay indicios de un login reciente
-      if (pathname === "/dashboard") {
-        // Verificar si hay alguna cookie de sesión
-        const hasAnySessionCookie = cookieNames.some((name) =>
-          req.cookies.has(name)
-        );
-
-        if (hasAnySessionCookie) {
-          if (DEBUG) {
-            console.log(
-              "🔄 [Middleware] Session cookie exists but no token yet, allowing through"
-            );
-          }
-          // Permitir el paso para dar tiempo a que la sesión se establezca
-          return NextResponse.next();
-        }
-
-        // Verificar el referer para detectar si venimos del login
-        const referer = req.headers.get("referer");
-        if (
-          referer &&
-          (referer.includes("/login") || referer.includes("/api/auth"))
-        ) {
-          if (DEBUG) {
-            console.log("🔄 [Middleware] Coming from login, allowing through");
-          }
-          return NextResponse.next();
-        }
+      if (pathname.startsWith("/login")) {
+        return NextResponse.next();
       }
 
-      // Para APIs, retornar 401
       if (pathname.startsWith("/api/")) {
         return NextResponse.json(
           { error: "Unauthorized", message: "Authentication required" },
@@ -218,24 +322,57 @@ export default async function middleware(req: NextRequest) {
         );
       }
 
-      // Para otras rutas, redirigir a login
       const redirectUrl = new URL("/login", baseUrl);
       const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
       redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Si hay token, permitir el acceso
-    if (DEBUG && pathname === "/dashboard") {
-      console.log("✅ [Middleware] Access granted to dashboard");
+    const userRole = token.role as string;
+
+    if (
+      isAdminRoute(pathname) &&
+      userRole !== "admin" &&
+      userRole !== "major_admin"
+    ) {
+      return NextResponse.redirect(new URL("/dashboard", baseUrl));
+    }
+
+    if (
+      isAdminApiRoute(pathname) &&
+      userRole !== "admin" &&
+      userRole !== "major_admin"
+    ) {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    if (isProtectedApiRoute(pathname) || pathname.startsWith("/api/")) {
+      if (!hasRoleAccess(pathname, userRole)) {
+        return NextResponse.json(
+          {
+            error: "Forbidden",
+            message: "Insufficient permissions for this resource",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (
+      pathname.startsWith("/dashboard/") &&
+      !hasRoleAccess(pathname, userRole)
+    ) {
+      return NextResponse.redirect(new URL("/dashboard", baseUrl));
     }
 
     return NextResponse.next();
   } catch (error) {
-    console.error("❌ [Middleware] General error:", error);
+    console.error("Middleware error:", error);
 
-    // En caso de error, ser permisivo para evitar bloqueos
-    if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+    if (isPublicRoute(pathname) || isPublicApiRoute(pathname)) {
       return NextResponse.next();
     }
 
@@ -258,6 +395,7 @@ export default async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next|.*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico)).*)",
+    "/(api)(.*)",
   ],
 };

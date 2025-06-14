@@ -27,7 +27,6 @@ import { loginSchema, LoginFormValues } from "@/lib/zod";
 function LoginFormContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
