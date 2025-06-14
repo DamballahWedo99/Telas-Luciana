@@ -33,32 +33,38 @@ export default function DashboardPage() {
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useUserVerification();
 
   const isMajorAdmin = session?.user?.role === "major_admin";
 
-  // Validación robusta de autenticación
   useEffect(() => {
     if (status === "loading") {
-      // Aún cargando, no hacer nada
       return;
     }
 
-    if (status === "unauthenticated" || !session?.user) {
-      // No autenticado, redirigir inmediatamente
-      console.log("🚫 No hay sesión válida, redirigiendo...");
+    if (status === "unauthenticated") {
+      console.log("🚫 Usuario no autenticado, redirigiendo...");
       router.replace("/login");
       return;
     }
 
-    if (status === "authenticated" && session?.user) {
-      // Sesión válida, permitir acceso
-      console.log("✅ Sesión válida, permitiendo acceso", session.user);
-      setIsAuthenticated(true);
+    if (status === "authenticated") {
+      if (!session?.user) {
+        console.log("⚠️ Sesión sin datos de usuario, esperando...");
+        setTimeout(() => {
+          if (!session?.user) {
+            console.log(
+              "🚫 No se pudieron cargar datos de usuario, redirigiendo..."
+            );
+            router.replace("/login");
+          }
+        }, 1000);
+        return;
+      }
 
-      // Delay mínimo para UX suave
+      console.log("✅ Sesión válida, mostrando dashboard", session.user);
+
       const timer = setTimeout(() => {
         setIsLoading(false);
       }, 800);
@@ -90,12 +96,14 @@ export default function DashboardPage() {
     setOpenFichasTecnicas(true);
   };
 
-  // Mostrar loading mientras se valida la sesión O mientras isLoading es true
-  if (status === "loading" || isLoading || !isAuthenticated) {
+  if (status === "loading" || isLoading) {
     return <LoadingScreen />;
   }
 
-  // Si llegamos aquí, tenemos una sesión válida
+  if (!session?.user) {
+    return null;
+  }
+
   const getNavigationTitle = () => {
     switch (currentView) {
       case "inventory":
