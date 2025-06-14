@@ -27,58 +27,85 @@ import {
 type ViewType = "inventory" | "orders";
 
 export default function DashboardPage() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
-  const [authCheckComplete, setAuthCheckComplete] = useState(false);
+  const [sessionCheckCount, setSessionCheckCount] = useState(0);
 
   useUserVerification();
 
   const isMajorAdmin = session?.user?.role === "major_admin";
 
   useEffect(() => {
+    console.log("📊 [Dashboard] Estado actual:", {
+      status,
+      hasSession: !!session,
+      hasUserId: !!session?.user?.id,
+      sessionCheckCount,
+      isRecentLogin: sessionStorage.getItem("loginAttempt") === "true",
+    });
+  }, [status, session, sessionCheckCount]);
+
+  useEffect(() => {
+    // Si acabamos de hacer login, dar más tiempo
+    const isRecentLogin = sessionStorage.getItem("loginAttempt") === "true";
+
     if (status === "loading") {
+      // Si es un login reciente, esperar más tiempo
+      if (isRecentLogin && sessionCheckCount < 10) {
+        const checkInterval = setInterval(() => {
+          setSessionCheckCount((prev) => prev + 1);
+        }, 500);
+
+        return () => clearInterval(checkInterval);
+      }
       return;
     }
 
-    if (status === "unauthenticated") {
-      console.log("🚫 Usuario no autenticado, redirigiendo...");
+    if (status === "unauthenticated" && !isRecentLogin) {
+      console.log("🚫 [Dashboard] Usuario no autenticado, redirigiendo...");
       router.replace("/login");
       return;
     }
 
     if (status === "authenticated") {
-      const checkSessionData = setTimeout(() => {
-        if (!session?.user?.id) {
-          console.log("⚠️ Datos de sesión incompletos, recargando...");
+      // Limpiar el flag de login
+      sessionStorage.removeItem("loginAttempt");
 
-          if (!authCheckComplete) {
-            setAuthCheckComplete(true);
-            window.location.reload();
-            return;
-          }
+      // Verificar que tengamos datos completos de sesión
+      if (!session?.user?.id && sessionCheckCount < 5) {
+        console.log("⏳ [Dashboard] Esperando datos completos de sesión...");
 
-          console.log(
-            "🚫 No se pudieron cargar datos de usuario después de recargar, redirigiendo..."
-          );
-          router.replace("/login");
-        } else {
-          console.log("✅ Sesión válida, mostrando dashboard", session.user);
-          setIsLoading(false);
-          setAuthCheckComplete(true);
-        }
-      }, 2000);
+        // Intentar actualizar la sesión
+        update();
 
-      return () => clearTimeout(checkSessionData);
+        // Incrementar contador y esperar
+        setTimeout(() => {
+          setSessionCheckCount((prev) => prev + 1);
+        }, 1000);
+        return;
+      }
+
+      if (session?.user?.id) {
+        console.log("✅ [Dashboard] Sesión completa, mostrando dashboard");
+        setIsLoading(false);
+      } else if (sessionCheckCount >= 5) {
+        console.log(
+          "❌ [Dashboard] No se pudieron obtener datos de sesión después de varios intentos"
+        );
+        router.replace("/login");
+      }
     }
-  }, [status, session, router, authCheckComplete]);
+  }, [status, session, router, sessionCheckCount, update]);
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
+      sessionStorage.removeItem("lastLoginTime");
+      sessionStorage.removeItem("loginAttempt");
       await signOut({ callbackUrl: "/login" });
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
@@ -99,10 +126,12 @@ export default function DashboardPage() {
     setOpenFichasTecnicas(true);
   };
 
-  if (status === "loading" || (isLoading && status !== "unauthenticated")) {
+  // Mostrar loading mientras verificamos el estado
+  if (status === "loading" || isLoading || sessionCheckCount > 0) {
     return <LoadingScreen />;
   }
 
+  // No mostrar nada si no hay sesión válida
   if (!session?.user?.id) {
     return <LoadingScreen />;
   }

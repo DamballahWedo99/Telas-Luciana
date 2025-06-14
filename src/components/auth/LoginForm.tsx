@@ -46,9 +46,16 @@ function LoginFormContent() {
     try {
       setIsLoading(true);
 
+      // Guardar el timestamp del login
+      sessionStorage.setItem("lastLoginTime", Date.now().toString());
+      sessionStorage.setItem("loginAttempt", "true");
+
       const result = await loginAction(values);
 
       if (result.error) {
+        sessionStorage.removeItem("lastLoginTime");
+        sessionStorage.removeItem("loginAttempt");
+
         if (
           typeof result.error === "string" &&
           result.error.includes("INVALID_CREDENTIALS")
@@ -68,19 +75,34 @@ function LoginFormContent() {
         return;
       }
 
+      // Login exitoso
       toast.success("Sesión iniciada correctamente", {
         duration: 2000,
       });
 
-      router.push(callbackUrl);
-      router.refresh();
+      // Esperar un momento para que la sesión se propague
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Usar window.location para forzar una recarga completa
+      // Esto asegura que las cookies se lean correctamente
+      if (process.env.NODE_ENV === "production") {
+        window.location.href = callbackUrl.startsWith("/")
+          ? `https://telasytejidosluciana.com${callbackUrl}`
+          : callbackUrl;
+      } else {
+        window.location.href = callbackUrl;
+      }
     } catch (error) {
+      sessionStorage.removeItem("lastLoginTime");
+      sessionStorage.removeItem("loginAttempt");
+
       toast.error("Error de conexión", {
         duration: 4000,
       });
       console.error(error);
     } finally {
-      setIsLoading(false);
+      // No quitar isLoading aquí porque vamos a navegar
+      // setIsLoading(false);
     }
   };
 
@@ -154,6 +176,7 @@ function LoginFormContent() {
                   size="icon"
                   className="absolute right-0 top-0 h-full px-3 py-2"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
                 >
                   {showPassword ? (
                     <EyeOffIcon className="h-4 w-4" />
