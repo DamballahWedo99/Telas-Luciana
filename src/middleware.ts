@@ -24,6 +24,40 @@ function cleanUrl(url: string): string {
   return url;
 }
 
+function isDirectBrowserAccess(req: NextRequest): boolean {
+  const referer = req.headers.get("referer");
+  const acceptHeader = req.headers.get("accept") || "";
+
+  if (!referer && acceptHeader.includes("text/html")) {
+    return true;
+  }
+
+  if (referer && process.env.NODE_ENV === "production") {
+    const refererUrl = new URL(referer);
+    if (
+      !refererUrl.hostname.includes("telasytejidosluciana.com") &&
+      !refererUrl.hostname.includes("localhost")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isLegitimateApiRequest(req: NextRequest): boolean {
+  const acceptHeader = req.headers.get("accept") || "";
+  const contentType = req.headers.get("content-type") || "";
+  const xRequestedWith = req.headers.get("x-requested-with");
+
+  return (
+    acceptHeader.includes("application/json") ||
+    contentType.includes("application/json") ||
+    xRequestedWith === "XMLHttpRequest" ||
+    req.method !== "GET"
+  );
+}
+
 const publicRoutes = [
   "/",
   "/login",
@@ -192,6 +226,19 @@ export default async function middleware(req: NextRequest) {
   const baseUrl = getBaseUrl(req);
 
   try {
+    if (pathname.startsWith("/api/") && !isPublicApiRoute(pathname)) {
+      if (isDirectBrowserAccess(req) && !isLegitimateApiRequest(req)) {
+        return NextResponse.json(
+          {
+            error: "Forbidden",
+            message:
+              "Direct API access not allowed. Use the application interface.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const rateLimitConfigItem = needsRateLimit(pathname);
     if (rateLimitConfigItem) {
       try {

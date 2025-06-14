@@ -24,12 +24,22 @@ export function Nav() {
         {/* Desktop navigation */}
         <div className="hidden md:flex items-center gap-[2vw]">
           <SearchComponent />
+
           <Link href="/catalogo">
             <Button
               variant="outline"
               className="border-[#174CA7] text-[#174CA7] hover:bg-[#174CA7] hover:text-white text-[2vw] lg:text-[1vw] px-[3vw] lg:px-[2vw] py-[2vh] lg:py-[2.5vh]"
             >
               Catálogo
+            </Button>
+          </Link>
+
+          <Link href="/login">
+            <Button
+              variant="outline"
+              className="border-[#174CA7] text-[#174CA7] hover:bg-[#174CA7] hover:text-white text-[2vw] lg:text-[1vw] px-[3vw] lg:px-[2vw] py-[2vh] lg:py-[2.5vh]"
+            >
+              Login
             </Button>
           </Link>
         </div>

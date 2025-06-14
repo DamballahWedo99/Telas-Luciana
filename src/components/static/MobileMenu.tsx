@@ -10,7 +10,6 @@ export function MobileMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -24,8 +23,6 @@ export function MobileMenu() {
     };
   }, []);
 
-  // Prevent scrolling when menu is open
-  // Listen for custom event to close the menu from search results
   useEffect(() => {
     const handleCloseMobileMenu = () => {
       setIsOpen(false);
@@ -38,7 +35,6 @@ export function MobileMenu() {
     };
   }, []);
 
-  // Prevent scrolling when menu is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -103,6 +99,14 @@ export function MobileMenu() {
                       onClick={() => setIsOpen(false)}
                     >
                       Catálogo
+                    </div>
+                  </Link>
+                  <Link href="/login">
+                    <div
+                      className="block px-3 py-2 rounded-md hover:bg-gray-100 text-[#174CA7]"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Login
                     </div>
                   </Link>
                 </div>

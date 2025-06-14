@@ -8,7 +8,6 @@ import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
 import { LoadingScreen } from "@/components/LoadingScreen";
-import { useRouter } from "next/navigation";
 import { useUserVerification } from "@/hooks/useUserVerification";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +31,6 @@ export default function DashboardPage() {
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
-  const router = useRouter();
 
   useUserVerification();
 
@@ -45,12 +43,6 @@ export default function DashboardPage() {
 
     return () => clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    if (status === "unauthenticated" && !isLoading) {
-      router.push("/login");
-    }
-  }, [status, isLoading, router]);
 
   const handleLogout = async () => {
     try {
@@ -96,7 +88,7 @@ export default function DashboardPage() {
         <div className="my-4 hidden md:block">
           <div className="flex justify-between items-center mb-3">
             <h1 className="text-2xl font-bold">{getNavigationTitle()}</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -104,7 +96,6 @@ export default function DashboardPage() {
                       variant="outline"
                       size="icon"
                       onClick={handleOpenFichasTecnicas}
-                      className="mr-2"
                     >
                       <FileText className="h-4 w-4" />
                     </Button>
@@ -116,7 +107,7 @@ export default function DashboardPage() {
               </TooltipProvider>
 
               {isMajorAdmin && (
-                <div className="flex items-center gap-2 mr-2">
+                <div className="flex items-center gap-2">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -166,6 +157,7 @@ export default function DashboardPage() {
                   </TooltipProvider>
                 </div>
               )}
+
               <Button
                 variant="outline"
                 onClick={handleLogout}
