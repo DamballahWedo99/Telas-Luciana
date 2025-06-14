@@ -65,12 +65,6 @@ export default function DashboardPage() {
       return;
     }
 
-    if (status === "unauthenticated" && !isRecentLogin) {
-      console.log("🚫 [Dashboard] Usuario no autenticado, redirigiendo...");
-      router.replace("/login");
-      return;
-    }
-
     if (status === "authenticated") {
       // Limpiar el flag de login
       sessionStorage.removeItem("loginAttempt");
