@@ -10,6 +10,7 @@ export function useUserVerification() {
   const lastCheckRef = useRef(0);
   const checkedPathsRef = useRef(new Set());
   const isInitialMountRef = useRef(true);
+  const hasPerformedInitialCheck = useRef(false);
 
   const checkUserExists = useCallback(
     async (source: "pathname" | "focus" | "mount") => {
@@ -30,6 +31,26 @@ export function useUserVerification() {
           segundosDesdeÚltimaVerificación: timeSinceLastCheck / 1000,
         });
         return;
+      }
+
+      if (source === "mount" && !hasPerformedInitialCheck.current) {
+        const loginTime = sessionStorage.getItem("lastLoginTime");
+        if (loginTime) {
+          const timeSinceLogin = now - parseInt(loginTime);
+          if (timeSinceLogin < 3000) {
+            console.log(
+              `Esperando antes de primera verificación: ${
+                3000 - timeSinceLogin
+              }ms`
+            );
+            setTimeout(() => {
+              hasPerformedInitialCheck.current = true;
+              checkUserExists("mount");
+            }, 3000 - timeSinceLogin);
+            return;
+          }
+        }
+        hasPerformedInitialCheck.current = true;
       }
 
       try {
@@ -62,6 +83,7 @@ export function useUserVerification() {
           console.log(
             "Usuario no encontrado en la base de datos. Cerrando sesión..."
           );
+          sessionStorage.removeItem("lastLoginTime");
           await signOut({
             redirect: true,
             callbackUrl: "/login?error=AccountDeleted",
@@ -80,7 +102,8 @@ export function useUserVerification() {
     if (
       pathname &&
       status === "authenticated" &&
-      !checkedPathsRef.current.has(pathname)
+      !checkedPathsRef.current.has(pathname) &&
+      hasPerformedInitialCheck.current
     ) {
       checkUserExists("pathname");
     }
@@ -88,7 +111,7 @@ export function useUserVerification() {
 
   useEffect(() => {
     const handleFocus = () => {
-      if (status === "authenticated") {
+      if (status === "authenticated" && hasPerformedInitialCheck.current) {
         checkUserExists("focus");
       }
     };

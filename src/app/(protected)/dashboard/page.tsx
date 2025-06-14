@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
+  const [authCheckComplete, setAuthCheckComplete] = useState(false);
 
   useUserVerification();
 
@@ -50,28 +51,30 @@ export default function DashboardPage() {
     }
 
     if (status === "authenticated") {
-      if (!session?.user) {
-        console.log("⚠️ Sesión sin datos de usuario, esperando...");
-        setTimeout(() => {
-          if (!session?.user) {
-            console.log(
-              "🚫 No se pudieron cargar datos de usuario, redirigiendo..."
-            );
-            router.replace("/login");
+      const checkSessionData = setTimeout(() => {
+        if (!session?.user?.id) {
+          console.log("⚠️ Datos de sesión incompletos, recargando...");
+
+          if (!authCheckComplete) {
+            setAuthCheckComplete(true);
+            window.location.reload();
+            return;
           }
-        }, 1000);
-        return;
-      }
 
-      console.log("✅ Sesión válida, mostrando dashboard", session.user);
+          console.log(
+            "🚫 No se pudieron cargar datos de usuario después de recargar, redirigiendo..."
+          );
+          router.replace("/login");
+        } else {
+          console.log("✅ Sesión válida, mostrando dashboard", session.user);
+          setIsLoading(false);
+          setAuthCheckComplete(true);
+        }
+      }, 2000);
 
-      const timer = setTimeout(() => {
-        setIsLoading(false);
-      }, 800);
-
-      return () => clearTimeout(timer);
+      return () => clearTimeout(checkSessionData);
     }
-  }, [status, session, router]);
+  }, [status, session, router, authCheckComplete]);
 
   const handleLogout = async () => {
     try {
@@ -96,12 +99,12 @@ export default function DashboardPage() {
     setOpenFichasTecnicas(true);
   };
 
-  if (status === "loading" || isLoading) {
+  if (status === "loading" || (isLoading && status !== "unauthenticated")) {
     return <LoadingScreen />;
   }
 
-  if (!session?.user) {
-    return null;
+  if (!session?.user?.id) {
+    return <LoadingScreen />;
   }
 
   const getNavigationTitle = () => {
