@@ -45,7 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     csrfToken: {
       name:
         process.env.NODE_ENV === "production"
-          ? "__Host-next-auth.csrf-token"
+          ? "__Secure-next-auth.csrf-token"
           : "next-auth.csrf-token",
       options: {
         httpOnly: true,
