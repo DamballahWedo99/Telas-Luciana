@@ -214,31 +214,60 @@ const findItemInFile = async (
       .map((item) => normalizeItem(item as RawInventoryItem))
       .filter((item) => item !== null) as InventoryItem[];
 
-    const targetOC = safeNormalize(targetItem.OC).toLowerCase().trim();
-    const targetTela = safeNormalize(targetItem.Tela).toLowerCase().trim();
-    const targetColor = safeNormalize(targetItem.Color).toLowerCase().trim();
-    const targetUbicacion = safeNormalize(targetItem.Ubicacion)
-      .toLowerCase()
-      .trim();
+    const targetOC = safeNormalize(targetItem.OC).trim();
+    const targetTela = safeNormalize(targetItem.Tela).trim();
+    const targetColor = safeNormalize(targetItem.Color).trim();
+    const targetUbicacion = safeNormalize(targetItem.Ubicacion).trim();
+    const targetCosto = safeNumber(targetItem.Costo);
+    const targetCantidad = safeNumber(targetItem.Cantidad);
+
+    console.log(`🔍 [SEARCH] Buscando en ${fileKey}:`, {
+      OC: targetOC,
+      Tela: targetTela,
+      Color: targetColor,
+      Ubicacion: targetUbicacion,
+      Costo: targetCosto,
+      Cantidad: targetCantidad,
+    });
 
     for (let i = 0; i < normalizedData.length; i++) {
       const item = normalizedData[i];
 
-      const itemOC = item.OC.toLowerCase().trim();
-      const itemTela = item.Tela.toLowerCase().trim();
-      const itemColor = item.Color.toLowerCase().trim();
-      const itemUbicacion = (item.Ubicacion || "").toLowerCase().trim();
+      const matchOC = item.OC === targetOC;
+      const matchTela = item.Tela === targetTela;
+      const matchColor = item.Color === targetColor;
+      const matchUbicacion = (item.Ubicacion || "") === targetUbicacion;
+      const matchCosto = Math.abs(item.Costo - targetCosto) < 0.01;
+      const matchCantidad = Math.abs(item.Cantidad - targetCantidad) < 0.01;
 
-      const matchOC = itemOC === targetOC;
-      const matchTela = itemTela === targetTela;
-      const matchColor = itemColor === targetColor;
+      console.log(`📋 [SEARCH] Item ${i}:`, {
+        itemOC: item.OC,
+        itemTela: item.Tela,
+        itemColor: item.Color,
+        itemUbicacion: item.Ubicacion,
+        itemCosto: item.Costo,
+        itemCantidad: item.Cantidad,
+        matches: {
+          OC: matchOC,
+          Tela: matchTela,
+          Color: matchColor,
+          Ubicacion: matchUbicacion,
+          Costo: matchCosto,
+          Cantidad: matchCantidad,
+        },
+      });
 
-      let matchUbicacion = true;
-      if (targetUbicacion && itemUbicacion) {
-        matchUbicacion = itemUbicacion === targetUbicacion;
-      }
-
-      if (matchOC && matchTela && matchColor && matchUbicacion) {
+      if (
+        matchOC &&
+        matchTela &&
+        matchColor &&
+        matchUbicacion &&
+        matchCosto &&
+        matchCantidad
+      ) {
+        console.log(
+          `✅ [SEARCH] MATCH ENCONTRADO en índice ${i} del archivo ${fileKey}`
+        );
         return {
           found: true,
           itemIndex: i,
@@ -248,6 +277,7 @@ const findItemInFile = async (
       }
     }
 
+    console.log(`❌ [SEARCH] NO se encontró match en ${fileKey}`);
     return { found: false };
   } catch (error) {
     console.error(`Error buscando en ${fileKey}:`, error);
@@ -626,6 +656,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("🔍 [UPDATE] Iniciando búsqueda con criterios:", {
+      OC: oldItem.OC,
+      Tela: oldItem.Tela,
+      Color: oldItem.Color,
+      Ubicacion: oldItem.Ubicacion,
+      Cantidad: oldItem.Cantidad,
+      Costo: oldItem.Costo,
+      isEdit,
+      quantityChange,
+    });
+
     const now = new Date();
     const year = now.getFullYear().toString();
     const monthNames = [
@@ -673,11 +714,15 @@ export async function POST(request: NextRequest) {
         targetFileKey = fileKey;
         targetItemIndex = result.itemIndex;
         targetData = result.normalizedData;
+        console.log(
+          `✅ [UPDATE] Item encontrado en archivo: ${fileKey}, índice: ${result.itemIndex}`
+        );
         break;
       }
     }
 
     if (!itemFound) {
+      console.log("❌ [UPDATE] Item NO encontrado con criterios:", oldItem);
       return NextResponse.json(
         {
           error: "Producto no encontrado en el inventario",
@@ -700,12 +745,14 @@ export async function POST(request: NextRequest) {
 
       normalizedNewItem.status = "completed";
       modifiedData[targetItemIndex] = normalizedNewItem;
+      console.log("✅ [UPDATE] Item editado exitosamente");
     } else if (quantityChange !== undefined) {
       const currentItem = modifiedData[targetItemIndex];
       const newQuantity = currentItem.Cantidad - quantityChange;
 
       if (newQuantity <= 0) {
         modifiedData.splice(targetItemIndex, 1);
+        console.log("✅ [UPDATE] Item removido (cantidad <= 0)");
       } else {
         modifiedData[targetItemIndex] = {
           ...currentItem,
@@ -713,6 +760,9 @@ export async function POST(request: NextRequest) {
           Total: currentItem.Costo * newQuantity,
           lastModified: new Date().toISOString(),
         };
+        console.log(
+          `✅ [UPDATE] Cantidad actualizada: ${currentItem.Cantidad} -> ${newQuantity}`
+        );
       }
     }
 
@@ -720,6 +770,7 @@ export async function POST(request: NextRequest) {
       const normalizedNewItem = normalizeItem(newItem);
       if (normalizedNewItem && isLambdaSafeItem(normalizedNewItem)) {
         modifiedData.push(normalizedNewItem);
+        console.log("✅ [UPDATE] Nuevo item agregado");
       }
     }
 

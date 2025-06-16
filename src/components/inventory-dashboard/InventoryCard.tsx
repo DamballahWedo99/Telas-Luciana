@@ -984,9 +984,24 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
-  const handleOpenEditDialog = (index: number) => {
-    setSelectedItemIndex(index);
-    setEditingItem({ ...inventory[index] });
+  const handleOpenEditDialog = (item: InventoryItem) => {
+    const originalIndex = inventory.findIndex(
+      (originalItem) =>
+        originalItem.OC === item.OC &&
+        originalItem.Tela === item.Tela &&
+        originalItem.Color === item.Color &&
+        originalItem.Ubicacion === item.Ubicacion &&
+        Math.abs(originalItem.Costo - item.Costo) < 0.01 &&
+        Math.abs(originalItem.Cantidad - item.Cantidad) < 0.01
+    );
+
+    if (originalIndex === -1) {
+      toast.error("No se pudo encontrar el item en el inventario original");
+      return;
+    }
+
+    setSelectedItemIndex(originalIndex);
+    setEditingItem({ ...item });
     setOpenEditDialog(true);
   };
 
@@ -1000,7 +1015,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         Color: inventory[selectedItemIndex].Color,
         Ubicacion: inventory[selectedItemIndex].Ubicacion,
         Cantidad: inventory[selectedItemIndex].Cantidad,
+        Costo: inventory[selectedItemIndex].Costo,
+        Unidades: inventory[selectedItemIndex].Unidades,
+        Importacion: inventory[selectedItemIndex].Importacion,
+        FacturaDragonAzteca:
+          inventory[selectedItemIndex].FacturaDragonAzteca || "",
       };
+
+      console.log("🔍 [EDIT] Enviando oldItem completo:", oldItem);
+      console.log("📝 [EDIT] Enviando newItem:", editingItem);
 
       const updatedInventory = [...inventory];
       updatedInventory[selectedItemIndex] = {
@@ -1018,20 +1041,37 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           },
           body: JSON.stringify({
             oldItem,
-            newItem: editingItem,
+            newItem: {
+              ...editingItem,
+              Total: editingItem.Costo * editingItem.Cantidad,
+            },
             isEdit: true,
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json();
+          console.error("❌ [EDIT] Error response:", errorData);
+
+          setInventory(inventory);
+
           throw new Error(errorData.error || "Error al actualizar inventario");
         }
 
+        const result = await response.json();
+        console.log("✅ [EDIT] Actualización exitosa:", result);
+
         toast.success("Producto actualizado correctamente");
       } catch (error) {
-        console.error("Error al actualizar inventario:", error);
-        toast.error("Error al actualizar el producto en S3");
+        console.error("❌ [EDIT] Error al actualizar inventario:", error);
+
+        setInventory(inventory);
+
+        toast.error(
+          `Error al actualizar el producto: ${
+            error instanceof Error ? error.message : "Error desconocido"
+          }`
+        );
       } finally {
         setIsEditingInProgress(false);
       }
@@ -1549,8 +1589,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     });
   };
 
-  const handleOpenSellDialog = (index: number) => {
-    setSelectedItemIndex(index);
+  const handleOpenSellDialog = (item: InventoryItem) => {
+    const originalIndex = inventory.findIndex(
+      (originalItem) =>
+        originalItem.OC === item.OC &&
+        originalItem.Tela === item.Tela &&
+        originalItem.Color === item.Color &&
+        originalItem.Ubicacion === item.Ubicacion &&
+        Math.abs(originalItem.Costo - item.Costo) < 0.01 &&
+        Math.abs(originalItem.Cantidad - item.Cantidad) < 0.01
+    );
+
+    if (originalIndex === -1) {
+      toast.error("No se pudo encontrar el item en el inventario original");
+      return;
+    }
+
+    setSelectedItemIndex(originalIndex);
     setQuantityToUpdate(0);
     setSellMode("manual");
     setSelectedRolls([]);
@@ -1559,20 +1614,26 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setIsProcessingSell(false);
     setOpenSellDialog(true);
 
-    if (inventory[index]) {
-      const item = inventory[index];
-      console.log(`🛒 [SELL] Abriendo diálogo de venta para:`, {
-        Tela: item.Tela,
-        Color: item.Color,
-        Ubicacion: item.Ubicacion,
-      });
-
-      loadPackingListData(item.Tela, item.Color, item.Ubicacion || "CDMX");
-    }
+    loadPackingListData(item.Tela, item.Color, item.Ubicacion || "CDMX");
   };
 
-  const handleOpenTransferDialog = (index: number) => {
-    setSelectedItemIndex(index);
+  const handleOpenTransferDialog = (item: InventoryItem) => {
+    const originalIndex = inventory.findIndex(
+      (originalItem) =>
+        originalItem.OC === item.OC &&
+        originalItem.Tela === item.Tela &&
+        originalItem.Color === item.Color &&
+        originalItem.Ubicacion === item.Ubicacion &&
+        Math.abs(originalItem.Costo - item.Costo) < 0.01 &&
+        Math.abs(originalItem.Cantidad - item.Cantidad) < 0.01
+    );
+
+    if (originalIndex === -1) {
+      toast.error("No se pudo encontrar el item en el inventario original");
+      return;
+    }
+
+    setSelectedItemIndex(originalIndex);
     setQuantityToUpdate(0);
     setTransferMode("manual");
     setSelectedTransferRolls([]);
@@ -1580,16 +1641,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setSelectedLot(null);
     setOpenTransferDialog(true);
 
-    if (inventory[index]) {
-      const item = inventory[index];
-      console.log(`🔄 [TRANSFER] Abriendo diálogo de traslado desde:`, {
-        Tela: item.Tela,
-        Color: item.Color,
-        Ubicacion: item.Ubicacion,
-      });
-
-      loadTransferPackingListData(item.Tela, item.Color);
-    }
+    loadTransferPackingListData(item.Tela, item.Color);
   };
 
   const handleSellItem = async () => {
@@ -3351,7 +3403,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                           size="sm"
                                           variant="outline"
                                           onClick={() =>
-                                            handleOpenEditDialog(index)
+                                            handleOpenEditDialog(item)
                                           }
                                           disabled={!isCurrentMonthAndYear()}
                                           className={
@@ -3383,7 +3435,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                           size="sm"
                                           variant="outline"
                                           onClick={() =>
-                                            handleOpenSellDialog(index)
+                                            handleOpenSellDialog(item)
                                           }
                                           disabled={!isCurrentMonthAndYear()}
                                           className={
@@ -3415,7 +3467,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                           size="sm"
                                           variant="outline"
                                           onClick={() =>
-                                            handleOpenTransferDialog(index)
+                                            handleOpenTransferDialog(item)
                                           }
                                           disabled={
                                             item.Ubicacion !== "CDMX" ||
