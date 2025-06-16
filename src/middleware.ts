@@ -272,9 +272,7 @@ export default async function middleware(req: NextRequest) {
       token = await getToken({
         req,
         secret,
-        secureCookie:
-          nextAuthUrl?.startsWith("https://") ||
-          process.env.NODE_ENV === "production",
+        secureCookie: process.env.NODE_ENV === "production",
         cookieName:
           process.env.NODE_ENV === "production"
             ? "__Secure-next-auth.session-token"
@@ -285,19 +283,36 @@ export default async function middleware(req: NextRequest) {
         console.log("🔍 Dashboard access attempt:", {
           hasToken: !!token,
           env: process.env.NODE_ENV,
-          secureCookie:
-            nextAuthUrl?.startsWith("https://") ||
-            process.env.NODE_ENV === "production",
+          secureCookie: process.env.NODE_ENV === "production",
           cookieName:
             process.env.NODE_ENV === "production"
               ? "__Secure-next-auth.session-token"
               : "next-auth.session-token",
           cookies: req.cookies.getAll().map((c) => c.name),
           nextAuthUrl: process.env.NEXTAUTH_URL,
+          headers: {
+            host: req.headers.get("host"),
+            userAgent: req.headers.get("user-agent"),
+            referer: req.headers.get("referer"),
+          },
         });
       }
     } catch (error) {
       console.error("getToken failed:", error);
+
+      console.error("getToken error details:", {
+        pathname,
+        secret: secret ? "present" : "missing",
+        env: process.env.NODE_ENV,
+        nextAuthUrl: process.env.NEXTAUTH_URL,
+        cookies: req.cookies
+          .getAll()
+          .map((c) => ({
+            name: c.name,
+            value: c.value.substring(0, 20) + "...",
+          })),
+      });
+
       if (pathname.startsWith("/api/")) {
         return NextResponse.json(
           { error: "Authentication error", message: "Token validation failed" },
@@ -311,6 +326,13 @@ export default async function middleware(req: NextRequest) {
     }
 
     if (!token) {
+      console.log("🚫 No token found for protected route:", {
+        pathname,
+        isLogin: pathname.startsWith("/login"),
+        isApi: pathname.startsWith("/api/"),
+        baseUrl,
+      });
+
       if (pathname.startsWith("/login")) {
         return NextResponse.next();
       }
@@ -325,6 +347,12 @@ export default async function middleware(req: NextRequest) {
       const redirectUrl = new URL("/login", baseUrl);
       const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
       redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
+
+      console.log("🔄 Redirecting to login:", {
+        from: pathname,
+        to: redirectUrl.toString(),
+      });
+
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -371,6 +399,12 @@ export default async function middleware(req: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error("Middleware error:", error);
+
+    console.error("Middleware error details:", {
+      pathname,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
 
     if (isPublicRoute(pathname) || isPublicApiRoute(pathname)) {
       return NextResponse.next();
