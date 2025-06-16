@@ -98,13 +98,14 @@ const safeNormalize = (value: unknown, defaultValue: string = ""): string => {
     value === null ||
     value === undefined ||
     value === "undefined" ||
-    value === "null"
+    value === "null" ||
+    Number.isNaN(value)
   ) {
     return defaultValue;
   }
 
   const str = String(value).trim();
-  if (str === "" || str === "undefined" || str === "null") {
+  if (str === "" || str === "undefined" || str === "null" || str === "NaN") {
     return defaultValue;
   }
 
@@ -120,7 +121,8 @@ const safeNumber = (value: unknown, defaultValue: number = 0): number => {
     value === null ||
     value === undefined ||
     value === "undefined" ||
-    value === "null"
+    value === "null" ||
+    Number.isNaN(value)
   ) {
     return defaultValue;
   }
@@ -190,10 +192,16 @@ const findItemInFile = async (
       return { found: false };
     }
 
-    const content = await fileResponse.Body.transformToString();
+    let content = await fileResponse.Body.transformToString();
     if (!content.trim()) {
       return { found: false };
     }
+
+    content = content
+      .replace(/:\s*NaN/g, ": null")
+      .replace(/:\s*undefined/g, ": null")
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]");
 
     let rawData: unknown;
     try {
@@ -217,18 +225,6 @@ const findItemInFile = async (
     const targetOC = safeNormalize(targetItem.OC).trim();
     const targetTela = safeNormalize(targetItem.Tela).trim();
     const targetColor = safeNormalize(targetItem.Color).trim();
-    const targetUbicacion = safeNormalize(targetItem.Ubicacion).trim();
-    const targetCosto = safeNumber(targetItem.Costo);
-    const targetCantidad = safeNumber(targetItem.Cantidad);
-
-    console.log(`🔍 [SEARCH] Buscando en ${fileKey}:`, {
-      OC: targetOC,
-      Tela: targetTela,
-      Color: targetColor,
-      Ubicacion: targetUbicacion,
-      Costo: targetCosto,
-      Cantidad: targetCantidad,
-    });
 
     for (let i = 0; i < normalizedData.length; i++) {
       const item = normalizedData[i];
@@ -236,38 +232,8 @@ const findItemInFile = async (
       const matchOC = item.OC === targetOC;
       const matchTela = item.Tela === targetTela;
       const matchColor = item.Color === targetColor;
-      const matchUbicacion = (item.Ubicacion || "") === targetUbicacion;
-      const matchCosto = Math.abs(item.Costo - targetCosto) < 0.01;
-      const matchCantidad = Math.abs(item.Cantidad - targetCantidad) < 0.01;
 
-      console.log(`📋 [SEARCH] Item ${i}:`, {
-        itemOC: item.OC,
-        itemTela: item.Tela,
-        itemColor: item.Color,
-        itemUbicacion: item.Ubicacion,
-        itemCosto: item.Costo,
-        itemCantidad: item.Cantidad,
-        matches: {
-          OC: matchOC,
-          Tela: matchTela,
-          Color: matchColor,
-          Ubicacion: matchUbicacion,
-          Costo: matchCosto,
-          Cantidad: matchCantidad,
-        },
-      });
-
-      if (
-        matchOC &&
-        matchTela &&
-        matchColor &&
-        matchUbicacion &&
-        matchCosto &&
-        matchCantidad
-      ) {
-        console.log(
-          `✅ [SEARCH] MATCH ENCONTRADO en índice ${i} del archivo ${fileKey}`
-        );
+      if (matchOC && matchTela && matchColor) {
         return {
           found: true,
           itemIndex: i,
@@ -277,7 +243,6 @@ const findItemInFile = async (
       }
     }
 
-    console.log(`❌ [SEARCH] NO se encontró match en ${fileKey}`);
     return { found: false };
   } catch (error) {
     console.error(`Error buscando en ${fileKey}:`, error);
@@ -300,10 +265,16 @@ const findConsolidableItem = async (
       return { found: false };
     }
 
-    const content = await fileResponse.Body.transformToString();
+    let content = await fileResponse.Body.transformToString();
     if (!content.trim()) {
       return { found: false };
     }
+
+    content = content
+      .replace(/:\s*NaN/g, ": null")
+      .replace(/:\s*undefined/g, ": null")
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]");
 
     let rawData: unknown;
     try {
@@ -523,7 +494,14 @@ const processTransferWithConsolidation = async (
         throw new Error(`No se pudo leer el archivo ${targetFileKey}`);
       }
 
-      const content = await fileResponse.Body.transformToString();
+      let content = await fileResponse.Body.transformToString();
+
+      content = content
+        .replace(/:\s*NaN/g, ": null")
+        .replace(/:\s*undefined/g, ": null")
+        .replace(/,\s*}/g, "}")
+        .replace(/,\s*]/g, "]");
+
       const rawData: unknown = JSON.parse(content);
 
       let dataArray: unknown[];
@@ -656,17 +634,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("🔍 [UPDATE] Iniciando búsqueda con criterios:", {
-      OC: oldItem.OC,
-      Tela: oldItem.Tela,
-      Color: oldItem.Color,
-      Ubicacion: oldItem.Ubicacion,
-      Cantidad: oldItem.Cantidad,
-      Costo: oldItem.Costo,
-      isEdit,
-      quantityChange,
-    });
-
     const now = new Date();
     const year = now.getFullYear().toString();
     const monthNames = [
@@ -714,15 +681,11 @@ export async function POST(request: NextRequest) {
         targetFileKey = fileKey;
         targetItemIndex = result.itemIndex;
         targetData = result.normalizedData;
-        console.log(
-          `✅ [UPDATE] Item encontrado en archivo: ${fileKey}, índice: ${result.itemIndex}`
-        );
         break;
       }
     }
 
     if (!itemFound) {
-      console.log("❌ [UPDATE] Item NO encontrado con criterios:", oldItem);
       return NextResponse.json(
         {
           error: "Producto no encontrado en el inventario",
@@ -745,14 +708,12 @@ export async function POST(request: NextRequest) {
 
       normalizedNewItem.status = "completed";
       modifiedData[targetItemIndex] = normalizedNewItem;
-      console.log("✅ [UPDATE] Item editado exitosamente");
     } else if (quantityChange !== undefined) {
       const currentItem = modifiedData[targetItemIndex];
       const newQuantity = currentItem.Cantidad - quantityChange;
 
       if (newQuantity <= 0) {
         modifiedData.splice(targetItemIndex, 1);
-        console.log("✅ [UPDATE] Item removido (cantidad <= 0)");
       } else {
         modifiedData[targetItemIndex] = {
           ...currentItem,
@@ -760,9 +721,6 @@ export async function POST(request: NextRequest) {
           Total: currentItem.Costo * newQuantity,
           lastModified: new Date().toISOString(),
         };
-        console.log(
-          `✅ [UPDATE] Cantidad actualizada: ${currentItem.Cantidad} -> ${newQuantity}`
-        );
       }
     }
 
@@ -770,7 +728,6 @@ export async function POST(request: NextRequest) {
       const normalizedNewItem = normalizeItem(newItem);
       if (normalizedNewItem && isLambdaSafeItem(normalizedNewItem)) {
         modifiedData.push(normalizedNewItem);
-        console.log("✅ [UPDATE] Nuevo item agregado");
       }
     }
 
@@ -784,12 +741,6 @@ export async function POST(request: NextRequest) {
     }
 
     const duration = Date.now() - startTime;
-
-    console.log(`[UPDATE] User ${session.user.email} updated inventory:`, {
-      operation: isEdit ? "edit" : "quantity_change",
-      fileUpdated: targetFileKey,
-      itemsInFile: modifiedData.length,
-    });
 
     return NextResponse.json({
       success: true,

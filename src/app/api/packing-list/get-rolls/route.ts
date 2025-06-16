@@ -119,10 +119,7 @@ export async function GET(request: NextRequest) {
     const allFiles = await getAllPackingListFiles();
 
     if (allFiles.length === 0) {
-      return NextResponse.json(
-        { error: "No se encontraron archivos de packing list" },
-        { status: 404 }
-      );
+      return NextResponse.json([]);
     }
 
     let allData: PackingListEntry[] = [];
@@ -185,9 +182,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(consolidatedData);
   } catch (error) {
     console.error("Error obteniendo packing list:", error);
-    return NextResponse.json(
-      { error: "Error al obtener los datos del packing list" },
-      { status: 500 }
-    );
+    return NextResponse.json([]);
   }
 }

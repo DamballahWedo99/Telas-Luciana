@@ -269,10 +269,15 @@ export default async function middleware(req: NextRequest) {
 
     let token;
     try {
+      // CORRECCIÓN 1: Usar configuración consistente con auth.ts
       token = await getToken({
         req,
         secret,
-        secureCookie: process.env.NODE_ENV === "production",
+        // CORRECCIÓN 2: Mantener lógica original de secureCookie usando nextAuthUrl
+        secureCookie:
+          nextAuthUrl?.startsWith("https://") ||
+          process.env.NODE_ENV === "production",
+        // CORRECCIÓN 3: Usar nombres de cookies consistentes con auth.ts actualizado
         cookieName:
           process.env.NODE_ENV === "production"
             ? "__Secure-next-auth.session-token"
@@ -283,13 +288,16 @@ export default async function middleware(req: NextRequest) {
         console.log("🔍 Dashboard access attempt:", {
           hasToken: !!token,
           env: process.env.NODE_ENV,
-          secureCookie: process.env.NODE_ENV === "production",
+          secureCookie:
+            nextAuthUrl?.startsWith("https://") ||
+            process.env.NODE_ENV === "production",
           cookieName:
             process.env.NODE_ENV === "production"
               ? "__Secure-next-auth.session-token"
               : "next-auth.session-token",
           cookies: req.cookies.getAll().map((c) => c.name),
           nextAuthUrl: process.env.NEXTAUTH_URL,
+          // CORRECCIÓN 4: Más debugging para identificar el problema
           headers: {
             host: req.headers.get("host"),
             userAgent: req.headers.get("user-agent"),
@@ -300,11 +308,15 @@ export default async function middleware(req: NextRequest) {
     } catch (error) {
       console.error("getToken failed:", error);
 
+      // CORRECCIÓN 5: Logging más detallado para debugging
       console.error("getToken error details:", {
         pathname,
         secret: secret ? "present" : "missing",
         env: process.env.NODE_ENV,
-        nextAuthUrl: process.env.NEXTAUTH_URL,
+        nextAuthUrl: nextAuthUrl,
+        secureCookie:
+          nextAuthUrl?.startsWith("https://") ||
+          process.env.NODE_ENV === "production",
         cookies: req.cookies
           .getAll()
           .map((c) => ({
@@ -325,6 +337,7 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
+    // CORRECCIÓN 6: Más logging específico para el caso sin token
     if (!token) {
       console.log("🚫 No token found for protected route:", {
         pathname,
@@ -344,6 +357,7 @@ export default async function middleware(req: NextRequest) {
         );
       }
 
+      // CORRECCIÓN 7: Asegurar que la redirección siempre ocurra
       const redirectUrl = new URL("/login", baseUrl);
       const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
       redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
@@ -400,6 +414,7 @@ export default async function middleware(req: NextRequest) {
   } catch (error) {
     console.error("Middleware error:", error);
 
+    // CORRECCIÓN 8: Mejor manejo de errores con más información
     console.error("Middleware error details:", {
       pathname,
       error: error instanceof Error ? error.message : String(error),

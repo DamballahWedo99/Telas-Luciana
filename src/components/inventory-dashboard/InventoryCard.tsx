@@ -1393,6 +1393,17 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       const data: PackingListEntry[] = await response.json();
       setPackingListData(data);
 
+      if (data.length === 0) {
+        toast.info(
+          `No se encontraron rollos en el packing list para ${tela} ${color}`
+        );
+        setAvailableRolls([]);
+        setSelectedLot(null);
+        setAvailableLots([]);
+        setRollsGroupedByLot(new Map());
+        return;
+      }
+
       const matchingEntries = data.filter(
         (entry) => entry.fabric_type === tela && entry.color === color
       );
@@ -1460,10 +1471,22 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             `⚠️ [PACKING-LIST] No hay rollos disponibles en ${ubicacion} para ${tela} ${color}`
           );
         }
+      } else {
+        setAvailableRolls([]);
+        setSelectedLot(null);
+        setAvailableLots([]);
+        setRollsGroupedByLot(new Map());
       }
     } catch (error) {
       console.error("Error al cargar packing list:", error);
-      toast.error("Error al cargar los datos de los rollos");
+      toast.info(
+        `No se encontraron rollos de packing list para ${tela} ${color}`
+      );
+      setPackingListData([]);
+      setAvailableRolls([]);
+      setSelectedLot(null);
+      setAvailableLots([]);
+      setRollsGroupedByLot(new Map());
     } finally {
       setIsLoadingPackingList(false);
     }
@@ -4111,14 +4134,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                   </Label>
                   <Input
                     id="quantity"
-                    type="text"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={
-                      quantityToUpdate === 0
-                        ? ""
-                        : formatInputNumber(quantityToUpdate.toString())
+                      quantityToUpdate === 0 ? "" : quantityToUpdate.toString()
                     }
                     onChange={(e) => {
-                      const numericValue = parseInputNumber(e.target.value);
+                      const numericValue = parseFloat(e.target.value) || 0;
                       setQuantityToUpdate(numericValue);
                     }}
                     placeholder="0.00"
@@ -4424,14 +4447,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                   </Label>
                   <Input
                     id="transfer-quantity"
-                    type="text"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={
-                      quantityToUpdate === 0
-                        ? ""
-                        : formatInputNumber(quantityToUpdate.toString())
+                      quantityToUpdate === 0 ? "" : quantityToUpdate.toString()
                     }
                     onChange={(e) => {
-                      const numericValue = parseInputNumber(e.target.value);
+                      const numericValue = parseFloat(e.target.value) || 0;
                       setQuantityToUpdate(numericValue);
                     }}
                     placeholder="0.00"
