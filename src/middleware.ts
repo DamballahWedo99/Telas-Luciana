@@ -16,7 +16,7 @@ function getBaseUrl(req: NextRequest): string {
 }
 
 function cleanUrl(url: string): string {
-  if (url.includes("localhost:3000")) {
+  if (process.env.NODE_ENV === "production" && url.includes("localhost:3000")) {
     return url
       .replace("localhost:3000", "telasytejidosluciana.com")
       .replace("http://", "https://");
@@ -225,6 +225,22 @@ export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const baseUrl = getBaseUrl(req);
 
+  if (pathname === "/dashboard") {
+    console.log("🚀 MIDDLEWARE EJECUTADO para /dashboard:", {
+      pathname,
+      method: req.method,
+      headers: {
+        host: req.headers.get("host"),
+        userAgent: req.headers.get("user-agent")?.substring(0, 50),
+        referer: req.headers.get("referer"),
+        accept: req.headers.get("accept"),
+      },
+      cookies: req.cookies.getAll().map((c) => c.name),
+      env: process.env.NODE_ENV,
+      nextAuthUrl: process.env.NEXTAUTH_URL,
+    });
+  }
+
   try {
     if (pathname.startsWith("/api/") && !isPublicApiRoute(pathname)) {
       if (isDirectBrowserAccess(req) && !isLegitimateApiRequest(req)) {
@@ -252,10 +268,12 @@ export default async function middleware(req: NextRequest) {
     }
 
     if (isPublicRoute(pathname)) {
+      console.log("✅ RUTA PÚBLICA:", pathname);
       return NextResponse.next();
     }
 
     if (isPublicApiRoute(pathname)) {
+      console.log("✅ API PÚBLICA:", pathname);
       return NextResponse.next();
     }
 
@@ -269,15 +287,12 @@ export default async function middleware(req: NextRequest) {
 
     let token;
     try {
-      // CORRECCIÓN 1: Usar configuración consistente con auth.ts
       token = await getToken({
         req,
         secret,
-        // CORRECCIÓN 2: Mantener lógica original de secureCookie usando nextAuthUrl
         secureCookie:
           nextAuthUrl?.startsWith("https://") ||
           process.env.NODE_ENV === "production",
-        // CORRECCIÓN 3: Usar nombres de cookies consistentes con auth.ts actualizado
         cookieName:
           process.env.NODE_ENV === "production"
             ? "__Secure-next-auth.session-token"
@@ -297,7 +312,6 @@ export default async function middleware(req: NextRequest) {
               : "next-auth.session-token",
           cookies: req.cookies.getAll().map((c) => c.name),
           nextAuthUrl: process.env.NEXTAUTH_URL,
-          // CORRECCIÓN 4: Más debugging para identificar el problema
           headers: {
             host: req.headers.get("host"),
             userAgent: req.headers.get("user-agent"),
@@ -308,7 +322,6 @@ export default async function middleware(req: NextRequest) {
     } catch (error) {
       console.error("getToken failed:", error);
 
-      // CORRECCIÓN 5: Logging más detallado para debugging
       console.error("getToken error details:", {
         pathname,
         secret: secret ? "present" : "missing",
@@ -317,12 +330,10 @@ export default async function middleware(req: NextRequest) {
         secureCookie:
           nextAuthUrl?.startsWith("https://") ||
           process.env.NODE_ENV === "production",
-        cookies: req.cookies
-          .getAll()
-          .map((c) => ({
-            name: c.name,
-            value: c.value.substring(0, 20) + "...",
-          })),
+        cookies: req.cookies.getAll().map((c) => ({
+          name: c.name,
+          value: c.value.substring(0, 20) + "...",
+        })),
       });
 
       if (pathname.startsWith("/api/")) {
@@ -337,37 +348,47 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    // CORRECCIÓN 6: Más logging específico para el caso sin token
     if (!token) {
-      console.log("🚫 No token found for protected route:", {
+      console.log("🚫 NO TOKEN ENCONTRADO - PREPARANDO REDIRECCIÓN:", {
         pathname,
         isLogin: pathname.startsWith("/login"),
         isApi: pathname.startsWith("/api/"),
         baseUrl,
+        shouldRedirect:
+          !pathname.startsWith("/login") && !pathname.startsWith("/api/"),
       });
 
       if (pathname.startsWith("/login")) {
+        console.log("✅ Es página de login, permitir acceso");
         return NextResponse.next();
       }
 
       if (pathname.startsWith("/api/")) {
+        console.log("🚫 Es API sin token, retornar 401");
         return NextResponse.json(
           { error: "Unauthorized", message: "Authentication required" },
           { status: 401 }
         );
       }
 
-      // CORRECCIÓN 7: Asegurar que la redirección siempre ocurra
       const redirectUrl = new URL("/login", baseUrl);
       const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
       redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
 
-      console.log("🔄 Redirecting to login:", {
+      console.log("🔄 EJECUTANDO REDIRECCIÓN A LOGIN:", {
         from: pathname,
         to: redirectUrl.toString(),
+        baseUrl,
+        cleanCallbackUrl,
       });
 
-      return NextResponse.redirect(redirectUrl);
+      const redirectResponse = NextResponse.redirect(redirectUrl);
+      console.log("🔄 RESPUESTA DE REDIRECCIÓN CREADA:", {
+        status: redirectResponse.status,
+        headers: Object.fromEntries(redirectResponse.headers.entries()),
+      });
+
+      return redirectResponse;
     }
 
     const userRole = token.role as string;
@@ -414,7 +435,6 @@ export default async function middleware(req: NextRequest) {
   } catch (error) {
     console.error("Middleware error:", error);
 
-    // CORRECCIÓN 8: Mejor manejo de errores con más información
     console.error("Middleware error details:", {
       pathname,
       error: error instanceof Error ? error.message : String(error),

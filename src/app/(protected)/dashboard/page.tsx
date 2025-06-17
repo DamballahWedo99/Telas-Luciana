@@ -27,73 +27,50 @@ import {
 type ViewType = "inventory" | "orders";
 
 export default function DashboardPage() {
-  const { data: session, status, update } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
-  const [sessionCheckCount, setSessionCheckCount] = useState(0);
 
   useUserVerification();
 
   const isMajorAdmin = session?.user?.role === "major_admin";
 
+  // Simplificar la lógica de redirección
   useEffect(() => {
     console.log("📊 [Dashboard] Estado actual:", {
       status,
       hasSession: !!session,
       hasUserId: !!session?.user?.id,
-      sessionCheckCount,
-      isRecentLogin: sessionStorage.getItem("loginAttempt") === "true",
     });
-  }, [status, session, sessionCheckCount]);
 
-  useEffect(() => {
-    // Si acabamos de hacer login, dar más tiempo
-    const isRecentLogin = sessionStorage.getItem("loginAttempt") === "true";
-
+    // Si está cargando, esperar
     if (status === "loading") {
-      // Si es un login reciente, esperar más tiempo
-      if (isRecentLogin && sessionCheckCount < 10) {
-        const checkInterval = setInterval(() => {
-          setSessionCheckCount((prev) => prev + 1);
-        }, 500);
-
-        return () => clearInterval(checkInterval);
-      }
       return;
     }
 
-    if (status === "authenticated") {
-      // Limpiar el flag de login
-      sessionStorage.removeItem("loginAttempt");
+    // Si no está autenticado, redirigir a login
+    if (status === "unauthenticated") {
+      console.log("🚫 [Dashboard] No autenticado, redirigiendo a login");
+      router.replace("/login");
+      return;
+    }
 
-      // Verificar que tengamos datos completos de sesión
-      if (!session?.user?.id && sessionCheckCount < 5) {
-        console.log("⏳ [Dashboard] Esperando datos completos de sesión...");
+    // Si está autenticado pero no hay datos de usuario después de 3 segundos, algo está mal
+    if (status === "authenticated" && !session?.user?.id) {
+      console.log("⚠️ [Dashboard] Autenticado pero sin datos de usuario");
 
-        // Intentar actualizar la sesión
-        update();
-
-        // Incrementar contador y esperar
-        setTimeout(() => {
-          setSessionCheckCount((prev) => prev + 1);
-        }, 1000);
-        return;
-      }
-
-      if (session?.user?.id) {
-        console.log("✅ [Dashboard] Sesión completa, mostrando dashboard");
-        setIsLoading(false);
-      } else if (sessionCheckCount >= 5) {
+      const timeout = setTimeout(() => {
         console.log(
-          "❌ [Dashboard] No se pudieron obtener datos de sesión después de varios intentos"
+          "❌ [Dashboard] Timeout esperando datos de usuario, redirigiendo a login"
         );
         router.replace("/login");
-      }
+      }, 3000);
+
+      return () => clearTimeout(timeout);
     }
-  }, [status, session, router, sessionCheckCount, update]);
+  }, [status, session, router]);
 
   const handleLogout = async () => {
     try {
@@ -120,13 +97,14 @@ export default function DashboardPage() {
     setOpenFichasTecnicas(true);
   };
 
-  // Mostrar loading mientras verificamos el estado
-  if (status === "loading" || isLoading || sessionCheckCount > 0) {
+  // Mostrar loading solo mientras está cargando la sesión
+  if (status === "loading") {
     return <LoadingScreen />;
   }
 
-  // No mostrar nada si no hay sesión válida
-  if (!session?.user?.id) {
+  // Si no hay sesión o no hay datos de usuario, mostrar loading
+  // (el useEffect manejará la redirección)
+  if (status === "unauthenticated" || !session?.user?.id) {
     return <LoadingScreen />;
   }
 
