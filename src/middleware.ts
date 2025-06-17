@@ -225,22 +225,6 @@ export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const baseUrl = getBaseUrl(req);
 
-  if (pathname === "/dashboard") {
-    console.log("🚀 MIDDLEWARE EJECUTADO para /dashboard:", {
-      pathname,
-      method: req.method,
-      headers: {
-        host: req.headers.get("host"),
-        userAgent: req.headers.get("user-agent")?.substring(0, 50),
-        referer: req.headers.get("referer"),
-        accept: req.headers.get("accept"),
-      },
-      cookies: req.cookies.getAll().map((c) => c.name),
-      env: process.env.NODE_ENV,
-      nextAuthUrl: process.env.NEXTAUTH_URL,
-    });
-  }
-
   try {
     if (pathname.startsWith("/api/") && !isPublicApiRoute(pathname)) {
       if (isDirectBrowserAccess(req) && !isLegitimateApiRequest(req)) {
@@ -268,12 +252,10 @@ export default async function middleware(req: NextRequest) {
     }
 
     if (isPublicRoute(pathname)) {
-      console.log("✅ RUTA PÚBLICA:", pathname);
       return NextResponse.next();
     }
 
     if (isPublicApiRoute(pathname)) {
-      console.log("✅ API PÚBLICA:", pathname);
       return NextResponse.next();
     }
 
@@ -298,27 +280,6 @@ export default async function middleware(req: NextRequest) {
             ? "__Secure-next-auth.session-token"
             : "next-auth.session-token",
       });
-
-      if (pathname === "/dashboard") {
-        console.log("🔍 Dashboard access attempt:", {
-          hasToken: !!token,
-          env: process.env.NODE_ENV,
-          secureCookie:
-            nextAuthUrl?.startsWith("https://") ||
-            process.env.NODE_ENV === "production",
-          cookieName:
-            process.env.NODE_ENV === "production"
-              ? "__Secure-next-auth.session-token"
-              : "next-auth.session-token",
-          cookies: req.cookies.getAll().map((c) => c.name),
-          nextAuthUrl: process.env.NEXTAUTH_URL,
-          headers: {
-            host: req.headers.get("host"),
-            userAgent: req.headers.get("user-agent"),
-            referer: req.headers.get("referer"),
-          },
-        });
-      }
     } catch (error) {
       console.error("getToken failed:", error);
 
@@ -349,22 +310,11 @@ export default async function middleware(req: NextRequest) {
     }
 
     if (!token) {
-      console.log("🚫 NO TOKEN ENCONTRADO - PREPARANDO REDIRECCIÓN:", {
-        pathname,
-        isLogin: pathname.startsWith("/login"),
-        isApi: pathname.startsWith("/api/"),
-        baseUrl,
-        shouldRedirect:
-          !pathname.startsWith("/login") && !pathname.startsWith("/api/"),
-      });
-
       if (pathname.startsWith("/login")) {
-        console.log("✅ Es página de login, permitir acceso");
         return NextResponse.next();
       }
 
       if (pathname.startsWith("/api/")) {
-        console.log("🚫 Es API sin token, retornar 401");
         return NextResponse.json(
           { error: "Unauthorized", message: "Authentication required" },
           { status: 401 }
@@ -375,18 +325,7 @@ export default async function middleware(req: NextRequest) {
       const cleanCallbackUrl = cleanUrl(`${baseUrl}${pathname}`);
       redirectUrl.searchParams.set("callbackUrl", cleanCallbackUrl);
 
-      console.log("🔄 EJECUTANDO REDIRECCIÓN A LOGIN:", {
-        from: pathname,
-        to: redirectUrl.toString(),
-        baseUrl,
-        cleanCallbackUrl,
-      });
-
       const redirectResponse = NextResponse.redirect(redirectUrl);
-      console.log("🔄 RESPUESTA DE REDIRECCIÓN CREADA:", {
-        status: redirectResponse.status,
-        headers: Object.fromEntries(redirectResponse.headers.entries()),
-      });
 
       return redirectResponse;
     }

@@ -3,14 +3,16 @@ import nodemailer from "nodemailer";
 export const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_SERVER_HOST,
   port: Number(process.env.EMAIL_SERVER_PORT) || 587,
+  secure: false,
+  requireTLS: true,
   auth: {
     user: process.env.EMAIL_SERVER_USER,
     pass: process.env.EMAIL_SERVER_PASSWORD,
   },
-  secure:
-    process.env.EMAIL_SERVER_PORT === "465"
-      ? true
-      : process.env.EMAIL_SERVER_SECURE === "true",
+  tls: {
+    ciphers: "SSLv3",
+    rejectUnauthorized: false,
+  },
   connectionTimeout: 60000,
   greetingTimeout: 60000,
   socketTimeout: 90000,
@@ -19,7 +21,9 @@ export const transporter = nodemailer.createTransport({
 transporter
   .verify()
   .then(() => console.log("✅ Conexión SMTP verificada"))
-  .catch((error) => console.error("❌ Error en la conexión SMTP:", error));
+  .catch((error: Error) =>
+    console.error("❌ Error en la conexión SMTP:", error)
+  );
 
 export async function sendPasswordResetEmail(
   to: string,
