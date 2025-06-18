@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
+import ClientesDialog from "@/components/directorio/ClientesDialog";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useUserVerification } from "@/hooks/useUserVerification";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import {
   BarChart,
   LayoutDashboardIcon,
   FileText,
+  Building2,
 } from "lucide-react";
 
 type ViewType = "inventory" | "orders";
@@ -32,12 +34,12 @@ export default function DashboardPage() {
   const [currentView, setCurrentView] = useState<ViewType>("inventory");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
+  const [openClientes, setOpenClientes] = useState(false);
 
   useUserVerification();
 
   const isMajorAdmin = session?.user?.role === "major_admin";
 
-  // Simplificar la lógica de redirección
   useEffect(() => {
     console.log("📊 [Dashboard] Estado actual:", {
       status,
@@ -45,19 +47,16 @@ export default function DashboardPage() {
       hasUserId: !!session?.user?.id,
     });
 
-    // Si está cargando, esperar
     if (status === "loading") {
       return;
     }
 
-    // Si no está autenticado, redirigir a login
     if (status === "unauthenticated") {
       console.log("🚫 [Dashboard] No autenticado, redirigiendo a login");
       router.replace("/login");
       return;
     }
 
-    // Si está autenticado pero no hay datos de usuario después de 3 segundos, algo está mal
     if (status === "authenticated" && !session?.user?.id) {
       console.log("⚠️ [Dashboard] Autenticado pero sin datos de usuario");
 
@@ -97,13 +96,14 @@ export default function DashboardPage() {
     setOpenFichasTecnicas(true);
   };
 
-  // Mostrar loading solo mientras está cargando la sesión
+  const handleOpenClientes = () => {
+    setOpenClientes(true);
+  };
+
   if (status === "loading") {
     return <LoadingScreen />;
   }
 
-  // Si no hay sesión o no hay datos de usuario, mostrar loading
-  // (el useEffect manejará la redirección)
   if (status === "unauthenticated" || !session?.user?.id) {
     return <LoadingScreen />;
   }
@@ -139,6 +139,23 @@ export default function DashboardPage() {
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Fichas Técnicas</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleOpenClientes}
+                    >
+                      <Building2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Directorio de Clientes</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -216,6 +233,8 @@ export default function DashboardPage() {
           open={openFichasTecnicas}
           setOpen={setOpenFichasTecnicas}
         />
+
+        <ClientesDialog open={openClientes} setOpen={setOpenClientes} />
       </div>
     </div>
   );

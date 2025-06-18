@@ -78,6 +78,76 @@ export const createUserSchema = z.object({
   }),
 });
 
+export const createClienteSchema = z.object({
+  empresa: z
+    .string()
+    .min(1, { message: "El nombre de la empresa es obligatorio" })
+    .max(100, {
+      message: "El nombre de la empresa no puede tener más de 100 caracteres",
+    })
+    .regex(/^[^<>]+$/, {
+      message: "El nombre de la empresa no puede contener los caracteres < o >",
+    }),
+  contacto: z
+    .string()
+    .max(50, { message: "El contacto no puede tener más de 50 caracteres" })
+    .regex(/^[^<>]*$/, {
+      message: "El contacto no puede contener los caracteres < o >",
+    })
+    .optional()
+    .or(z.literal("")),
+  direccion: z
+    .string()
+    .max(200, { message: "La dirección no puede tener más de 200 caracteres" })
+    .regex(/^[^<>]*$/, {
+      message: "La dirección no puede contener los caracteres < o >",
+    })
+    .optional()
+    .or(z.literal("")),
+  telefono: z
+    .string()
+    .max(20, { message: "El teléfono no puede tener más de 20 caracteres" })
+    .regex(/^[0-9\s\-\+\(\)]*$/, {
+      message:
+        "El teléfono solo puede contener números, espacios, guiones, + y paréntesis",
+    })
+    .optional()
+    .or(z.literal("")),
+  email: z
+    .string()
+    .min(1, { message: "El correo electrónico es obligatorio" })
+    .email({ message: "Por favor, ingrese un correo electrónico válido" })
+    .regex(/^[^\s<>]+$/, {
+      message: "El correo no puede contener espacios ni caracteres < o >",
+    }),
+  vendedor: z
+    .string()
+    .max(50, { message: "El vendedor no puede tener más de 50 caracteres" })
+    .regex(/^[^<>]*$/, {
+      message: "El vendedor no puede contener los caracteres < o >",
+    })
+    .optional()
+    .or(z.literal("")),
+  ubicacion: z
+    .string()
+    .max(50, { message: "La ubicación no puede tener más de 50 caracteres" })
+    .regex(/^[^<>]*$/, {
+      message: "La ubicación no puede contener los caracteres < o >",
+    })
+    .optional()
+    .or(z.literal("")),
+  comentarios: z
+    .string()
+    .max(500, {
+      message: "Los comentarios no pueden tener más de 500 caracteres",
+    })
+    .regex(/^[^<>]*$/, {
+      message: "Los comentarios no pueden contener los caracteres < o >",
+    })
+    .optional()
+    .or(z.literal("")),
+});
+
 export const newRowSchema = z.object({
   OC: z
     .string()
@@ -132,3 +202,4 @@ export type LoginFormValues = z.infer<typeof loginSchema>;
 export type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;
+export type CreateClienteFormValues = z.infer<typeof createClienteSchema>;

@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import { XCircleIcon, Plus, Loader2, FileText } from "lucide-react";
+import { XCircleIcon, Plus, Loader2, FileText, Building2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,6 +36,7 @@ import { NewOrderDialog } from "@/components/inventory-dashboard/NewOrderDialog"
 import { NewUserDialog } from "@/components/inventory-dashboard/NewUserDialog";
 import { InventoryHistoryDialog } from "@/components/inventory-dashboard/InventoryHistoryDialog";
 import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
+import ClientesDialog from "@/components/directorio/ClientesDialog";
 import LockScreen from "@/components/inventory-dashboard/LockScreen";
 import {
   InventoryItem,
@@ -569,6 +570,7 @@ const Dashboard = () => {
   const [openNewRow, setOpenNewRow] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
+  const [openClientes, setOpenClientes] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [openNewUser, setOpenNewUser] = useState(false);
@@ -877,10 +879,16 @@ const Dashboard = () => {
     return (
       <div className="fixed inset-0 overflow-hidden">
         <div className="h-full flex flex-col items-center justify-center p-4">
-          {/* Contenedor para botón + LockScreen centrados */}
           <div className="w-full space-y-4">
-            {/* Botón de Fichas Técnicas con padding igual al LockScreen */}
-            <div className="max-w-lg mx-auto px-4">
+            <div className="max-w-lg mx-auto px-4 space-y-3">
+              <Button
+                onClick={() => setOpenClientes(true)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
+              >
+                <Building2 className="h-4 w-4" />
+                Índice de Clientes
+              </Button>
+
               <Button
                 onClick={() => setOpenFichasTecnicas(true)}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
@@ -890,7 +898,6 @@ const Dashboard = () => {
               </Button>
             </div>
 
-            {/* LockScreen */}
             <div>
               <LockScreen
                 inventory={inventory}
@@ -901,7 +908,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Loading overlay */}
         {isLoadingInventory && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-6 mx-4 max-w-sm w-full shadow-xl">
@@ -919,6 +925,8 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+
+        <ClientesDialog open={openClientes} setOpen={setOpenClientes} />
 
         <FichasTecnicasDialog
           open={openFichasTecnicas}
@@ -1018,6 +1026,8 @@ const Dashboard = () => {
           onSuccess={handleNewRowSuccess}
         />
       )}
+
+      <ClientesDialog open={openClientes} setOpen={setOpenClientes} />
 
       <FichasTecnicasDialog
         open={openFichasTecnicas}
