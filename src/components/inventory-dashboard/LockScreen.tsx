@@ -9,6 +9,7 @@ import {
   FilterIcon,
   SearchIcon,
   XCircleIcon,
+  PackageIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -158,6 +159,45 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
 
   const totalCosto = useMemo(() => {
     return filteredInventory.reduce((total, item) => total + item.Total, 0);
+  }, [filteredInventory]);
+
+  const telaSummary = useMemo(() => {
+    const summary = new Map<
+      string,
+      {
+        cantidad: number;
+        items: number;
+        unidades: string;
+        ubicaciones: Set<string>;
+      }
+    >();
+
+    filteredInventory.forEach((item) => {
+      const key = item.Tela;
+      if (summary.has(key)) {
+        const existing = summary.get(key)!;
+        existing.cantidad += item.Cantidad;
+        existing.items += 1;
+        existing.ubicaciones.add(item.Ubicacion || "Sin ubicación");
+      } else {
+        summary.set(key, {
+          cantidad: item.Cantidad,
+          items: 1,
+          unidades: item.Unidades,
+          ubicaciones: new Set([item.Ubicacion || "Sin ubicación"]),
+        });
+      }
+    });
+
+    return Array.from(summary.entries())
+      .map(([tela, data]) => ({
+        tela,
+        cantidad: data.cantidad,
+        items: data.items,
+        unidades: data.unidades,
+        ubicaciones: Array.from(data.ubicaciones).join(", "),
+      }))
+      .sort((a, b) => a.tela.localeCompare(b.tela));
   }, [filteredInventory]);
 
   const handleExportPDF = () => {
@@ -313,8 +353,7 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
 
   return (
     <div className="min-h-full flex flex-col bg-gray-50 p-4">
-      <div className="max-w-lg w-full mx-auto">
-        {/* Tarjeta de filtros */}
+      <div className="max-w-lg w-full mx-auto space-y-4">
         <Card className="bg-white shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
@@ -339,7 +378,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            {/* Búsqueda */}
             <div className="space-y-1">
               <Label htmlFor="search" className="text-xs">
                 Buscar
@@ -360,9 +398,7 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
               </div>
             </div>
 
-            {/* Filtros de selección */}
             <div className="grid grid-cols-2 gap-3">
-              {/* Filtro de Unidades */}
               <div className="space-y-1">
                 <Label htmlFor="unitFilter" className="text-xs">
                   Unidades
@@ -384,7 +420,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
                 </Select>
               </div>
 
-              {/* Filtro de OC (solo para admin) */}
               {isAdmin && (
                 <div className="space-y-1">
                   <Label htmlFor="ocFilter" className="text-xs">
@@ -406,7 +441,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
                 </div>
               )}
 
-              {/* Filtro de Tela */}
               <div className="space-y-1">
                 <Label htmlFor="telaFilter" className="text-xs">
                   Tela
@@ -426,7 +460,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
                 </Select>
               </div>
 
-              {/* Filtro de Color */}
               <div className="space-y-1">
                 <Label htmlFor="colorFilter" className="text-xs">
                   Color
@@ -446,7 +479,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
                 </Select>
               </div>
 
-              {/* Filtro de Ubicación */}
               <div className="space-y-1">
                 <Label htmlFor="ubicacionFilter" className="text-xs">
                   Ubicación
@@ -475,7 +507,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
               </div>
             </div>
 
-            {/* Etiquetas de filtros activos */}
             <div className="flex flex-wrap gap-2 mt-2">
               {ocFilter !== "all" && (
                 <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
@@ -518,11 +549,49 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
           </CardFooter>
         </Card>
 
-        {/* Disclaimer */}
-        <p className="text-center text-xs text-gray-500 mt-4">
-          Para acceder a todas las funcionalidades del sistema, por favor
-          utiliza una computadora de escritorio.
-        </p>
+        <Card className="bg-white shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center">
+              <PackageIcon className="mr-2 h-5 w-5 text-primary" />
+              Resumen por Tela
+            </CardTitle>
+            <CardDescription>
+              {telaSummary.length} tipos de tela encontrados
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {telaSummary.length > 0 ? (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {telaSummary.map((item, index) => (
+                  <div
+                    key={index}
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"
+                  >
+                    <div className="flex-1">
+                      <h4 className="font-medium text-sm">{item.tela}</h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {item.items} producto{item.items !== 1 ? "s" : ""} •{" "}
+                        {item.ubicaciones}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-sm">
+                        {formatNumber(item.cantidad)} {item.unidades}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <PackageIcon className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">
+                  No hay telas que coincidan con los filtros
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

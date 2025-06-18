@@ -877,35 +877,31 @@ const Dashboard = () => {
 
   if (isMobile) {
     return (
-      <div className="fixed inset-0 overflow-hidden">
-        <div className="h-full flex flex-col items-center justify-center p-4">
-          <div className="w-full space-y-4">
-            <div className="max-w-lg mx-auto px-4 space-y-3">
-              <Button
-                onClick={() => setOpenClientes(true)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
-              >
-                <Building2 className="h-4 w-4" />
-                Índice de Clientes
-              </Button>
+      <div className="min-h-screen bg-gray-50 overflow-y-auto">
+        <div className="pb-safe">
+          <div className="max-w-lg mx-auto px-4 py-4 space-y-3">
+            <Button
+              onClick={() => setOpenClientes(true)}
+              className="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
+            >
+              <Building2 className="h-4 w-4" />
+              Índice de Clientes
+            </Button>
 
-              <Button
-                onClick={() => setOpenFichasTecnicas(true)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
-              >
-                <FileText className="h-4 w-4" />
-                Fichas Técnicas
-              </Button>
-            </div>
-
-            <div>
-              <LockScreen
-                inventory={inventory}
-                filters={filters}
-                isAdmin={isAdmin}
-              />
-            </div>
+            <Button
+              onClick={() => setOpenFichasTecnicas(true)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
+            >
+              <FileText className="h-4 w-4" />
+              Fichas Técnicas
+            </Button>
           </div>
+
+          <LockScreen
+            inventory={inventory}
+            filters={filters}
+            isAdmin={isAdmin}
+          />
         </div>
 
         {isLoadingInventory && (
