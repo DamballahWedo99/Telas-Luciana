@@ -160,6 +160,8 @@ interface TransferUpdatePayload {
   newItem?: InventoryItemData;
   quantityToTransfer: number;
   newMeridaQuantity?: number;
+  sourceLocation: "CDMX" | "MID";
+  destinationLocation: "CDMX" | "MID";
 }
 
 interface ProcessReturnResponse {
@@ -1025,6 +1027,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       console.log("🔍 [EDIT] Enviando oldItem completo:", oldItem);
       console.log("📝 [EDIT] Enviando newItem:", editingItem);
 
+      // Mapear ubicación para la API
+      const locationForAPI =
+        editingItem.Ubicacion === "Mérida" ? "MID" : "CDMX";
+
       const updatedInventory = [...inventory];
       updatedInventory[selectedItemIndex] = {
         ...editingItem,
@@ -1046,6 +1052,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               Total: editingItem.Costo * editingItem.Cantidad,
             },
             isEdit: true,
+            location: locationForAPI,
           }),
         });
 
@@ -1705,6 +1712,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           Modo: sellMode,
         });
 
+        // Mapear ubicación del inventario a formato de API
+        const locationForAPI = item.Ubicacion === "Mérida" ? "MID" : "CDMX";
+
         const inventoryUpdatePayload = {
           oldItem: {
             OC: item.OC || "",
@@ -1716,7 +1726,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             Unidades: item.Unidades || "",
           },
           quantityChange: quantityToSell,
-          operation: "sell",
+          location: locationForAPI,
         };
 
         console.log("📦 [SELL] Enviando payload a S3:", inventoryUpdatePayload);
@@ -2027,6 +2037,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           },
           quantityToTransfer,
           newMeridaQuantity: existingMeridaItem.Cantidad + quantityToTransfer,
+          sourceLocation: "CDMX",
+          destinationLocation: "MID",
         };
       } else {
         console.log("🆕 CREANDO NUEVO ITEM EN MÉRIDA");
@@ -2050,6 +2062,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           oldItem,
           newItem: newMeridaItem,
           quantityToTransfer,
+          sourceLocation: "CDMX",
+          destinationLocation: "MID",
         };
       }
 
@@ -3526,8 +3540,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                               currentViewingMonth
                                             )} ${currentViewingYear}`
                                           : item.Ubicacion !== "CDMX"
-                                          ? "Solo desde CDMX"
-                                          : "Trasladar a Mérida"}
+                                            ? "Solo desde CDMX"
+                                            : "Trasladar a Mérida"}
                                       </p>
                                     </TooltipContent>
                                   </Tooltip>

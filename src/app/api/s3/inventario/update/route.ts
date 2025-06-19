@@ -27,10 +27,12 @@ interface InventoryItem {
   Costo: number;
   Total: number;
   Unidades: string;
+  CDMX?: number;
+  MID?: number;
   Importacion?: string;
   FacturaDragonAzteca?: string;
-  status: string;
-  lastModified: string;
+  status?: string;
+  lastModified?: string;
   [key: string]: unknown;
 }
 
@@ -43,6 +45,8 @@ interface RawInventoryItem {
   Costo?: unknown;
   Total?: unknown;
   Unidades?: unknown;
+  CDMX?: unknown;
+  MID?: unknown;
   Importacion?: unknown;
   FacturaDragonAzteca?: unknown;
   status?: unknown;
@@ -51,12 +55,11 @@ interface RawInventoryItem {
 }
 
 interface TransferPayload {
-  transferType: "consolidate" | "create";
+  transferType: "transfer";
   oldItem: RawInventoryItem;
-  existingMeridaItem?: RawInventoryItem;
-  newItem?: RawInventoryItem;
   quantityToTransfer: number;
-  newMeridaQuantity?: number;
+  sourceLocation: "CDMX" | "MID";
+  destinationLocation: "CDMX" | "MID";
 }
 
 interface UpdateRequest {
@@ -64,6 +67,7 @@ interface UpdateRequest {
   newItem?: RawInventoryItem;
   isEdit?: boolean;
   quantityChange?: number;
+  location?: "CDMX" | "MID";
 }
 
 interface FileSearchResult {
@@ -83,7 +87,7 @@ const isLambdaSafeItem = (item: InventoryItem): boolean => {
     String(item.Color).trim() !== "" &&
     typeof item.Cantidad === "number" &&
     !isNaN(item.Cantidad) &&
-    item.Cantidad > 0 &&
+    item.Cantidad >= 0 &&
     typeof item.Costo === "number" &&
     !isNaN(item.Costo) &&
     item.Costo >= 0 &&
@@ -143,28 +147,54 @@ const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
       Color: safeNormalize(rawItem.Color, "SIN-COLOR"),
       Cantidad: safeNumber(rawItem.Cantidad, 0),
       Costo: safeNumber(rawItem.Costo, 0),
-      Total: 0,
+      Total: safeNumber(rawItem.Total, 0),
       Unidades: safeNormalize(rawItem.Unidades, "KGS"),
-      status: safeNormalize(rawItem.status, "needs_pricing"),
-      lastModified: new Date().toISOString(),
     };
 
-    const ubicacion = safeNormalize(rawItem.Ubicacion);
-    if (ubicacion) {
-      item.Ubicacion = ubicacion;
+    if (rawItem.CDMX !== undefined) {
+      if (
+        rawItem.CDMX === null ||
+        rawItem.CDMX === "NaN" ||
+        Number.isNaN(rawItem.CDMX)
+      ) {
+        item.CDMX = undefined;
+      } else {
+        item.CDMX = safeNumber(rawItem.CDMX, 0);
+      }
+    }
+    if (rawItem.MID !== undefined) {
+      if (
+        rawItem.MID === null ||
+        rawItem.MID === "NaN" ||
+        Number.isNaN(rawItem.MID)
+      ) {
+        item.MID = undefined;
+      } else {
+        item.MID = safeNumber(rawItem.MID, 0);
+      }
     }
 
-    const importacion = safeNormalize(rawItem.Importacion);
-    if (importacion) {
-      item.Importacion = importacion;
-    }
+    Object.keys(rawItem).forEach((key) => {
+      if (
+        ![
+          "OC",
+          "Tela",
+          "Color",
+          "Cantidad",
+          "Costo",
+          "Total",
+          "Unidades",
+          "CDMX",
+          "MID",
+        ].includes(key)
+      ) {
+        item[key] = rawItem[key];
+      }
+    });
 
-    const factura = safeNormalize(rawItem.FacturaDragonAzteca);
-    if (factura) {
-      item.FacturaDragonAzteca = factura;
+    if (!item.Total || item.Total === 0) {
+      item.Total = item.Costo * item.Cantidad;
     }
-
-    item.Total = item.Costo * item.Cantidad;
 
     if (!isLambdaSafeItem(item)) {
       return null;
@@ -250,90 +280,29 @@ const findItemInFile = async (
   }
 };
 
-const findConsolidableItem = async (
-  fileKey: string,
-  targetItem: RawInventoryItem
-): Promise<FileSearchResult> => {
-  try {
-    const getCommand = new GetObjectCommand({
-      Bucket: "telas-luciana",
-      Key: fileKey,
-    });
+const reorderItemFields = (item: InventoryItem): InventoryItem => {
+  const orderedItem: Record<string, unknown> = {};
 
-    const fileResponse = await s3Client.send(getCommand);
-    if (!fileResponse.Body) {
-      return { found: false };
+  if (item.OC !== undefined) orderedItem.OC = item.OC;
+  if (item.Tela !== undefined) orderedItem.Tela = item.Tela;
+  if (item.Color !== undefined) orderedItem.Color = item.Color;
+  if (item.Costo !== undefined) orderedItem.Costo = item.Costo;
+  if (item.Cantidad !== undefined) orderedItem.Cantidad = item.Cantidad;
+  if (item.Unidades !== undefined) orderedItem.Unidades = item.Unidades;
+  if (item.CDMX !== undefined) orderedItem.CDMX = item.CDMX;
+  if (item.MID !== undefined) orderedItem.MID = item.MID;
+  if (item.Total !== undefined) orderedItem.Total = item.Total;
+
+  Object.keys(item).forEach((key) => {
+    if (
+      !orderedItem.hasOwnProperty(key) &&
+      !["lastModified", "status", "Ubicacion"].includes(key)
+    ) {
+      orderedItem[key] = item[key];
     }
+  });
 
-    let content = await fileResponse.Body.transformToString();
-    if (!content.trim()) {
-      return { found: false };
-    }
-
-    content = content
-      .replace(/:\s*NaN/g, ": null")
-      .replace(/:\s*undefined/g, ": null")
-      .replace(/,\s*}/g, "}")
-      .replace(/,\s*]/g, "]");
-
-    let rawData: unknown;
-    try {
-      rawData = JSON.parse(content);
-    } catch (parseError) {
-      console.error(`JSON inválido en ${fileKey}:`, parseError);
-      return { found: false };
-    }
-
-    let dataArray: unknown[];
-    if (!Array.isArray(rawData)) {
-      dataArray = [rawData];
-    } else {
-      dataArray = rawData;
-    }
-
-    const normalizedData = dataArray
-      .map((item) => normalizeItem(item as RawInventoryItem))
-      .filter((item) => item !== null) as InventoryItem[];
-
-    const targetOC = safeNormalize(targetItem.OC).toLowerCase();
-    const targetTela = safeNormalize(targetItem.Tela).toLowerCase();
-    const targetColor = safeNormalize(targetItem.Color).toLowerCase();
-    const targetUbicacion = safeNormalize(targetItem.Ubicacion).toLowerCase();
-    const targetCosto = safeNumber(targetItem.Costo);
-    const targetUnidades = safeNormalize(targetItem.Unidades).toLowerCase();
-
-    for (let i = 0; i < normalizedData.length; i++) {
-      const item = normalizedData[i];
-
-      const itemOC = item.OC.toLowerCase();
-      const itemTela = item.Tela.toLowerCase();
-      const itemColor = item.Color.toLowerCase();
-      const itemUbicacion = (item.Ubicacion || "").toLowerCase();
-      const itemCosto = item.Costo;
-      const itemUnidades = item.Unidades.toLowerCase();
-
-      if (
-        itemOC === targetOC &&
-        itemTela === targetTela &&
-        itemColor === targetColor &&
-        itemUbicacion === targetUbicacion &&
-        Math.abs(itemCosto - targetCosto) < 0.01 &&
-        itemUnidades === targetUnidades
-      ) {
-        return {
-          found: true,
-          itemIndex: i,
-          normalizedData,
-          originalData: dataArray,
-        };
-      }
-    }
-
-    return { found: false };
-  } catch (error) {
-    console.error(`Error buscando consolidable en ${fileKey}:`, error);
-    return { found: false };
-  }
+  return orderedItem as InventoryItem;
 };
 
 const saveFileSafely = async (
@@ -358,7 +327,31 @@ const saveFileSafely = async (
       return true;
     }
 
-    const content = JSON.stringify(safeItems, null, 2);
+    const itemsForSave = safeItems.map((item) => {
+      let saveItem = { ...item };
+
+      if (saveItem.CDMX === undefined) {
+        saveItem.CDMX = NaN;
+      }
+      if (saveItem.MID === undefined) {
+        saveItem.MID = NaN;
+      }
+
+      delete saveItem.lastModified;
+      delete saveItem.status;
+      delete saveItem.Ubicacion;
+
+      saveItem = reorderItemFields(saveItem);
+
+      return saveItem;
+    });
+
+    let content: string;
+    if (itemsForSave.length === 1) {
+      content = JSON.stringify(itemsForSave[0], null, 2);
+    } else {
+      content = JSON.stringify(itemsForSave, null, 2);
+    }
 
     const putCommand = new PutObjectCommand({
       Bucket: "telas-luciana",
@@ -386,14 +379,8 @@ const processTransferWithConsolidation = async (
   consolidatedItemFile?: string;
   sourceItemFile?: string;
 }> => {
-  const {
-    transferType,
-    oldItem,
-    existingMeridaItem,
-    newItem,
-    quantityToTransfer,
-    newMeridaQuantity,
-  } = transferPayload;
+  const { oldItem, quantityToTransfer, sourceLocation, destinationLocation } =
+    transferPayload;
 
   let sourceItemFound = false;
   let sourceFileKey = "";
@@ -410,19 +397,29 @@ const processTransferWithConsolidation = async (
 
       const modifiedData = [...result.normalizedData];
       const currentItem = modifiedData[result.itemIndex];
-      const newQuantity = currentItem.Cantidad - quantityToTransfer;
 
-      if (newQuantity <= 0) {
-        modifiedData.splice(result.itemIndex, 1);
-      } else {
-        modifiedData[result.itemIndex] = {
-          ...currentItem,
-          Cantidad: newQuantity,
-          Total: currentItem.Costo * newQuantity,
-          lastModified: new Date().toISOString(),
-        };
+      const currentLocationQuantity =
+        sourceLocation === "CDMX"
+          ? currentItem.CDMX || 0
+          : currentItem.MID || 0;
+
+      if (currentLocationQuantity < quantityToTransfer) {
+        throw new Error(
+          `No hay suficiente inventario en ${sourceLocation}. Disponible: ${currentLocationQuantity}, Solicitado: ${quantityToTransfer}`
+        );
       }
 
+      if (sourceLocation === "CDMX" && destinationLocation === "MID") {
+        currentItem.CDMX = currentLocationQuantity - quantityToTransfer;
+        const currentMID = currentItem.MID || 0;
+        currentItem.MID = currentMID + quantityToTransfer;
+      } else if (sourceLocation === "MID" && destinationLocation === "CDMX") {
+        currentItem.MID = currentLocationQuantity - quantityToTransfer;
+        const currentCDMX = currentItem.CDMX || 0;
+        currentItem.CDMX = currentCDMX + quantityToTransfer;
+      }
+
+      modifiedData[result.itemIndex] = currentItem;
       await saveFileSafely(fileKey, modifiedData);
       break;
     }
@@ -432,115 +429,15 @@ const processTransferWithConsolidation = async (
     throw new Error("Item de origen no encontrado para traslado");
   }
 
-  if (transferType === "consolidate" && existingMeridaItem) {
-    let destinationItemFound = false;
-
-    for (const fileKey of jsonFiles) {
-      const result = await findConsolidableItem(fileKey, existingMeridaItem);
-      if (
-        result.found &&
-        result.normalizedData &&
-        result.itemIndex !== undefined
-      ) {
-        destinationItemFound = true;
-
-        const modifiedData = [...result.normalizedData];
-        const existingItem = modifiedData[result.itemIndex];
-
-        modifiedData[result.itemIndex] = {
-          ...existingItem,
-          Cantidad: newMeridaQuantity!,
-          Total: existingItem.Costo * newMeridaQuantity!,
-          lastModified: new Date().toISOString(),
-        };
-
-        await saveFileSafely(fileKey, modifiedData);
-
-        return {
-          success: true,
-          message: `Traslado consolidado: ${quantityToTransfer} ${safeNormalize(
-            oldItem.Unidades
-          )} agregados al item existente en Mérida`,
-          operation: "consolidate",
-          consolidatedItemFile: fileKey,
-          sourceItemFile: sourceFileKey,
-        };
-      }
-    }
-
-    if (!destinationItemFound) {
-      throw new Error(
-        "Item existente en Mérida no encontrado para consolidación"
-      );
-    }
-  } else if (transferType === "create" && newItem) {
-    const normalizedNewItem = normalizeItem(newItem);
-    if (!normalizedNewItem || !isLambdaSafeItem(normalizedNewItem)) {
-      throw new Error("El nuevo item no es válido o seguro para Lambda");
-    }
-
-    normalizedNewItem.status = "completed";
-
-    const targetFileKey = sourceFileKey;
-
-    try {
-      const getCommand = new GetObjectCommand({
-        Bucket: "telas-luciana",
-        Key: targetFileKey,
-      });
-
-      const fileResponse = await s3Client.send(getCommand);
-      if (!fileResponse.Body) {
-        throw new Error(`No se pudo leer el archivo ${targetFileKey}`);
-      }
-
-      let content = await fileResponse.Body.transformToString();
-
-      content = content
-        .replace(/:\s*NaN/g, ": null")
-        .replace(/:\s*undefined/g, ": null")
-        .replace(/,\s*}/g, "}")
-        .replace(/,\s*]/g, "]");
-
-      const rawData: unknown = JSON.parse(content);
-
-      let dataArray: unknown[];
-      if (!Array.isArray(rawData)) {
-        dataArray = [rawData];
-      } else {
-        dataArray = rawData;
-      }
-
-      const normalizedData = dataArray
-        .map((item: unknown) => normalizeItem(item as RawInventoryItem))
-        .filter(
-          (item: InventoryItem | null) => item !== null
-        ) as InventoryItem[];
-
-      const modifiedData = [...normalizedData, normalizedNewItem];
-
-      await saveFileSafely(targetFileKey, modifiedData);
-
-      return {
-        success: true,
-        message: `Nuevo item creado en Mérida: ${quantityToTransfer} ${safeNormalize(
-          oldItem.Unidades
-        )}`,
-        operation: "create",
-        consolidatedItemFile: targetFileKey,
-        sourceItemFile: sourceFileKey,
-      };
-    } catch (error) {
-      console.error("Error creando nuevo item:", error);
-      throw new Error(
-        `No se pudo crear el nuevo item en ${targetFileKey}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
-
-  throw new Error("Tipo de traslado no reconocido");
+  return {
+    success: true,
+    message: `Traslado completado: ${quantityToTransfer} ${safeNormalize(
+      oldItem.Unidades
+    )} transferidos de ${sourceLocation} a ${destinationLocation}`,
+    operation: "transfer",
+    consolidatedItemFile: sourceFileKey,
+    sourceItemFile: sourceFileKey,
+  };
 };
 
 export async function POST(request: NextRequest) {
@@ -625,11 +522,29 @@ export async function POST(request: NextRequest) {
     }
 
     const updateRequest = body as UpdateRequest;
-    const { oldItem, newItem, isEdit, quantityChange } = updateRequest;
+    const { oldItem, newItem, isEdit, quantityChange, location } =
+      updateRequest;
 
     if (!oldItem) {
       return NextResponse.json(
         { error: "oldItem es requerido" },
+        { status: 400 }
+      );
+    }
+
+    if ((quantityChange && !isEdit) || isEdit) {
+      if (!location) {
+        const operationType = isEdit ? "ediciones" : "ventas";
+        return NextResponse.json(
+          { error: `location es requerida para ${operationType} (CDMX o MID)` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (location && location !== "CDMX" && location !== "MID") {
+      return NextResponse.json(
+        { error: "location debe ser 'CDMX' o 'MID'" },
         { status: 400 }
       );
     }
@@ -696,31 +611,78 @@ export async function POST(request: NextRequest) {
     }
 
     const modifiedData = [...targetData];
+    const currentItem = { ...modifiedData[targetItemIndex] };
 
     if (isEdit && newItem) {
-      const normalizedNewItem = normalizeItem(newItem);
-      if (!normalizedNewItem) {
+      const editedItem = { ...currentItem };
+
+      if (newItem.Cantidad !== undefined) {
+        const newQuantity = safeNumber(newItem.Cantidad, 0);
+
+        if (location === "CDMX") {
+          editedItem.CDMX = newQuantity;
+        } else {
+          editedItem.MID = newQuantity;
+        }
+
+        const cdmxAmount = editedItem.CDMX || 0;
+        const midAmount = editedItem.MID || 0;
+        editedItem.Cantidad = cdmxAmount + midAmount;
+      }
+
+      if (newItem.Costo !== undefined) {
+        editedItem.Costo = safeNumber(newItem.Costo, 0);
+      }
+      if (newItem.Tela !== undefined) {
+        editedItem.Tela = safeNormalize(newItem.Tela);
+      }
+      if (newItem.Color !== undefined) {
+        editedItem.Color = safeNormalize(newItem.Color);
+      }
+      if (newItem.Unidades !== undefined) {
+        editedItem.Unidades = safeNormalize(newItem.Unidades);
+      }
+
+      editedItem.Total = editedItem.Costo * editedItem.Cantidad;
+
+      modifiedData[targetItemIndex] = editedItem;
+    } else if (quantityChange !== undefined && location) {
+      let currentLocationQuantity = 0;
+
+      if (location === "CDMX") {
+        currentLocationQuantity = currentItem.CDMX || 0;
+      } else {
+        currentLocationQuantity = currentItem.MID || 0;
+      }
+
+      if (currentLocationQuantity < quantityChange) {
         return NextResponse.json(
-          { error: "newItem tiene datos inválidos" },
+          {
+            error: `No hay suficiente inventario en ${location}. Disponible: ${currentLocationQuantity}, Solicitado: ${quantityChange}`,
+            available: currentLocationQuantity,
+            requested: quantityChange,
+            location: location,
+          },
           { status: 400 }
         );
       }
 
-      normalizedNewItem.status = "completed";
-      modifiedData[targetItemIndex] = normalizedNewItem;
-    } else if (quantityChange !== undefined) {
-      const currentItem = modifiedData[targetItemIndex];
-      const newQuantity = currentItem.Cantidad - quantityChange;
+      if (location === "CDMX") {
+        currentItem.CDMX = currentLocationQuantity - quantityChange;
+      } else {
+        currentItem.MID = currentLocationQuantity - quantityChange;
+      }
 
-      if (newQuantity <= 0) {
+      const cdmxAmount = currentItem.CDMX || 0;
+      const midAmount = currentItem.MID || 0;
+      const newTotalQuantity = cdmxAmount + midAmount;
+
+      if (newTotalQuantity <= 0) {
         modifiedData.splice(targetItemIndex, 1);
       } else {
-        modifiedData[targetItemIndex] = {
-          ...currentItem,
-          Cantidad: newQuantity,
-          Total: currentItem.Costo * newQuantity,
-          lastModified: new Date().toISOString(),
-        };
+        currentItem.Cantidad = newTotalQuantity;
+        currentItem.Total = currentItem.Costo * newTotalQuantity;
+        modifiedData[targetItemIndex] = currentItem;
       }
     }
 
@@ -742,10 +704,22 @@ export async function POST(request: NextRequest) {
 
     const duration = Date.now() - startTime;
 
+    let operationMessage = "Inventario actualizado correctamente";
+    let operationType = "update";
+
+    if (isEdit) {
+      operationMessage = `Producto editado en ${location}: nueva cantidad en ${location}`;
+      operationType = "edit";
+    } else if (quantityChange && location) {
+      operationMessage = `Venta procesada en ${location}: ${quantityChange} unidades`;
+      operationType = "sale";
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Inventario actualizado de manera segura",
-      operation: isEdit ? "edit" : "quantity_change",
+      message: operationMessage,
+      operation: operationType,
+      location: location,
       fileUpdated: targetFileKey,
       itemsInFile: modifiedData.length,
       lambdaSafe: true,

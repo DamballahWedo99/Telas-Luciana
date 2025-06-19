@@ -49,13 +49,34 @@ interface InventoryItem {
   Cantidad: number;
   Unidades: string;
   Total: number;
-  Ubicacion: string;
-  Importacion: string;
-  FacturaDragonAzteca: string;
+  Ubicacion?: string;
+  Importacion?: string;
+  FacturaDragonAzteca?: string;
   status?: string;
   lastModified?: string;
   almacen?: string;
   created_from?: string;
+  CDMX?: number;
+  MID?: number;
+  [key: string]: unknown;
+}
+
+interface RawInventoryItem {
+  OC?: unknown;
+  Tela?: unknown;
+  Color?: unknown;
+  Ubicacion?: unknown;
+  Cantidad?: unknown;
+  Costo?: unknown;
+  Total?: unknown;
+  Unidades?: unknown;
+  CDMX?: unknown;
+  MID?: unknown;
+  Importacion?: unknown;
+  FacturaDragonAzteca?: unknown;
+  status?: unknown;
+  lastModified?: unknown;
+  [key: string]: unknown;
 }
 
 interface PackingListEntry {
@@ -107,6 +128,280 @@ interface Results {
   historyUpdates: number;
 }
 
+interface FileSearchResult {
+  found: boolean;
+  itemIndex?: number;
+  normalizedData?: InventoryItem[];
+  originalData?: unknown[];
+}
+
+const safeNormalize = (value: unknown, defaultValue: string = ""): string => {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "undefined" ||
+    value === "null" ||
+    Number.isNaN(value)
+  ) {
+    return defaultValue;
+  }
+
+  const str = String(value).trim();
+  if (str === "" || str === "undefined" || str === "null" || str === "NaN") {
+    return defaultValue;
+  }
+
+  if (str.length >= 2 && str.startsWith('"') && str.endsWith('"')) {
+    return str.slice(1, -1);
+  }
+
+  return str;
+};
+
+const safeNumber = (value: unknown, defaultValue: number = 0): number => {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "undefined" ||
+    value === "null" ||
+    Number.isNaN(value)
+  ) {
+    return defaultValue;
+  }
+
+  const num = parseFloat(String(value));
+  return isNaN(num) ? defaultValue : num;
+};
+
+const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
+  try {
+    if (!rawItem || typeof rawItem !== "object") {
+      return null;
+    }
+
+    const item: InventoryItem = {
+      OC: safeNormalize(rawItem.OC, "SIN-OC"),
+      Tela: safeNormalize(rawItem.Tela, "SIN-TELA"),
+      Color: safeNormalize(rawItem.Color, "SIN-COLOR"),
+      Cantidad: safeNumber(rawItem.Cantidad, 0),
+      Costo: safeNumber(rawItem.Costo, 0),
+      Total: safeNumber(rawItem.Total, 0),
+      Unidades: safeNormalize(rawItem.Unidades, "KGS"),
+    };
+
+    if (rawItem.CDMX !== undefined) {
+      if (
+        rawItem.CDMX === null ||
+        rawItem.CDMX === "NaN" ||
+        Number.isNaN(rawItem.CDMX)
+      ) {
+        item.CDMX = undefined;
+      } else {
+        item.CDMX = safeNumber(rawItem.CDMX, 0);
+      }
+    }
+    if (rawItem.MID !== undefined) {
+      if (
+        rawItem.MID === null ||
+        rawItem.MID === "NaN" ||
+        Number.isNaN(rawItem.MID)
+      ) {
+        item.MID = undefined;
+      } else {
+        item.MID = safeNumber(rawItem.MID, 0);
+      }
+    }
+
+    Object.keys(rawItem).forEach((key) => {
+      if (
+        ![
+          "OC",
+          "Tela",
+          "Color",
+          "Cantidad",
+          "Costo",
+          "Total",
+          "Unidades",
+          "CDMX",
+          "MID",
+        ].includes(key) &&
+        rawItem[key] !== undefined &&
+        rawItem[key] !== null
+      ) {
+        item[key] = rawItem[key];
+      }
+    });
+
+    if (!item.Total || item.Total === 0) {
+      item.Total = item.Costo * item.Cantidad;
+    }
+
+    return item;
+  } catch (error) {
+    console.error("Error normalizing item:", error);
+    return null;
+  }
+};
+
+const findItemInFile = async (
+  fileKey: string,
+  targetOC: string,
+  targetTela: string,
+  targetColor: string
+): Promise<FileSearchResult> => {
+  try {
+    const getCommand = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: fileKey,
+    });
+
+    const fileResponse = await s3Client.send(getCommand);
+    if (!fileResponse.Body) {
+      return { found: false };
+    }
+
+    let content = await fileResponse.Body.transformToString();
+    if (!content.trim()) {
+      return { found: false };
+    }
+
+    content = content
+      .replace(/:\s*NaN/g, ": null")
+      .replace(/:\s*undefined/g, ": null")
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]");
+
+    let rawData: unknown;
+    try {
+      rawData = JSON.parse(content);
+    } catch (parseError) {
+      console.error(`JSON inválido en ${fileKey}:`, parseError);
+      return { found: false };
+    }
+
+    let dataArray: unknown[];
+    if (!Array.isArray(rawData)) {
+      dataArray = [rawData];
+    } else {
+      dataArray = rawData;
+    }
+
+    const normalizedData = dataArray
+      .map((item) => normalizeItem(item as RawInventoryItem))
+      .filter((item) => item !== null) as InventoryItem[];
+
+    const normalizedTargetOC = safeNormalize(targetOC).trim();
+    const normalizedTargetTela = safeNormalize(targetTela).trim();
+    const normalizedTargetColor = safeNormalize(targetColor).trim();
+
+    for (let i = 0; i < normalizedData.length; i++) {
+      const item = normalizedData[i];
+
+      const matchOC = item.OC === normalizedTargetOC;
+      const matchTela = item.Tela === normalizedTargetTela;
+      const matchColor = item.Color === normalizedTargetColor;
+
+      if (matchOC && matchTela && matchColor) {
+        return {
+          found: true,
+          itemIndex: i,
+          normalizedData,
+          originalData: dataArray,
+        };
+      }
+    }
+
+    return { found: false };
+  } catch (error) {
+    console.error(`Error buscando en ${fileKey}:`, error);
+    return { found: false };
+  }
+};
+
+const reorderItemFields = (item: InventoryItem): InventoryItem => {
+  const orderedItem: Record<string, unknown> = {};
+
+  if (item.OC !== undefined) orderedItem.OC = item.OC;
+  if (item.Tela !== undefined) orderedItem.Tela = item.Tela;
+  if (item.Color !== undefined) orderedItem.Color = item.Color;
+  if (item.Costo !== undefined) orderedItem.Costo = item.Costo;
+  if (item.Cantidad !== undefined) orderedItem.Cantidad = item.Cantidad;
+  if (item.Unidades !== undefined) orderedItem.Unidades = item.Unidades;
+  if (item.CDMX !== undefined) orderedItem.CDMX = item.CDMX;
+  if (item.MID !== undefined) orderedItem.MID = item.MID;
+  if (item.Total !== undefined) orderedItem.Total = item.Total;
+
+  Object.keys(item).forEach((key) => {
+    if (
+      !orderedItem.hasOwnProperty(key) &&
+      !["lastModified", "status", "Ubicacion", "almacen"].includes(key) &&
+      item[key] !== undefined &&
+      item[key] !== null &&
+      item[key] !== ""
+    ) {
+      orderedItem[key] = item[key];
+    }
+  });
+
+  return orderedItem as InventoryItem;
+};
+
+const saveFileSafely = async (
+  fileKey: string,
+  items: InventoryItem[]
+): Promise<boolean> => {
+  try {
+    if (items.length === 0) {
+      return true;
+    }
+
+    const itemsForSave = items.map((item) => {
+      let saveItem = { ...item };
+
+      if (saveItem.CDMX === undefined) {
+        saveItem.CDMX = NaN;
+      }
+      if (saveItem.MID === undefined) {
+        saveItem.MID = NaN;
+      }
+
+      delete saveItem.lastModified;
+      delete saveItem.status;
+      delete saveItem.Ubicacion;
+      delete saveItem.almacen;
+
+      saveItem = reorderItemFields(saveItem);
+
+      return saveItem;
+    });
+
+    let content: string;
+    if (itemsForSave.length === 1) {
+      content = JSON.stringify(itemsForSave[0], null, 2);
+    } else {
+      content = JSON.stringify(itemsForSave, null, 2);
+    }
+
+    const putCommand = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: fileKey,
+      Body: content,
+      ContentType: "application/json",
+      Metadata: {
+        "last-updated": new Date().toISOString(),
+        operation: "return-roll",
+      },
+    });
+
+    await s3Client.send(putCommand);
+
+    return true;
+  } catch (error) {
+    console.error(`Error guardando ${fileKey}:`, error);
+    return false;
+  }
+};
+
 function isManualSale(rollNumber: number | string): boolean {
   return String(rollNumber).startsWith("MANUAL-");
 }
@@ -114,8 +409,7 @@ function isManualSale(rollNumber: number | string): boolean {
 async function findInventoryFile(
   oc: string,
   tela: string,
-  color: string,
-  ubicacion: string
+  color: string
 ): Promise<string | null> {
   try {
     const now = new Date();
@@ -145,76 +439,14 @@ async function findInventoryFile(
     const listResponse = await s3Client.send(listCommand);
     const jsonFiles = (listResponse.Contents || [])
       .filter((item) => item.Key && item.Key.endsWith(".json"))
-      .map((item) => item.Key!);
+      .filter((item) => !item.Key!.includes("_backup_"))
+      .map((item) => item.Key!)
+      .sort();
 
     for (const fileKey of jsonFiles) {
-      try {
-        const getCommand = new GetObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: fileKey,
-        });
-
-        const fileResponse = await s3Client.send(getCommand);
-        if (!fileResponse.Body) continue;
-
-        let fileContent = await fileResponse.Body.transformToString();
-        fileContent = fileContent.replace(/: *NaN/g, ": null");
-
-        let jsonData: InventoryItem[] = JSON.parse(fileContent);
-        if (!Array.isArray(jsonData)) {
-          jsonData = [jsonData as InventoryItem];
-        }
-
-        const foundItem = jsonData.find((item: InventoryItem) => {
-          const matchOC = item.OC?.toLowerCase() === oc.toLowerCase();
-          const matchTela = item.Tela?.toLowerCase() === tela.toLowerCase();
-          const matchColor = item.Color?.toLowerCase() === color.toLowerCase();
-          const matchUbicacion =
-            item.Ubicacion?.toLowerCase() === ubicacion.toLowerCase();
-
-          return matchOC && matchTela && matchColor && matchUbicacion;
-        });
-
-        if (foundItem) {
-          return fileKey;
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    const cleanOC = oc.replace(/[^a-zA-Z0-9]/g, "_");
-    const relatedFiles = jsonFiles.filter(
-      (file) => file.includes(cleanOC) && file.includes("inventario_")
-    );
-
-    for (const fileKey of relatedFiles) {
-      try {
-        const getCommand = new GetObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: fileKey,
-        });
-
-        const fileResponse = await s3Client.send(getCommand);
-        if (!fileResponse.Body) continue;
-
-        let fileContent = await fileResponse.Body.transformToString();
-        fileContent = fileContent.replace(/: *NaN/g, ": null");
-
-        let jsonData: InventoryItem[] = JSON.parse(fileContent);
-        if (!Array.isArray(jsonData)) {
-          jsonData = [jsonData as InventoryItem];
-        }
-
-        const foundItem = jsonData.find((item: InventoryItem) => {
-          return item.OC?.toLowerCase() === oc.toLowerCase();
-        });
-
-        if (foundItem) {
-          return fileKey;
-        }
-      } catch {
-        continue;
+      const result = await findItemInFile(fileKey, oc, tela, color);
+      if (result.found) {
+        return fileKey;
       }
     }
 
@@ -289,94 +521,63 @@ async function findPackingListFile(
 
 async function updateInventory(
   fileKey: string,
-  roll: ReturnRoll
+  rolls: ReturnRoll[]
 ): Promise<boolean> {
   try {
-    const getCommand = new GetObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: fileKey,
-    });
+    const firstRoll = rolls[0];
+    const result = await findItemInFile(
+      fileKey,
+      firstRoll.oc,
+      firstRoll.fabric_type,
+      firstRoll.color
+    );
 
-    const fileResponse = await s3Client.send(getCommand);
-    if (!fileResponse.Body) return false;
-
-    let fileContent = await fileResponse.Body.transformToString();
-    fileContent = fileContent.replace(/: *NaN/g, ": null");
-
-    let jsonData: InventoryItem[] = JSON.parse(fileContent);
-    if (!Array.isArray(jsonData)) {
-      jsonData = [jsonData as InventoryItem];
+    if (
+      !result.found ||
+      !result.normalizedData ||
+      result.itemIndex === undefined
+    ) {
+      return false;
     }
 
-    let itemFound = false;
-    for (let i = 0; i < jsonData.length; i++) {
-      const item = jsonData[i];
-      const matchOC =
-        item.OC?.toLowerCase().trim() === roll.oc.toLowerCase().trim();
-      const matchTela =
-        item.Tela?.toLowerCase().trim() ===
-        roll.fabric_type.toLowerCase().trim();
-      const matchColor =
-        item.Color?.toLowerCase().trim() === roll.color.toLowerCase().trim();
-      const matchUbicacion =
-        item.Ubicacion?.toLowerCase().trim() ===
-          roll.almacen.toLowerCase().trim() ||
-        item.almacen?.toLowerCase().trim() ===
-          roll.almacen.toLowerCase().trim();
+    const modifiedData = [...result.normalizedData];
+    const currentItem = { ...modifiedData[result.itemIndex] };
 
-      if (matchOC && matchTela && matchColor && matchUbicacion) {
-        const currentQuantity = parseFloat(String(item.Cantidad)) || 0;
-        const newQuantity = currentQuantity + roll.return_quantity;
+    for (const roll of rolls) {
+      const ubicacion = roll.almacen.toUpperCase();
 
-        jsonData[i].Cantidad = newQuantity;
-        jsonData[i].Total = (parseFloat(String(item.Costo)) || 0) * newQuantity;
-
-        itemFound = true;
-        break;
+      if (ubicacion === "CDMX") {
+        const currentCDMX = currentItem.CDMX || 0;
+        currentItem.CDMX = currentCDMX + roll.return_quantity;
+      } else if (
+        ubicacion === "MID" ||
+        ubicacion === "MÉRIDA" ||
+        ubicacion === "MERIDA"
+      ) {
+        const currentMID = currentItem.MID || 0;
+        currentItem.MID = currentMID + roll.return_quantity;
       }
     }
 
-    if (!itemFound) {
-      const newItem: InventoryItem = {
-        OC: roll.oc,
-        Tela: roll.fabric_type,
-        Color: roll.color,
-        Costo: roll.costo,
-        Cantidad: roll.return_quantity,
-        Unidades: roll.units,
-        Total: roll.costo * roll.return_quantity,
-        Ubicacion: roll.almacen,
-        Importacion: "DA",
-        FacturaDragonAzteca: "",
-        status: "completed",
-        lastModified: new Date().toISOString(),
-      };
+    const updatedCDMX = currentItem.CDMX || 0;
+    const updatedMID = currentItem.MID || 0;
+    currentItem.Cantidad = updatedCDMX + updatedMID;
 
-      jsonData.push(newItem);
-    }
+    currentItem.Total = currentItem.Costo * currentItem.Cantidad;
 
-    const putCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: fileKey,
-      Body: JSON.stringify(jsonData, null, 2),
-      ContentType: "application/json",
-      Metadata: {
-        "last-updated": new Date().toISOString(),
-        operation: "return-roll",
-        "roll-number": String(roll.roll_number),
-      },
-    });
-
-    await s3Client.send(putCommand);
-    return true;
+    modifiedData[result.itemIndex] = currentItem;
+    return await saveFileSafely(fileKey, modifiedData);
   } catch (error) {
     console.error("Error actualizando inventario:", error);
     return false;
   }
 }
 
-async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
+async function createInventoryFile(
+  rolls: ReturnRoll[]
+): Promise<string | null> {
   try {
+    const firstRoll = rolls[0];
     const year = new Date().getFullYear().toString();
     const monthNames = [
       "Enero",
@@ -394,42 +595,54 @@ async function createInventoryFile(roll: ReturnRoll): Promise<string | null> {
     ];
     const monthName = monthNames[new Date().getMonth()];
 
-    const fileName = `inventario_${roll.oc.replace(
+    const fileName = `inventario_${firstRoll.oc.replace(
       /[^a-zA-Z0-9]/g,
       "_"
     )}_${Date.now()}.json`;
     const fileKey = `Inventario/${year}/${monthName}/${fileName}`;
 
+    let totalCDMX = 0;
+    let totalMID = 0;
+    let totalQuantity = 0;
+
+    for (const roll of rolls) {
+      const ubicacion = roll.almacen.toUpperCase();
+
+      if (ubicacion === "CDMX") {
+        totalCDMX += roll.return_quantity;
+      } else if (
+        ubicacion === "MID" ||
+        ubicacion === "MÉRIDA" ||
+        ubicacion === "MERIDA"
+      ) {
+        totalMID += roll.return_quantity;
+      }
+      totalQuantity += roll.return_quantity;
+    }
+
     const newItem: InventoryItem = {
-      OC: roll.oc,
-      Tela: roll.fabric_type,
-      Color: roll.color,
-      Costo: roll.costo,
-      Cantidad: roll.return_quantity,
-      Unidades: roll.units,
-      Total: roll.costo * roll.return_quantity,
-      Ubicacion: roll.almacen,
-      Importacion: "DA",
-      FacturaDragonAzteca: "",
-      status: "completed",
-      lastModified: new Date().toISOString(),
-      created_from: "manual_sale_return",
+      OC: firstRoll.oc,
+      Tela: firstRoll.fabric_type,
+      Color: firstRoll.color,
+      Costo: firstRoll.costo,
+      Cantidad: totalQuantity,
+      Unidades: firstRoll.units,
+      Total: firstRoll.costo * totalQuantity,
     };
 
-    const putCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: fileKey,
-      Body: JSON.stringify([newItem], null, 2),
-      ContentType: "application/json",
-      Metadata: {
-        created: new Date().toISOString(),
-        operation: "return-manual-sale",
-        "roll-number": String(roll.roll_number),
-      },
-    });
+    if (totalCDMX > 0) {
+      newItem.CDMX = totalCDMX;
+    } else {
+      newItem.CDMX = NaN;
+    }
 
-    await s3Client.send(putCommand);
-    return fileKey;
+    if (totalMID > 0) {
+      newItem.MID = totalMID;
+    } else {
+      newItem.MID = NaN;
+    }
+
+    return (await saveFileSafely(fileKey, [newItem])) ? fileKey : null;
   } catch (error) {
     console.error("Error creando archivo inventario:", error);
     return null;
@@ -712,25 +925,35 @@ export async function POST(request: NextRequest) {
       historyUpdates: 0,
     };
 
+    const rollsByItem = new Map<string, ReturnRoll[]>();
+
     for (const roll of returnData.rolls) {
+      const itemKey = `${roll.oc}|${roll.fabric_type}|${roll.color}`;
+      if (!rollsByItem.has(itemKey)) {
+        rollsByItem.set(itemKey, []);
+      }
+      rollsByItem.get(itemKey)!.push(roll);
+    }
+
+    for (const [, itemRolls] of rollsByItem) {
       try {
-        const isManual = isManualSale(roll.roll_number);
+        const firstRoll = itemRolls[0];
+        const isManual = isManualSale(firstRoll.roll_number);
         let inventoryUpdated = false;
         let packingListUpdated = false;
 
         if (isManual) {
           const inventoryFile = await findInventoryFile(
-            roll.oc,
-            roll.fabric_type,
-            roll.color,
-            roll.almacen
+            firstRoll.oc,
+            firstRoll.fabric_type,
+            firstRoll.color
           );
 
           if (inventoryFile) {
-            inventoryUpdated = await updateInventory(inventoryFile, roll);
+            inventoryUpdated = await updateInventory(inventoryFile, itemRolls);
             if (inventoryUpdated) results.inventoryUpdates++;
           } else {
-            const newInventoryFile = await createInventoryFile(roll);
+            const newInventoryFile = await createInventoryFile(itemRolls);
             if (newInventoryFile) {
               inventoryUpdated = true;
               results.inventoryUpdates++;
@@ -740,57 +963,67 @@ export async function POST(request: NextRequest) {
           packingListUpdated = true;
         } else {
           const inventoryFile = await findInventoryFile(
-            roll.oc,
-            roll.fabric_type,
-            roll.color,
-            roll.almacen
-          );
-
-          const packingListFile = await findPackingListFile(
-            roll.oc,
-            roll.fabric_type,
-            roll.color,
-            roll.lot
+            firstRoll.oc,
+            firstRoll.fabric_type,
+            firstRoll.color
           );
 
           if (inventoryFile) {
-            inventoryUpdated = await updateInventory(inventoryFile, roll);
+            inventoryUpdated = await updateInventory(inventoryFile, itemRolls);
             if (inventoryUpdated) results.inventoryUpdates++;
           }
 
-          if (packingListFile) {
-            packingListUpdated = await updatePackingList(packingListFile, roll);
-            if (packingListUpdated) results.packingListUpdates++;
+          for (const roll of itemRolls) {
+            const packingListFile = await findPackingListFile(
+              roll.oc,
+              roll.fabric_type,
+              roll.color,
+              roll.lot
+            );
+
+            if (packingListFile) {
+              const plUpdated = await updatePackingList(packingListFile, roll);
+              if (plUpdated) {
+                packingListUpdated = true;
+                results.packingListUpdates++;
+              }
+            }
           }
         }
 
         if (inventoryUpdated || packingListUpdated) {
-          results.successful.push({
-            roll_number: roll.roll_number,
-            fabric_type: roll.fabric_type,
-            color: roll.color,
-            return_quantity: roll.return_quantity,
-            units: roll.units,
-            inventory_updated: inventoryUpdated,
-            packing_list_updated: packingListUpdated,
-            sale_type: isManual ? "manual" : "roll",
-          });
+          for (const roll of itemRolls) {
+            results.successful.push({
+              roll_number: roll.roll_number,
+              fabric_type: roll.fabric_type,
+              color: roll.color,
+              return_quantity: roll.return_quantity,
+              units: roll.units,
+              inventory_updated: inventoryUpdated,
+              packing_list_updated: packingListUpdated,
+              sale_type: isManual ? "manual" : "roll",
+            });
+          }
         } else {
-          results.failed.push({
-            roll_number: roll.roll_number,
-            error: isManual
-              ? "No se pudo actualizar el inventario para la venta manual"
-              : "No se pudo actualizar ni inventario ni packing list",
-          });
+          for (const roll of itemRolls) {
+            results.failed.push({
+              roll_number: roll.roll_number,
+              error: isManual
+                ? "No se pudo actualizar el inventario para la venta manual"
+                : "No se pudo actualizar ni inventario ni packing list",
+            });
+          }
         }
       } catch (rollError) {
-        results.failed.push({
-          roll_number: roll.roll_number,
-          error:
-            rollError instanceof Error
-              ? rollError.message
-              : "Error desconocido",
-        });
+        for (const roll of itemRolls) {
+          results.failed.push({
+            roll_number: roll.roll_number,
+            error:
+              rollError instanceof Error
+                ? rollError.message
+                : "Error desconocido",
+          });
+        }
       }
     }
 
