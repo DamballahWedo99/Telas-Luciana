@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react"; // ✅ Usar sesión de NextAuth en lugar de API
 import {
   Dialog,
   DialogContent,
@@ -25,13 +26,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Search,
   Building2,
@@ -87,6 +81,7 @@ interface ClientesDialogProps {
 }
 
 export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
+  const { data: session } = useSession(); // ✅ Usar useSession en lugar de fetch
   const [searchTerm, setSearchTerm] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,31 +100,30 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     comentarios: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [userRole, setUserRole] = useState<string>("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const isMobile = useIsMobile();
 
+  // ✅ Obtener información del usuario desde la sesión
+  const userRole = session?.user?.role || "";
+  const userName = session?.user?.name || ""; // ✅ Usar solo el name del usuario
+
+  // ✅ Función para obtener vendedor dinámicamente
+  const getVendedorForUser = (name: string, role: string): string => {
+    if (role !== "seller") {
+      return "TTL"; // Admin y major_admin siempre usan TTL
+    }
+
+    // Para sellers, usar su nombre directamente
+    return name || "TTL";
+  };
+
   useEffect(() => {
     if (open) {
       loadClientes();
-      loadUserRole();
     }
   }, [open]);
-
-  const loadUserRole = async () => {
-    try {
-      const response = await fetch("/api/users/me");
-      if (response.ok) {
-        const userData = await response.json();
-        setUserRole(userData?.role || "");
-      }
-    } catch (error) {
-      console.error("Error loading user role:", error);
-      setUserRole("");
-    }
-  };
 
   const loadClientes = async () => {
     setIsLoading(true);
@@ -267,6 +261,20 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   const handleNewCliente = () => {
     setEditingCliente(null);
     resetForm();
+
+    // ✅ AUTO-ASIGNAR VENDEDOR al crear nuevo cliente usando nombre del usuario
+    const autoVendedor = getVendedorForUser(userName, userRole);
+    setClienteForm({
+      empresa: "",
+      contacto: "",
+      direccion: "",
+      telefono: "",
+      email: "",
+      vendedor: autoVendedor, // Auto-asignar basado en nombre del usuario
+      ubicacion: "",
+      comentarios: "",
+    });
+
     setOpenClienteForm(true);
   };
 
@@ -311,7 +319,23 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     }
   };
 
-  const canDeleteClients = userRole === "admin" || userRole === "major admin";
+  // ✅ LÓGICA DE PERMISOS MEJORADA
+  const canEditCliente = (cliente: Cliente): boolean => {
+    // Admin y major_admin pueden editar cualquier cliente
+    if (userRole === "admin" || userRole === "major_admin") {
+      return true;
+    }
+
+    // Sellers solo pueden editar clientes asignados a ellos
+    if (userRole === "seller") {
+      const validVendedor = getVendedorForUser(userName, userRole);
+      return cliente.vendedor === validVendedor;
+    }
+
+    return false;
+  };
+
+  const canDeleteClients = userRole === "admin" || userRole === "major_admin";
 
   const filteredClientes = clientes.filter(
     (cliente) =>
@@ -333,13 +357,31 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   );
 
   const getVendedorColor = (vendedor: string) => {
-    const colors: { [key: string]: string } = {
-      Franz: "bg-blue-100 text-blue-800 hover:bg-blue-200",
-      Olga: "bg-pink-100 text-pink-800 hover:bg-pink-200",
-      Ana: "bg-green-100 text-green-800 hover:bg-green-200",
-      default: "bg-gray-100 text-gray-800 hover:bg-gray-200",
-    };
-    return colors[vendedor] || colors.default;
+    // ✅ Colores dinámicos basados en hash del nombre
+    const colors = [
+      "bg-blue-100 text-blue-800 hover:bg-blue-200",
+      "bg-pink-100 text-pink-800 hover:bg-pink-200",
+      "bg-green-100 text-green-800 hover:bg-green-200",
+      "bg-purple-100 text-purple-800 hover:bg-purple-200",
+      "bg-orange-100 text-orange-800 hover:bg-orange-200",
+      "bg-indigo-100 text-indigo-800 hover:bg-indigo-200",
+      "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
+      "bg-red-100 text-red-800 hover:bg-red-200",
+    ];
+
+    // TTL siempre usa color gris específico
+    if (vendedor === "TTL") {
+      return "bg-gray-100 text-gray-800 hover:bg-gray-200";
+    }
+
+    // Generar hash simple del nombre para consistencia de color
+    let hash = 0;
+    for (let i = 0; i < vendedor.length; i++) {
+      hash = vendedor.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % colors.length;
+
+    return colors[colorIndex];
   };
 
   const handleCancel = () => {
@@ -349,13 +391,16 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   };
 
   const resetForm = () => {
+    // ✅ AUTO-ASIGNAR VENDEDOR por defecto usando nombre del usuario
+    const autoVendedor = getVendedorForUser(userName, userRole);
+
     setClienteForm({
       empresa: "",
       contacto: "",
       direccion: "",
       telefono: "",
       email: "",
-      vendedor: "",
+      vendedor: autoVendedor, // Auto-asignar basado en nombre del usuario
       ubicacion: "",
       comentarios: "",
     });
@@ -369,6 +414,9 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     cliente: Cliente;
     isMobileVersion?: boolean;
   }) => {
+    // ✅ Verificar permisos para cada cliente individualmente
+    const canEdit = canEditCliente(cliente);
+
     if (isMobileVersion) {
       return (
         <Card className="bg-white border shadow-sm">
@@ -389,14 +437,17 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                 )}
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEditCliente(cliente)}
-                  className="h-8 w-8 p-0"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
+                {/* ✅ Mostrar botón de editar solo si tiene permisos */}
+                {canEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditCliente(cliente)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
                 {canDeleteClients && (
                   <Button
                     variant="outline"
@@ -556,15 +607,18 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
 
             <div className="flex-shrink-0 ml-4">
               <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEditCliente(cliente)}
-                  className="h-8 w-8 p-0"
-                  title="Editar cliente"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
+                {/* ✅ Mostrar botón de editar solo si tiene permisos */}
+                {canEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditCliente(cliente)}
+                    className="h-8 w-8 p-0"
+                    title="Editar cliente"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
                 {canDeleteClients && (
                   <Button
                     variant="outline"
@@ -585,6 +639,11 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   };
 
   const isEditing = editingCliente !== null;
+
+  // ✅ Verificar si el usuario está autenticado
+  if (!session) {
+    return null; // No mostrar nada si no hay sesión
+  }
 
   if (isMobile) {
     return (
@@ -698,26 +757,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                 </Button>
               </div>
             </div>
-
-            <style jsx>{`
-              @keyframes slideInUp {
-                from {
-                  opacity: 0;
-                  transform: translateY(20px);
-                }
-                to {
-                  opacity: 1;
-                  transform: translateY(0);
-                }
-              }
-
-              .line-clamp-2 {
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-              }
-            `}</style>
           </DialogContent>
         </Dialog>
 
@@ -735,7 +774,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
               <DialogDescription className="text-sm text-gray-600 mt-1">
                 {isEditing
                   ? "Actualiza la información del cliente"
-                  : "Crea un nuevo contacto en el directorio"}
+                  : `Crea un nuevo contacto en el directorio. Se asignará automáticamente a: ${getVendedorForUser(userName, userRole)}`}
               </DialogDescription>
             </div>
 
@@ -848,37 +887,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                 {formErrors.email && (
                   <p className="text-red-500 text-xs mt-1.5">
                     {formErrors.email}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="vendedor"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Vendedor
-                </Label>
-                <Select
-                  value={clienteForm.vendedor}
-                  onValueChange={(value) =>
-                    handleInputChange("vendedor", value)
-                  }
-                >
-                  <SelectTrigger
-                    className={`mt-1.5 h-11 ${formErrors.vendedor ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                  >
-                    <SelectValue placeholder="Selecciona vendedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Franz">Franz</SelectItem>
-                    <SelectItem value="Olga">Olga</SelectItem>
-                    <SelectItem value="Ana">Ana</SelectItem>
-                  </SelectContent>
-                </Select>
-                {formErrors.vendedor && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.vendedor}
                   </p>
                 )}
               </div>
@@ -1046,7 +1054,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
               )}
             </div>
 
-            <div className="mt-4 pt-3 border-t flex justify-center">
+            <div className="mt-4 pt-3 border-t flex justify-end">
               <Button
                 onClick={handleNewCliente}
                 className="bg-green-600 hover:bg-green-700 text-white"
@@ -1073,7 +1081,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
             <DialogDescription>
               {isEditing
                 ? "Actualiza la información del cliente en el directorio."
-                : "Crea un nuevo contacto en el directorio de clientes."}{" "}
+                : `Crea un nuevo contacto en el directorio de clientes. Se asignará automáticamente a: ${getVendedorForUser(userName, userRole)}.`}{" "}
               Los campos marcados con * son obligatorios.
             </DialogDescription>
           </DialogHeader>
@@ -1181,36 +1189,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                 {formErrors.email && (
                   <p className="text-red-500 text-xs mt-1">
                     {formErrors.email}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="vendedor" className="text-right">
-                Vendedor
-              </Label>
-              <div className="col-span-3">
-                <Select
-                  value={clienteForm.vendedor}
-                  onValueChange={(value) =>
-                    handleInputChange("vendedor", value)
-                  }
-                >
-                  <SelectTrigger
-                    className={formErrors.vendedor ? "border-red-500" : ""}
-                  >
-                    <SelectValue placeholder="Selecciona vendedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Franz">Franz</SelectItem>
-                    <SelectItem value="Olga">Olga</SelectItem>
-                    <SelectItem value="Ana">Ana</SelectItem>
-                  </SelectContent>
-                </Select>
-                {formErrors.vendedor && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.vendedor}
                   </p>
                 )}
               </div>

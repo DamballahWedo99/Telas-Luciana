@@ -83,6 +83,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
+    // ✅ SIMPLE: Solo verificar que tenga rol válido (permitir sellers)
+    const userRole = session.user.role;
+    if (!userRole || !["admin", "major_admin", "seller"].includes(userRole)) {
+      return NextResponse.json(
+        { error: "No tienes permisos para ver el directorio de clientes" },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const debug = searchParams.get("debug") === "true";
 
@@ -218,9 +227,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
+    // ✅ SIMPLE: Solo verificar que tenga rol válido (permitir sellers)
+    const userRole = session.user.role;
+    if (!userRole || !["admin", "major_admin", "seller"].includes(userRole)) {
+      return NextResponse.json(
+        { error: "No tienes permisos para crear clientes" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
 
-    const {
+    let {
       empresa,
       contacto,
       direccion,
@@ -250,6 +268,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ✅ SIMPLE: Auto-asignar vendedor para sellers
+    if (userRole === "seller" && !vendedor) {
+      const userName = session.user.name;
+      vendedor = userName || "TTL";
+    }
+
+    // ✅ SIMPLE: Para admins, usar TTL si no especifican vendedor
+    if (["admin", "major_admin"].includes(userRole) && !vendedor) {
+      vendedor = "TTL";
+    }
+
     const newCliente: NormalizedClienteItem = {
       empresa: empresa.trim(),
       contacto: contacto?.trim() || "",
@@ -261,24 +290,10 @@ export async function POST(request: NextRequest) {
       comentarios: comentarios?.trim() || "",
     };
 
+    // ✅ SIMPLE: Usar nombre del vendedor directamente como carpeta
     let vendedorSubfolder = "";
-
     if (vendedor && vendedor.trim()) {
-      const vendedorNormalizado = vendedor.trim();
-      switch (vendedorNormalizado) {
-        case "Franz":
-          vendedorSubfolder = "Franz/";
-          break;
-        case "Olga":
-          vendedorSubfolder = "Olga/";
-          break;
-        case "Ana":
-          vendedorSubfolder = "Ana/";
-          break;
-        default:
-          vendedorSubfolder = `${vendedorNormalizado}/`;
-          break;
-      }
+      vendedorSubfolder = `${vendedor.trim()}/`;
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -340,6 +355,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
+    // ✅ SIMPLE: Solo verificar que tenga rol válido (permitir sellers)
+    const userRole = session.user.role;
+    if (!userRole || !["admin", "major_admin", "seller"].includes(userRole)) {
+      return NextResponse.json(
+        { error: "No tienes permisos para actualizar clientes" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
 
     const {
@@ -385,24 +409,10 @@ export async function PUT(request: NextRequest) {
       comentarios: comentarios?.trim() || "",
     };
 
+    // ✅ SIMPLE: Usar nombre del vendedor directamente como carpeta
     let newVendedorSubfolder = "";
-
     if (vendedor && vendedor.trim()) {
-      const vendedorNormalizado = vendedor.trim();
-      switch (vendedorNormalizado) {
-        case "Franz":
-          newVendedorSubfolder = "Franz/";
-          break;
-        case "Olga":
-          newVendedorSubfolder = "Olga/";
-          break;
-        case "Ana":
-          newVendedorSubfolder = "Ana/";
-          break;
-        default:
-          newVendedorSubfolder = `${vendedorNormalizado}/`;
-          break;
-      }
+      newVendedorSubfolder = `${vendedor.trim()}/`;
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -477,7 +487,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const userRole = session.user.role;
-    if (userRole !== "admin" && userRole !== "major_admin") {
+    if (!userRole || (userRole !== "admin" && userRole !== "major_admin")) {
       return NextResponse.json(
         { error: "No tienes permisos para eliminar clientes" },
         { status: 403 }

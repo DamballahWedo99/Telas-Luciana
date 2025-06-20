@@ -94,6 +94,7 @@ const protectedApiRoutes = [
   "/api/s3/inventario",
   "/api/s3/fichas-tecnicas",
   "/api/s3/fichas-tecnicas/download",
+  "/api/s3/clientes", // ✅ AGREGADO - Permitir acceso a clientes
 ];
 
 const rateLimitConfig: Record<
@@ -144,6 +145,7 @@ const roleBasedAccess: Record<string, string[]> = {
     "/api/s3/fichas-tecnicas",
     "/api/s3/fichas-tecnicas/download",
     "/api/users/verify",
+    "/api/s3/clientes", // ✅ AGREGADO - Permitir a todos los usuarios autenticados (admin, major_admin, seller)
     "/dashboard",
   ],
 };

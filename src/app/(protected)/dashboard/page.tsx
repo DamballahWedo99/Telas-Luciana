@@ -23,7 +23,7 @@ import {
   BarChart,
   LayoutDashboardIcon,
   FileText,
-  Building2,
+  NotebookTabs,
 } from "lucide-react";
 
 type ViewType = "inventory" | "orders";
@@ -151,7 +151,7 @@ export default function DashboardPage() {
                       size="icon"
                       onClick={handleOpenClientes}
                     >
-                      <Building2 className="h-4 w-4" />
+                      <NotebookTabs className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
