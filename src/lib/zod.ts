@@ -184,17 +184,7 @@ export const newRowSchema = z.object({
   Unidades: z.enum(["KGS", "MTS"], {
     message: "Debe seleccionar una unidad válida",
   }),
-  Importacion: z.enum(["DA", "HOY"], {
-    message: "Debe seleccionar una importación válida",
-  }),
-  FacturaDragonAzteca: z
-    .string()
-    .max(50, { message: "La factura no puede tener más de 50 caracteres" })
-    .regex(/^[^<>]*$/, {
-      message: "La factura no puede contener los caracteres < o >",
-    })
-    .optional()
-    .or(z.literal("")),
+  Importacion: z.enum(["DA", "HOY", ""]).optional(),
 });
 
 export type NewRowFormValues = z.infer<typeof newRowSchema>;

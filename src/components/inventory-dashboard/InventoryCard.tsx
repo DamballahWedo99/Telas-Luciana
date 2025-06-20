@@ -237,7 +237,6 @@ interface FormData {
   Costo: string;
   Unidades: "KGS" | "MTS";
   Importacion: string;
-  FacturaDragonAzteca: string;
 }
 
 function processInventoryData(data: unknown[]): InventoryItem[] {
@@ -605,7 +604,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     Costo: "",
     Unidades: "KGS",
     Importacion: "",
-    FacturaDragonAzteca: "",
   });
   const [selectedHistoryYear, setSelectedHistoryYear] = useState<string>(
     new Date().getFullYear().toString()
@@ -739,7 +737,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       Costo: "",
       Unidades: "KGS",
       Importacion: "",
-      FacturaDragonAzteca: "",
     });
     setFormErrors({});
     setTouchedFields({});
@@ -776,6 +773,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       } else if (field === "Unidades") {
         if (value !== "KGS" && value !== "MTS") {
           throw new Error("Debe seleccionar KGS o MTS");
+        }
+      } else if (field === "Importacion") {
+        if (
+          typeof value === "string" &&
+          value.trim() !== "" &&
+          value !== "DA" &&
+          value !== "HOY"
+        ) {
+          throw new Error("Debe seleccionar DA, HOY o dejar vacío");
         }
       }
 
@@ -1150,7 +1156,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       Costo: "",
       Unidades: "KGS",
       Importacion: "",
-      FacturaDragonAzteca: "",
     });
   };
 
@@ -1326,7 +1331,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         Costo: "",
         Unidades: "KGS",
         Importacion: "",
-        FacturaDragonAzteca: "",
       });
 
       handleCloseInventoryDialog();
@@ -3922,37 +3926,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                           {formErrors.Importacion}
                         </p>
                       )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="factura" className="text-right">
-                      Factura D.A.
-                    </Label>
-                    <div className="col-span-3">
-                      <Input
-                        id="factura"
-                        placeholder="Número de factura (opcional)"
-                        value={formData.FacturaDragonAzteca}
-                        onChange={(e) =>
-                          handleInputChange(
-                            "FacturaDragonAzteca",
-                            e.target.value
-                          )
-                        }
-                        className={
-                          formErrors.FacturaDragonAzteca &&
-                          touchedFields.FacturaDragonAzteca
-                            ? "border-red-500"
-                            : ""
-                        }
-                      />
-                      {formErrors.FacturaDragonAzteca &&
-                        touchedFields.FacturaDragonAzteca && (
-                          <p className="text-red-500 text-sm mt-1">
-                            {formErrors.FacturaDragonAzteca}
-                          </p>
-                        )}
                     </div>
                   </div>
                 </div>
