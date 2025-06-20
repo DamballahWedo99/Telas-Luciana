@@ -4,7 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Session } from "next-auth";
 import { toast } from "sonner";
 
-import { EyeIcon, EyeOffIcon, UserPlusIcon, Loader2Icon } from "lucide-react";
+import {
+  EyeIcon,
+  EyeOffIcon,
+  UserPlusIcon,
+  Loader2Icon,
+  AlertTriangleIcon,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +54,7 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
+  const [userWarning, setUserWarning] = useState<string | null>(null);
 
   const isSubmittingRef = useRef(false);
 
@@ -74,6 +81,7 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
       isSubmittingRef.current = true;
       setIsCreatingUser(true);
       setUserError(null);
+      setUserWarning(null);
 
       if (!session?.user?.id) {
         setUserError("No hay sesión activa");
@@ -105,10 +113,21 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
         reset();
         setOpen(false);
 
-        toast.success(`Usuario creado exitosamente`);
+        if (result.warning) {
+          setUserWarning(result.warning);
+          toast.warning("Usuario creado con advertencias", {
+            description: result.warning,
+            duration: 8000,
+          });
+        } else {
+          toast.success(`Usuario creado exitosamente`);
+        }
       }
     } catch (error) {
-      setUserError("Ocurrió un error al crear el usuario");
+      setUserError(
+        "Error inesperado al crear el usuario: " +
+          (error instanceof Error ? error.message : String(error))
+      );
       console.error(error);
     } finally {
       setIsCreatingUser(false);
@@ -121,6 +140,8 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
   React.useEffect(() => {
     if (!open) {
       isSubmittingRef.current = false;
+      setUserError(null);
+      setUserWarning(null);
     }
   }, [open]);
 
@@ -145,9 +166,7 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
     let password = "";
 
     password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
-
     password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
-
     password += numbers.charAt(Math.floor(Math.random() * numbers.length));
 
     const safeChars = uppercase + lowercase + numbers + specialChars;
@@ -185,6 +204,15 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
         {userError && (
           <Alert variant="destructive">
             <AlertDescription>{userError}</AlertDescription>
+          </Alert>
+        )}
+
+        {userWarning && (
+          <Alert className="border-yellow-500 bg-yellow-50">
+            <AlertTriangleIcon className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-800">
+              {userWarning}
+            </AlertDescription>
           </Alert>
         )}
 

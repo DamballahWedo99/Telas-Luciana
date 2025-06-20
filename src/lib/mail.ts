@@ -1,13 +1,64 @@
 import { Resend } from "resend";
 
-export const resend = new Resend(process.env.RESEND_API_KEY);
+const resendApiKey = process.env.RESEND_API_KEY;
+const emailFrom =
+  process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com";
+const nextAuthUrl = process.env.NEXTAUTH_URL;
+
+if (!resendApiKey) {
+  console.error("❌ RESEND_API_KEY no está configurada");
+}
+
+if (!nextAuthUrl) {
+  console.error("❌ NEXTAUTH_URL no está configurada");
+}
+
+export const resend = new Resend(resendApiKey);
+
+function validateResendConfig(): { isValid: boolean; error?: string } {
+  if (!resendApiKey) {
+    return { isValid: false, error: "RESEND_API_KEY no configurada" };
+  }
+
+  if (!resendApiKey.startsWith("re_")) {
+    return { isValid: false, error: "RESEND_API_KEY tiene formato inválido" };
+  }
+
+  if (!nextAuthUrl) {
+    return { isValid: false, error: "NEXTAUTH_URL no configurada" };
+  }
+
+  return { isValid: true };
+}
 
 if (process.env.NODE_ENV !== "production") {
-  if (!process.env.RESEND_API_KEY) {
-    console.error("❌ RESEND_API_KEY no está configurada");
-  } else {
+  const validation = validateResendConfig();
+  if (validation.isValid) {
     console.log("✅ Resend configurado correctamente");
+  } else {
+    console.error(`❌ ${validation.error}`);
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  let errorMessage = "Error desconocido al enviar correo";
+
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message: string }).message;
+    if (message.includes("API key is invalid")) {
+      errorMessage = "Clave API de Resend inválida";
+    } else if (message.includes("Invalid from field")) {
+      errorMessage = "Dirección de correo remitente inválida";
+    } else if (message.includes("not allowed")) {
+      errorMessage = "Dominio no verificado en Resend";
+    } else if (message.includes("rate limit")) {
+      errorMessage = "Límite de envío excedido";
+    } else {
+      errorMessage = message;
+    }
+  }
+
+  return errorMessage;
 }
 
 export async function sendPasswordResetEmail(
@@ -15,13 +66,18 @@ export async function sendPasswordResetEmail(
   token: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`;
+    const validation = validateResendConfig();
+    if (!validation.isValid) {
+      return { error: `Error de configuración: ${validation.error}` };
+    }
+
+    const resetUrl = `${nextAuthUrl}/reset-password?token=${token}`;
 
     console.log(`Intentando enviar correo de restablecimiento a: ${to}`);
     console.log(`URL de restablecimiento: ${resetUrl}`);
 
     const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      from: emailFrom,
       to: [to],
       subject: "Restablecimiento de contraseña",
       html: `
@@ -47,16 +103,27 @@ export async function sendPasswordResetEmail(
 
     if (error) {
       console.error(`❌ Error al enviar correo a ${to}:`, error);
-      return {
-        error: `Error al enviar correo: ${error.message || "Error desconocido"}`,
-      };
+      const errorMessage = getErrorMessage(error);
+      return { error: `Error al enviar correo: ${errorMessage}` };
     }
 
     console.log(`✅ Correo enviado: ${data?.id}`);
     return { success: true };
   } catch (error) {
-    console.error(`❌ Error al enviar correo a ${to}:`, error);
-    return { error: `Error al enviar correo: ${(error as Error).message}` };
+    console.error(`❌ Error crítico al enviar correo a ${to}:`, error);
+
+    let errorMessage = "Error inesperado";
+    if (error instanceof Error) {
+      if (error.message.includes("fetch")) {
+        errorMessage = "Error de conexión con Resend";
+      } else if (error.message.includes("timeout")) {
+        errorMessage = "Timeout al conectar con Resend";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
+    return { error: `Error al enviar correo: ${errorMessage}` };
   }
 }
 
@@ -65,11 +132,18 @@ export async function sendNewAccountEmail(
   name: string,
   password: string
 ): Promise<{ success?: boolean; error?: string }> {
-  const loginUrl = `${process.env.NEXTAUTH_URL}/login`;
-
   try {
+    const validation = validateResendConfig();
+    if (!validation.isValid) {
+      return { error: `Error de configuración: ${validation.error}` };
+    }
+
+    const loginUrl = `${nextAuthUrl}/login`;
+
+    console.log(`Intentando enviar correo de nueva cuenta a: ${to}`);
+
     const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      from: emailFrom,
       to: [to],
       subject: "Tu cuenta ha sido creada",
       html: `
@@ -99,16 +173,27 @@ export async function sendNewAccountEmail(
 
     if (error) {
       console.error(`❌ Error al enviar correo a ${to}:`, error);
-      return {
-        error: `Error al enviar correo: ${error.message || "Error desconocido"}`,
-      };
+      const errorMessage = getErrorMessage(error);
+      return { error: `Error al enviar correo: ${errorMessage}` };
     }
 
     console.log(`✅ Correo de nueva cuenta enviado a: ${to} - ID: ${data?.id}`);
     return { success: true };
   } catch (error) {
-    console.error(`❌ Error al enviar correo a ${to}:`, error);
-    return { error: `Error al enviar correo: ${(error as Error).message}` };
+    console.error(`❌ Error crítico al enviar correo a ${to}:`, error);
+
+    let errorMessage = "Error inesperado";
+    if (error instanceof Error) {
+      if (error.message.includes("fetch")) {
+        errorMessage = "Error de conexión con Resend";
+      } else if (error.message.includes("timeout")) {
+        errorMessage = "Timeout al conectar con Resend";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
+    return { error: `Error al enviar correo: ${errorMessage}` };
   }
 }
 
@@ -119,8 +204,13 @@ export async function sendContactEmail(
   message: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
+    const validation = validateResendConfig();
+    if (!validation.isValid) {
+      return { error: `Error de configuración: ${validation.error}` };
+    }
+
     const { data: adminData, error: adminError } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      from: emailFrom,
       to: ["administracion@telasytejidosluciana.com"],
       replyTo: email,
       subject: subject,
@@ -141,12 +231,12 @@ export async function sendContactEmail(
     if (adminError) {
       console.error(`❌ Error al enviar correo al administrador:`, adminError);
       return {
-        error: `Error al enviar correo: ${adminError.message || "Error desconocido"}`,
+        error: `Error al enviar correo: ${(adminError as { message?: string }).message || "Error desconocido"}`,
       };
     }
 
     const { data: userData, error: userError } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      from: emailFrom,
       to: [email],
       subject: `Confirmación: ${subject}`,
       html: `
@@ -168,7 +258,7 @@ export async function sendContactEmail(
     if (userError) {
       console.error(`❌ Error al enviar confirmación al usuario:`, userError);
       return {
-        error: `Error al enviar correo: ${userError.message || "Error desconocido"}`,
+        error: `Error al enviar correo: ${(userError as { message?: string }).message || "Error desconocido"}`,
       };
     }
 
@@ -177,7 +267,7 @@ export async function sendContactEmail(
     );
     return { success: true };
   } catch (error) {
-    console.error(`❌ Error al enviar correos de contacto:`, error);
+    console.error(`❌ Error crítico al enviar correos de contacto:`, error);
     return { error: `Error al enviar correo: ${(error as Error).message}` };
   }
 }

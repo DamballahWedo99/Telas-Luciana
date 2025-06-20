@@ -11,28 +11,24 @@ import { loginSchema, forgotPasswordSchema, createUserSchema } from "@/lib/zod";
 import { Redis } from "@upstash/redis";
 import { Ratelimit } from "@upstash/ratelimit";
 
-// Inicializar Redis cliente
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || "",
   token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
 });
 
-// Configurar limitador específico para login
 const loginLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(5, "15 m"), // 5 intentos por 15 minutos
+  limiter: Ratelimit.slidingWindow(5, "15 m"),
   analytics: true,
   prefix: "ratelimit:login",
 });
 
-// Función para verificar si el usuario excedió el límite de intentos
 async function checkLoginRateLimit(
   email: string
 ): Promise<{ limited: boolean; remaining: number }> {
   try {
     console.log("Verificando rate limit para:", email);
 
-    // Intentar consumir un token de la tasa
     const { success, limit, remaining } = await loginLimiter.limit(email);
 
     console.log(
@@ -45,13 +41,12 @@ async function checkLoginRateLimit(
     };
   } catch (error) {
     console.error("Error verificando rate limit:", error);
-    return { limited: false, remaining: 5 }; // En caso de error, permitir el intento
+    return { limited: false, remaining: 5 };
   }
 }
 
 export const loginAction = async (values: z.infer<typeof loginSchema>) => {
   try {
-    // Verificar si el usuario ha excedido los intentos de inicio de sesión usando Redis
     const { limited, remaining } = await checkLoginRateLimit(values.email);
 
     if (limited) {
@@ -63,7 +58,6 @@ export const loginAction = async (values: z.infer<typeof loginSchema>) => {
 
     console.log(`Intentos restantes para ${values.email}: ${remaining}`);
 
-    // Intentar iniciar sesión
     const res = await signIn("credentials", {
       email: values.email,
       password: values.password,
@@ -126,6 +120,8 @@ export const createUserAction = async (
   values: z.infer<typeof createUserSchema>,
   createdById: string
 ) => {
+  let createdUser = null;
+
   try {
     const validatedFields = createUserSchema.safeParse(values);
 
@@ -136,6 +132,20 @@ export const createUserAction = async (
     }
 
     const { name, email, password, role } = validatedFields.data;
+
+    if (!process.env.RESEND_API_KEY) {
+      console.error("❌ RESEND_API_KEY no está configurada en producción");
+      return {
+        error:
+          "Error: RESEND_API_KEY no configurada. Contacta al administrador.",
+      };
+    }
+
+    if (!process.env.EMAIL_FROM && !process.env.NEXTAUTH_URL) {
+      console.error(
+        "❌ Variables de entorno EMAIL_FROM o NEXTAUTH_URL faltantes"
+      );
+    }
 
     const existingUser = await db.user.findUnique({
       where: { email },
@@ -149,6 +159,7 @@ export const createUserAction = async (
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    console.log(`Creando usuario en BD: ${email}`);
     const user = await db.user.create({
       data: {
         name,
@@ -159,13 +170,87 @@ export const createUserAction = async (
       },
     });
 
-    const emailResult = await sendNewAccountEmail(email, name, password);
+    createdUser = user;
+    console.log(`✅ Usuario creado en BD exitosamente: ${user.id}`);
 
-    if (emailResult.error) {
+    try {
+      console.log(`Intentando enviar email de bienvenida a: ${email}`);
+      const emailResult = await sendNewAccountEmail(email, name, password);
+
+      if (emailResult.error) {
+        console.error(
+          "⚠️ Error al enviar correo de bienvenida:",
+          emailResult.error
+        );
+        console.error(
+          "⚠️ El usuario fue creado pero no se pudo enviar el email"
+        );
+
+        let userFriendlyError =
+          "Usuario creado exitosamente, pero hubo un problema enviando el email de bienvenida: ";
+
+        if (
+          emailResult.error.includes("API key is invalid") ||
+          emailResult.error.includes("Clave API de Resend inválida")
+        ) {
+          userFriendlyError += "API Key de Resend inválida";
+        } else if (
+          emailResult.error.includes("Invalid from field") ||
+          emailResult.error.includes("Dirección de correo remitente inválida")
+        ) {
+          userFriendlyError +=
+            "Dirección de correo no configurada correctamente";
+        } else if (
+          emailResult.error.includes("not allowed") ||
+          emailResult.error.includes("Dominio no verificado")
+        ) {
+          userFriendlyError += "Dominio de correo no verificado en Resend";
+        } else if (
+          emailResult.error.includes("rate limit") ||
+          emailResult.error.includes("Límite de envío excedido")
+        ) {
+          userFriendlyError += "Límite de envío de correos excedido";
+        } else if (
+          emailResult.error.includes("conexión") ||
+          emailResult.error.includes("timeout")
+        ) {
+          userFriendlyError += "Problema de conexión con el servicio de correo";
+        } else {
+          userFriendlyError += emailResult.error;
+        }
+
+        return {
+          success: true,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+          emailSent: false,
+          warning: userFriendlyError,
+        };
+      } else {
+        console.log(`✅ Email de bienvenida enviado exitosamente a: ${email}`);
+      }
+    } catch (emailError) {
+      console.error("❌ Error crítico al enviar email:", emailError);
       console.error(
-        "Error al enviar correo al nuevo usuario:",
-        emailResult.error
+        "⚠️ El usuario fue creado pero falló el envío del email completamente"
       );
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+        emailSent: false,
+        warning:
+          "Usuario creado exitosamente, pero falló completamente el envío del email de bienvenida. Verifica la configuración de Resend.",
+      };
     }
 
     return {
@@ -176,11 +261,49 @@ export const createUserAction = async (
         email: user.email,
         role: user.role,
       },
+      emailSent: true,
     };
   } catch (error) {
-    console.error("Error al crear usuario:", error);
+    console.error("❌ Error crítico al crear usuario:", error);
+
+    if (createdUser) {
+      try {
+        console.log(`Limpiando usuario creado por error: ${createdUser.id}`);
+        await db.user.delete({
+          where: { id: createdUser.id },
+        });
+        console.log(`✅ Usuario ${createdUser.id} eliminado por rollback`);
+      } catch (deleteError) {
+        console.error("❌ Error al hacer rollback del usuario:", deleteError);
+      }
+    }
+
+    if (error instanceof Error) {
+      if (error.message.includes("Unique constraint")) {
+        return { error: "El correo electrónico ya está registrado" };
+      }
+      if (error.message.includes("RESEND")) {
+        return {
+          error:
+            "Error crítico en el servicio de email. Usuario no creado: " +
+            error.message,
+        };
+      }
+      if (error.message.includes("Database")) {
+        return { error: "Error de base de datos: " + error.message };
+      }
+      if (
+        error.message.includes("network") ||
+        error.message.includes("fetch")
+      ) {
+        return { error: "Error de conexión de red: " + error.message };
+      }
+    }
+
     return {
-      error: "Error al crear el usuario",
+      error:
+        "Error desconocido al crear el usuario: " +
+        (error instanceof Error ? error.message : String(error)),
     };
   }
 };
