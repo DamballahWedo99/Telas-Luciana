@@ -1,28 +1,13 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-export const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_SERVER_HOST,
-  port: Number(process.env.EMAIL_SERVER_PORT) || 465,
-  secure: process.env.EMAIL_SERVER_PORT === "465",
-  auth: {
-    user: process.env.EMAIL_SERVER_USER,
-    pass: process.env.EMAIL_SERVER_PASSWORD,
-  },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  connectionTimeout: 60000,
-  greetingTimeout: 60000,
-  socketTimeout: 90000,
-});
+export const resend = new Resend(process.env.RESEND_API_KEY);
 
 if (process.env.NODE_ENV !== "production") {
-  transporter
-    .verify()
-    .then(() => console.log("✅ Conexión SMTP verificada"))
-    .catch((error: Error) =>
-      console.error("❌ Error en la conexión SMTP:", error)
-    );
+  if (!process.env.RESEND_API_KEY) {
+    console.error("❌ RESEND_API_KEY no está configurada");
+  } else {
+    console.log("✅ Resend configurado correctamente");
+  }
 }
 
 export async function sendPasswordResetEmail(
@@ -35,9 +20,9 @@ export async function sendPasswordResetEmail(
     console.log(`Intentando enviar correo de restablecimiento a: ${to}`);
     console.log(`URL de restablecimiento: ${resetUrl}`);
 
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to,
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      to: [to],
       subject: "Restablecimiento de contraseña",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -60,7 +45,14 @@ export async function sendPasswordResetEmail(
       `,
     });
 
-    console.log(`✅ Correo enviado: ${info.messageId}`);
+    if (error) {
+      console.error(`❌ Error al enviar correo a ${to}:`, error);
+      return {
+        error: `Error al enviar correo: ${error.message || "Error desconocido"}`,
+      };
+    }
+
+    console.log(`✅ Correo enviado: ${data?.id}`);
     return { success: true };
   } catch (error) {
     console.error(`❌ Error al enviar correo a ${to}:`, error);
@@ -76,9 +68,9 @@ export async function sendNewAccountEmail(
   const loginUrl = `${process.env.NEXTAUTH_URL}/login`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to,
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      to: [to],
       subject: "Tu cuenta ha sido creada",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -104,7 +96,15 @@ export async function sendNewAccountEmail(
         </div>
       `,
     });
-    console.log(`✅ Correo de nueva cuenta enviado a: ${to}`);
+
+    if (error) {
+      console.error(`❌ Error al enviar correo a ${to}:`, error);
+      return {
+        error: `Error al enviar correo: ${error.message || "Error desconocido"}`,
+      };
+    }
+
+    console.log(`✅ Correo de nueva cuenta enviado a: ${to} - ID: ${data?.id}`);
     return { success: true };
   } catch (error) {
     console.error(`❌ Error al enviar correo a ${to}:`, error);
@@ -119,9 +119,9 @@ export async function sendContactEmail(
   message: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to: "administracion@telasytejidosluciana.com",
+    const { data: adminData, error: adminError } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      to: ["administracion@telasytejidosluciana.com"],
       replyTo: email,
       subject: subject,
       html: `
@@ -138,9 +138,16 @@ export async function sendContactEmail(
       `,
     });
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to: email,
+    if (adminError) {
+      console.error(`❌ Error al enviar correo al administrador:`, adminError);
+      return {
+        error: `Error al enviar correo: ${adminError.message || "Error desconocido"}`,
+      };
+    }
+
+    const { data: userData, error: userError } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      to: [email],
       subject: `Confirmación: ${subject}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -158,6 +165,16 @@ export async function sendContactEmail(
       `,
     });
 
+    if (userError) {
+      console.error(`❌ Error al enviar confirmación al usuario:`, userError);
+      return {
+        error: `Error al enviar correo: ${userError.message || "Error desconocido"}`,
+      };
+    }
+
+    console.log(
+      `✅ Correos de contacto enviados - Admin: ${adminData?.id}, Usuario: ${userData?.id}`
+    );
     return { success: true };
   } catch (error) {
     console.error(`❌ Error al enviar correos de contacto:`, error);
