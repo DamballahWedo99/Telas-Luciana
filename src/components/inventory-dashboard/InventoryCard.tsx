@@ -2836,11 +2836,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     () =>
       inventory.filter((item) => {
         const matchesSearch = isAdmin
-          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
-          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+          ? item.OC.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
+            item.Tela.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.trim().toLowerCase())
+          : item.Tela.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
+            item.Color.toLowerCase().includes(searchTerm.trim().toLowerCase());
 
         const matchesUnit =
           unitFilter === "all" || item.Unidades === unitFilter;

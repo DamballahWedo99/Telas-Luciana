@@ -27,9 +27,9 @@ export const KeyMetricsSection: React.FC<KeyMetricsSectionProps> = ({
   const metrics = useMemo((): KeyMetricsType => {
     const filteredInventory = inventory.filter((item) => {
       const matchesSearch =
-        item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+        item.OC.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
+        item.Tela.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
+        item.Color.toLowerCase().includes(searchTerm.trim().toLowerCase());
 
       const matchesUnit = unitFilter === "all" || item.Unidades === unitFilter;
 
