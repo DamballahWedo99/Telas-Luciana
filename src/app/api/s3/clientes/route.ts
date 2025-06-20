@@ -83,7 +83,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // ✅ SIMPLE: Solo verificar que tenga rol válido (permitir sellers)
     const userRole = session.user.role;
     if (!userRole || !["admin", "major_admin", "seller"].includes(userRole)) {
       return NextResponse.json(
@@ -227,7 +226,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // ✅ SIMPLE: Solo verificar que tenga rol válido (permitir sellers)
     const userRole = session.user.role;
     if (!userRole || !["admin", "major_admin", "seller"].includes(userRole)) {
       return NextResponse.json(
@@ -238,16 +236,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    let {
+    const {
       empresa,
       contacto,
       direccion,
       telefono,
       email,
-      vendedor,
       ubicacion,
       comentarios,
     } = body;
+
+    let { vendedor } = body;
 
     if (!empresa || !email) {
       return NextResponse.json(
@@ -268,13 +267,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ SIMPLE: Auto-asignar vendedor para sellers
     if (userRole === "seller" && !vendedor) {
       const userName = session.user.name;
       vendedor = userName || "TTL";
     }
 
-    // ✅ SIMPLE: Para admins, usar TTL si no especifican vendedor
     if (["admin", "major_admin"].includes(userRole) && !vendedor) {
       vendedor = "TTL";
     }
@@ -290,7 +287,6 @@ export async function POST(request: NextRequest) {
       comentarios: comentarios?.trim() || "",
     };
 
-    // ✅ SIMPLE: Usar nombre del vendedor directamente como carpeta
     let vendedorSubfolder = "";
     if (vendedor && vendedor.trim()) {
       vendedorSubfolder = `${vendedor.trim()}/`;
@@ -355,7 +351,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // ✅ SIMPLE: Solo verificar que tenga rol válido (permitir sellers)
     const userRole = session.user.role;
     if (!userRole || !["admin", "major_admin", "seller"].includes(userRole)) {
       return NextResponse.json(
@@ -409,7 +404,6 @@ export async function PUT(request: NextRequest) {
       comentarios: comentarios?.trim() || "",
     };
 
-    // ✅ SIMPLE: Usar nombre del vendedor directamente como carpeta
     let newVendedorSubfolder = "";
     if (vendedor && vendedor.trim()) {
       newVendedorSubfolder = `${vendedor.trim()}/`;
