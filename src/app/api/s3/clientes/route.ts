@@ -46,17 +46,41 @@ const fixInvalidJSON = (content: string): string => {
   return content.replace(/: *NaN/g, ": null");
 };
 
+const extractVendedorFromPath = (fileKey: string): string => {
+  const pathParts = fileKey.split("/");
+
+  if (
+    pathParts.length > 3 &&
+    pathParts[0] === "Directorio" &&
+    pathParts[1] === "Main"
+  ) {
+    const vendedorFromPath = pathParts[2];
+
+    if (vendedorFromPath && vendedorFromPath !== "Main") {
+      return (
+        vendedorFromPath.charAt(0).toUpperCase() + vendedorFromPath.slice(1)
+      );
+    }
+  }
+
+  return "TTL";
+};
+
 const normalizeClienteItem = (
   item: RawClienteItem,
   fileKey?: string
 ): NormalizedClienteItem => {
+  const vendedorFromPath = fileKey ? extractVendedorFromPath(fileKey) : "";
+
+  const finalVendedor = vendedorFromPath || item.vendedor || "TTL";
+
   const normalizedItem = {
     empresa: item.empresa || "",
     contacto: item.contacto || "",
     direccion: item.direccion || "",
     telefono: item.telefono || "",
     email: item.email || "",
-    vendedor: item.vendedor || "",
+    vendedor: finalVendedor,
     ubicacion: item.ubicacion || "",
     comentarios: item.comentarios || "",
     ...(fileKey && { fileKey }),
@@ -289,7 +313,7 @@ export async function POST(request: NextRequest) {
 
     let vendedorSubfolder = "";
     if (vendedor && vendedor.trim()) {
-      vendedorSubfolder = `${vendedor.trim()}/`;
+      vendedorSubfolder = `${vendedor.trim().toLowerCase()}/`;
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -406,7 +430,7 @@ export async function PUT(request: NextRequest) {
 
     let newVendedorSubfolder = "";
     if (vendedor && vendedor.trim()) {
-      newVendedorSubfolder = `${vendedor.trim()}/`;
+      newVendedorSubfolder = `${vendedor.trim().toLowerCase()}/`;
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");

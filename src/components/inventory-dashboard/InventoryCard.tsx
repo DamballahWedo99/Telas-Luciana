@@ -2601,12 +2601,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const filteredInventoryForOC = useMemo(
     () =>
       inventory.filter((item) => {
+        const searchTermLower = searchTerm.trim().toLowerCase();
+        const isMaikyExactSearch = searchTermLower === "maiky";
+
         const matchesSearch = isAdmin
-          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
-          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+          ? item.OC.toLowerCase().includes(searchTermLower) ||
+            (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower)
+          : (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower);
 
         const matchesUnit =
           unitFilter === "all" || item.Unidades === unitFilter;
@@ -2641,12 +2648,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const filteredInventoryForTela = useMemo(
     () =>
       inventory.filter((item) => {
+        const searchTermLower = searchTerm.trim().toLowerCase();
+        const isMaikyExactSearch = searchTermLower === "maiky";
+
         const matchesSearch = isAdmin
-          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
-          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+          ? item.OC.toLowerCase().includes(searchTermLower) ||
+            (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower)
+          : (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower);
 
         const matchesUnit =
           unitFilter === "all" || item.Unidades === unitFilter;
@@ -2683,12 +2697,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const filteredInventoryForColor = useMemo(
     () =>
       inventory.filter((item) => {
+        const searchTermLower = searchTerm.trim().toLowerCase();
+        const isMaikyExactSearch = searchTermLower === "maiky";
+
         const matchesSearch = isAdmin
-          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
-          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+          ? item.OC.toLowerCase().includes(searchTermLower) ||
+            (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower)
+          : (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower);
 
         const matchesUnit =
           unitFilter === "all" || item.Unidades === unitFilter;
@@ -2724,12 +2745,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const filteredInventoryForUbicacion = useMemo(
     () =>
       inventory.filter((item) => {
+        const searchTermLower = searchTerm.trim().toLowerCase();
+        const isMaikyExactSearch = searchTermLower === "maiky";
+
         const matchesSearch = isAdmin
-          ? item.OC.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase())
-          : item.Tela.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.toLowerCase());
+          ? item.OC.toLowerCase().includes(searchTermLower) ||
+            (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower)
+          : (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower);
 
         const matchesUnit =
           unitFilter === "all" || item.Unidades === unitFilter;
@@ -2835,12 +2863,19 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const filteredInventory = useMemo(
     () =>
       inventory.filter((item) => {
+        const searchTermLower = searchTerm.trim().toLowerCase();
+        const isMaikyExactSearch = searchTermLower === "maiky";
+
         const matchesSearch = isAdmin
-          ? item.OC.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-            item.Tela.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.trim().toLowerCase())
-          : item.Tela.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-            item.Color.toLowerCase().includes(searchTerm.trim().toLowerCase());
+          ? item.OC.toLowerCase().includes(searchTermLower) ||
+            (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower)
+          : (isMaikyExactSearch
+              ? item.Tela.toLowerCase() === "maiky"
+              : item.Tela.toLowerCase().includes(searchTermLower)) ||
+            item.Color.toLowerCase().includes(searchTermLower);
 
         const matchesUnit =
           unitFilter === "all" || item.Unidades === unitFilter;
@@ -2857,13 +2892,16 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         const matchesUbicacion =
           ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
 
+        const hasQuantity = item.Cantidad > 0;
+
         return (
           matchesSearch &&
           matchesUnit &&
           matchesOC &&
           matchesTela &&
           matchesColor &&
-          matchesUbicacion
+          matchesUbicacion &&
+          hasQuantity
         );
       }),
     [
@@ -2885,6 +2923,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const totalCosto = useMemo(() => {
     return filteredInventory.reduce((total, item) => total + item.Total, 0);
   }, [filteredInventory]);
+
+  const activeProductsCount = useMemo(
+    () => inventory.filter((item) => item.Cantidad > 0).length,
+    [inventory]
+  );
 
   const hasOCOptions = uniqueOCs.length > 0;
   const hasTelaOptions = uniqueTelas.length > 0;
@@ -2926,7 +2969,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               </div>
             </CardTitle>
             <CardDescription>
-              {inventory.length} productos en el sistema
+              {activeProductsCount} productos en el sistema
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
