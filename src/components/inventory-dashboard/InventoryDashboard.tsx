@@ -5,13 +5,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
-import {
-  XCircleIcon,
-  Plus,
-  Loader2,
-  FileText,
-  NotebookTabs,
-} from "lucide-react";
+import { XCircleIcon, Plus, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -885,24 +879,6 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen bg-gray-50 overflow-y-auto">
         <div className="pb-safe">
-          <div className="max-w-lg mx-auto px-4 py-4 space-y-3">
-            <Button
-              onClick={() => setOpenClientes(true)}
-              className="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
-            >
-              <NotebookTabs className="h-4 w-4" />
-              Directorio de Clientes
-            </Button>
-
-            <Button
-              onClick={() => setOpenFichasTecnicas(true)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center justify-center gap-2 h-11"
-            >
-              <FileText className="h-4 w-4" />
-              Fichas Técnicas
-            </Button>
-          </div>
-
           <LockScreen
             inventory={inventory}
             filters={filters}

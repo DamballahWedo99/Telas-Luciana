@@ -45,7 +45,6 @@ function LoginFormContent() {
     try {
       setIsLoading(true);
 
-      // Guardar el timestamp del login
       sessionStorage.setItem("lastLoginTime", Date.now().toString());
       sessionStorage.setItem("loginAttempt", "true");
 
@@ -71,19 +70,17 @@ function LoginFormContent() {
             duration: 4000,
           });
         }
+
+        setIsLoading(false);
         return;
       }
 
-      // Login exitoso
       toast.success("Sesión iniciada correctamente", {
         duration: 2000,
       });
 
-      // Esperar un momento para que la sesión se propague
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Usar window.location para forzar una recarga completa
-      // Esto asegura que las cookies se lean correctamente
       if (process.env.NODE_ENV === "production") {
         window.location.href = callbackUrl.startsWith("/")
           ? `https://telasytejidosluciana.com${callbackUrl}`
@@ -99,9 +96,8 @@ function LoginFormContent() {
         duration: 4000,
       });
       console.error(error);
-    } finally {
-      // No quitar isLoading aquí porque vamos a navegar
-      // setIsLoading(false);
+
+      setIsLoading(false);
     }
   };
 
