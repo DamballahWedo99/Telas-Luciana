@@ -54,38 +54,76 @@ export async function GET(request: NextRequest) {
         let allowedRoles = ["major_admin"];
 
         try {
-          if (obj.Key?.includes("_roles_")) {
-            const rolesMatch = obj.Key.match(/_roles_([^_]+)/);
-            if (rolesMatch) {
-              allowedRoles = rolesMatch[1].split("-");
-            }
-          } else {
-            try {
-              const headCommand = new HeadObjectCommand({
-                Bucket: "telas-luciana",
-                Key: obj.Key!,
-              });
-              const headResponse = await s3Client.send(headCommand);
+          const headCommand = new HeadObjectCommand({
+            Bucket: "telas-luciana",
+            Key: obj.Key!,
+          });
 
-              if (headResponse.Metadata?.allowedroles) {
-                allowedRoles = headResponse.Metadata.allowedroles.split("-");
+          const headResponse = await s3Client.send(headCommand);
+
+          console.log(`[FICHAS-DEBUG] File: ${obj.Key}`, {
+            metadata: headResponse.Metadata,
+            allowedroles: headResponse.Metadata?.allowedroles,
+          });
+
+          if (headResponse.Metadata?.allowedroles) {
+            allowedRoles = headResponse.Metadata.allowedroles
+              .split("-")
+              .filter((role) => role.trim() !== "");
+            console.log(
+              `[FICHAS-DEBUG] Roles from metadata: ${allowedRoles.join(", ")}`
+            );
+          } else {
+            if (obj.Key && obj.Key.includes("_roles_")) {
+              const rolesMatch = obj.Key.match(/_roles_([^._]+)/);
+              if (rolesMatch && rolesMatch[1]) {
+                allowedRoles = rolesMatch[1]
+                  .split("-")
+                  .filter((role) => role.trim() !== "");
+                console.log(
+                  `[FICHAS-DEBUG] Roles from filename: ${allowedRoles.join(", ")}`
+                );
               }
-            } catch {
+            } else {
               console.log(
-                `No metadata found for ${obj.Key}, using default roles`
+                `[FICHAS-DEBUG] No metadata and no roles in filename for ${obj.Key}, using default: major_admin`
               );
             }
           }
         } catch (error) {
-          console.error("Error parsing roles:", error);
+          console.error(
+            `[FICHAS-DEBUG] Error getting metadata for ${obj.Key}:`,
+            error
+          );
+
+          if (obj.Key && obj.Key.includes("_roles_")) {
+            const rolesMatch = obj.Key.match(/_roles_([^._]+)/);
+            if (rolesMatch && rolesMatch[1]) {
+              allowedRoles = rolesMatch[1]
+                .split("-")
+                .filter((role) => role.trim() !== "");
+              console.log(
+                `[FICHAS-DEBUG] Fallback roles from filename: ${allowedRoles.join(", ")}`
+              );
+            }
+          }
         }
+
+        if (allowedRoles.length === 0) {
+          allowedRoles = ["major_admin"];
+          console.log(
+            `[FICHAS-DEBUG] Empty roles detected for ${obj.Key}, defaulting to major_admin`
+          );
+        }
+
+        const cleanName = obj
+          .Key!.replace("Inventario/Fichas Tecnicas/", "")
+          .replace(".pdf", "")
+          .replace(/_roles_[^.]*/, "");
 
         return {
           key: obj.Key!,
-          name: obj
-            .Key!.replace("Inventario/Fichas Tecnicas/", "")
-            .replace(".pdf", "")
-            .replace(/_roles_[^.]*/, ""),
+          name: cleanName,
           size: obj.Size || 0,
           lastModified: obj.LastModified?.toISOString() || "",
           allowedRoles,
@@ -94,14 +132,25 @@ export async function GET(request: NextRequest) {
     );
 
     const filteredFichas = fichas.filter((ficha) => {
-      if (userRole === "major_admin") return true;
-      if (userRole === "admin")
-        return (
+      let canAccess = false;
+
+      if (userRole === "major_admin") {
+        canAccess = true;
+      } else if (userRole === "admin") {
+        canAccess =
           ficha.allowedRoles.includes("admin") ||
-          ficha.allowedRoles.includes("major_admin")
-        );
-      if (userRole === "seller") return ficha.allowedRoles.includes("seller");
-      return false;
+          ficha.allowedRoles.includes("major_admin");
+      } else if (userRole === "seller") {
+        canAccess = ficha.allowedRoles.includes("seller");
+      }
+
+      console.log(`[FICHAS-DEBUG] Access check for ${ficha.name}:`, {
+        userRole,
+        allowedRoles: ficha.allowedRoles,
+        canAccess,
+      });
+
+      return canAccess;
     });
 
     const duration = Date.now() - startTime;

@@ -84,6 +84,7 @@ const adminApiRoutes = [
   "/api/s3/inventario/update",
   "/api/s3/fichas-tecnicas/upload",
   "/api/s3/fichas-tecnicas/delete",
+  "/api/s3/fichas-tecnicas/edit",
 ];
 
 const protectedApiRoutes = [
@@ -94,7 +95,7 @@ const protectedApiRoutes = [
   "/api/s3/inventario",
   "/api/s3/fichas-tecnicas",
   "/api/s3/fichas-tecnicas/download",
-  "/api/s3/clientes", // ✅ AGREGADO - Permitir acceso a clientes
+  "/api/s3/clientes",
 ];
 
 const rateLimitConfig: Record<
@@ -125,6 +126,11 @@ const rateLimitConfig: Record<
     message:
       "Demasiadas solicitudes de eliminación. Espera antes de intentar nuevamente.",
   },
+  "/api/s3/fichas-tecnicas/edit": {
+    type: "api",
+    message:
+      "Demasiadas solicitudes de edición. Espera antes de intentar nuevamente.",
+  },
 };
 
 const roleBasedAccess: Record<string, string[]> = {
@@ -133,6 +139,7 @@ const roleBasedAccess: Record<string, string[]> = {
     "/api/s3/inventario/update",
     "/api/s3/fichas-tecnicas/upload",
     "/api/s3/fichas-tecnicas/delete",
+    "/api/s3/fichas-tecnicas/edit",
     "/dashboard/admin",
     "/dashboard/settings",
   ],
@@ -145,7 +152,7 @@ const roleBasedAccess: Record<string, string[]> = {
     "/api/s3/fichas-tecnicas",
     "/api/s3/fichas-tecnicas/download",
     "/api/users/verify",
-    "/api/s3/clientes", // ✅ AGREGADO - Permitir a todos los usuarios autenticados (admin, major_admin, seller)
+    "/api/s3/clientes",
     "/dashboard",
   ],
 };

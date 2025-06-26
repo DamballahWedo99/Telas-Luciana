@@ -67,8 +67,20 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    const sanitizedFileName = fileName
+      .replace(/\//g, "-")
+      .replace(/\\/g, "-")
+      .replace(/:/g, "-")
+      .replace(/\*/g, "-")
+      .replace(/\?/g, "-")
+      .replace(/"/g, "-")
+      .replace(/</g, "-")
+      .replace(/>/g, "-")
+      .replace(/\|/g, "-")
+      .trim();
+
     const rolesString = allowedRoles.join("-");
-    const key = `Inventario/Fichas Tecnicas/${fileName}.pdf`;
+    const key = `Inventario/Fichas Tecnicas/${sanitizedFileName}.pdf`;
 
     const command = new PutObjectCommand({
       Bucket: "telas-luciana",
@@ -76,9 +88,9 @@ export async function POST(request: NextRequest) {
       Body: buffer,
       ContentType: "application/pdf",
       Metadata: {
-        allowedRoles: rolesString,
-        uploadedBy: session.user.email || "",
-        uploadedAt: new Date().toISOString(),
+        allowedroles: rolesString,
+        uploadedby: session.user.email || "",
+        uploadedat: new Date().toISOString(),
       },
     });
 
@@ -90,8 +102,10 @@ export async function POST(request: NextRequest) {
       `[FICHAS-TECNICAS] User ${session.user.email} uploaded ficha:`,
       {
         key,
-        fileName,
+        originalFileName: fileName,
+        sanitizedFileName,
         allowedRoles,
+        rolesString,
         fileSize: buffer.length,
         duration: `${duration}ms`,
       }
