@@ -349,28 +349,39 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
 
   const visualizationData = useMemo(() => {
     const fabricValueData = Object.entries(
-      filteredInventory.reduce((acc, item) => {
-        const key = item.Tela as string;
-        acc[key] = (acc[key] || 0) + item.Total;
-        return acc;
-      }, {} as Record<string, number>)
+      filteredInventory.reduce(
+        (acc, item) => {
+          const key = item.Tela as string;
+          acc[key] = (acc[key] || 0) + item.Total;
+          return acc;
+        },
+        {} as Record<string, number>
+      )
     ).map(([name, value]) => ({ name, value }));
 
     const colorQuantityData = Object.entries(
-      filteredInventory.reduce((acc, item) => {
-        const key = item.Color as string;
-        acc[key] = (acc[key] || 0) + item.Cantidad;
-        return acc;
-      }, {} as Record<string, number>)
+      filteredInventory.reduce(
+        (acc, item) => {
+          const key = item.Color as string;
+          acc[key] = (acc[key] || 0) + item.Cantidad;
+          return acc;
+        },
+        {} as Record<string, number>
+      )
     ).map(([name, value]) => ({ name, value }));
 
     const ocValueData = Object.entries(
-      filteredInventory.reduce((acc, item) => {
-        const key = item.OC as string;
-        acc[key] = (acc[key] || 0) + item.Total;
-        return acc;
-      }, {} as Record<string, number>)
-    ).map(([name, value]) => ({ name, value }));
+      filteredInventory.reduce(
+        (acc, item) => {
+          const key = item.OC as string;
+          acc[key] = (acc[key] || 0) + item.Total;
+          return acc;
+        },
+        {} as Record<string, number>
+      )
+    )
+      .map(([name, value]) => ({ name, value }))
+      .filter((item) => item.value > 0);
 
     const fabricCostData: FabricCostData = {
       MTS: filteredInventory
@@ -391,20 +402,26 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         })),
     };
 
-    const groupedInventory = filteredInventory.reduce((acc, item) => {
-      const key = `${item.Tela}-${item.Color}`;
-      if (!acc[key]) {
-        acc[key] = {
-          tela: item.Tela,
-          color: item.Color,
-          cantidad: 0,
-          costo: 0,
-        };
-      }
-      acc[key].cantidad += item.Cantidad;
-      acc[key].costo += item.Costo;
-      return acc;
-    }, {} as Record<string, { tela: string; color: string; cantidad: number; costo: number }>);
+    const groupedInventory = filteredInventory.reduce(
+      (acc, item) => {
+        const key = `${item.Tela}-${item.Color}`;
+        if (!acc[key]) {
+          acc[key] = {
+            tela: item.Tela,
+            color: item.Color,
+            cantidad: 0,
+            costo: 0,
+          };
+        }
+        acc[key].cantidad += item.Cantidad;
+        acc[key].costo += item.Costo;
+        return acc;
+      },
+      {} as Record<
+        string,
+        { tela: string; color: string; cantidad: number; costo: number }
+      >
+    );
 
     const costDistribution = Object.values(groupedInventory)
       .sort((a, b) => b.costo - a.costo)
@@ -1299,12 +1316,14 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
                     {visualizationData.ocValueData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
-                          data={visualizationData.ocValueData.slice(0, 10)}
+                          data={visualizationData.ocValueData
+                            .sort((a, b) => b.value - a.value)
+                            .slice(0, 10)}
                           layout="vertical"
                           margin={{
                             top: 20,
                             right: 30,
-                            left: 80,
+                            left: 200,
                             bottom: 20,
                           }}
                           barSize={30}
