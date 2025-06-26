@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react"; // ✅ Usar sesión de NextAuth en lugar de API
+import { useSession } from "next-auth/react";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,7 @@ import {
   MessageSquare,
   Edit,
   Trash2,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClienteSchema, type CreateClienteFormValues } from "@/lib/zod";
@@ -81,12 +82,12 @@ interface ClientesDialogProps {
 }
 
 export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
-  const { data: session } = useSession(); // ✅ Usar useSession en lugar de fetch
+  const { data: session } = useSession();
   const [searchTerm, setSearchTerm] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [openClienteForm, setOpenClienteForm] = useState(false);
+  const [view, setView] = useState<"list" | "form">("list");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [clienteForm, setClienteForm] = useState<CreateClienteFormValues>({
@@ -105,23 +106,20 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const isMobile = useIsMobile();
 
-  // ✅ Obtener información del usuario desde la sesión
   const userRole = session?.user?.role || "";
-  const userName = session?.user?.name || ""; // ✅ Usar solo el name del usuario
+  const userName = session?.user?.name || "";
 
-  // ✅ Función para obtener vendedor dinámicamente
   const getVendedorForUser = (name: string, role: string): string => {
     if (role !== "seller") {
-      return "TTL"; // Admin y major_admin siempre usan TTL
+      return "TTL";
     }
-
-    // Para sellers, usar su nombre directamente
     return name || "TTL";
   };
 
   useEffect(() => {
     if (open) {
       loadClientes();
+      setView("list");
     }
   }, [open]);
 
@@ -229,7 +227,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       );
 
       resetForm();
-      setOpenClienteForm(false);
+      setView("list");
       await loadClientes();
     } catch (error) {
       console.error("Error submitting cliente:", error);
@@ -255,14 +253,13 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       ubicacion: cliente.ubicacion,
       comentarios: cliente.comentarios,
     });
-    setOpenClienteForm(true);
+    setView("form");
   };
 
   const handleNewCliente = () => {
     setEditingCliente(null);
     resetForm();
 
-    // ✅ AUTO-ASIGNAR VENDEDOR al crear nuevo cliente usando nombre del usuario
     const autoVendedor = getVendedorForUser(userName, userRole);
     setClienteForm({
       empresa: "",
@@ -270,12 +267,12 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       direccion: "",
       telefono: "",
       email: "",
-      vendedor: autoVendedor, // Auto-asignar basado en nombre del usuario
+      vendedor: autoVendedor,
       ubicacion: "",
       comentarios: "",
     });
 
-    setOpenClienteForm(true);
+    setView("form");
   };
 
   const handleDeleteCliente = (cliente: Cliente) => {
@@ -319,14 +316,11 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     }
   };
 
-  // ✅ LÓGICA DE PERMISOS MEJORADA
   const canEditCliente = (cliente: Cliente): boolean => {
-    // Admin y major_admin pueden editar cualquier cliente
     if (userRole === "admin" || userRole === "major_admin") {
       return true;
     }
 
-    // Sellers solo pueden editar clientes asignados a ellos
     if (userRole === "seller") {
       const validVendedor = getVendedorForUser(userName, userRole);
       return cliente.vendedor === validVendedor;
@@ -357,7 +351,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   );
 
   const getVendedorColor = (vendedor: string) => {
-    // ✅ Colores dinámicos basados en hash del nombre
     const colors = [
       "bg-blue-100 text-blue-800 hover:bg-blue-200",
       "bg-pink-100 text-pink-800 hover:bg-pink-200",
@@ -369,12 +362,10 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       "bg-red-100 text-red-800 hover:bg-red-200",
     ];
 
-    // TTL siempre usa color gris específico
     if (vendedor === "TTL") {
       return "bg-gray-100 text-gray-800 hover:bg-gray-200";
     }
 
-    // Generar hash simple del nombre para consistencia de color
     let hash = 0;
     for (let i = 0; i < vendedor.length; i++) {
       hash = vendedor.charCodeAt(i) + ((hash << 5) - hash);
@@ -385,13 +376,18 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   };
 
   const handleCancel = () => {
-    setOpen(false);
-    setSearchTerm("");
-    setError("");
+    if (view === "form") {
+      setView("list");
+      setEditingCliente(null);
+      resetForm();
+    } else {
+      setOpen(false);
+      setSearchTerm("");
+      setError("");
+    }
   };
 
   const resetForm = () => {
-    // ✅ AUTO-ASIGNAR VENDEDOR por defecto usando nombre del usuario
     const autoVendedor = getVendedorForUser(userName, userRole);
 
     setClienteForm({
@@ -400,7 +396,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       direccion: "",
       telefono: "",
       email: "",
-      vendedor: autoVendedor, // Auto-asignar basado en nombre del usuario
+      vendedor: autoVendedor,
       ubicacion: "",
       comentarios: "",
     });
@@ -414,7 +410,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     cliente: Cliente;
     isMobileVersion?: boolean;
   }) => {
-    // ✅ Verificar permisos para cada cliente individualmente
     const canEdit = canEditCliente(cliente);
 
     if (isMobileVersion) {
@@ -437,7 +432,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                 )}
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                {/* ✅ Mostrar botón de editar solo si tiene permisos */}
                 {canEdit && (
                   <Button
                     variant="outline"
@@ -607,7 +601,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
 
             <div className="flex-shrink-0 ml-4">
               <div className="flex gap-1">
-                {/* ✅ Mostrar botón de editar solo si tiene permisos */}
                 {canEdit && (
                   <Button
                     variant="outline"
@@ -640,345 +633,394 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
 
   const isEditing = editingCliente !== null;
 
-  // ✅ Verificar si el usuario está autenticado
   if (!session) {
-    return null; // No mostrar nada si no hay sesión
+    return null;
   }
 
   if (isMobile) {
     return (
       <>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-hidden p-0 rounded-3xl [&>button]:hidden">
-            <div className="p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-3xl">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-blue-100 rounded-2xl">
-                  <Building2 className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <DialogTitle className="text-lg font-semibold">
-                    Directorio de Clientes
-                  </DialogTitle>
-                  <DialogDescription className="text-sm text-gray-600">
-                    Directorio completo de clientes
-                  </DialogDescription>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 flex-1 overflow-hidden flex flex-col">
-              <div className="mb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Buscar cliente..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 rounded-xl h-12 bg-gray-50 border-gray-200 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="p-4 bg-blue-50 rounded-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <DialogContent className="max-w-[95vw] h-[85vh] overflow-hidden p-0 rounded-3xl [&>button]:hidden">
+            {view === "list" ? (
+              <>
+                <div className="p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-3xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-100 rounded-2xl">
+                      <Building2 className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <DialogTitle className="text-lg font-semibold">
+                        Directorio de Clientes
+                      </DialogTitle>
+                      <DialogDescription className="text-sm text-gray-600">
+                        Directorio completo de clientes
+                      </DialogDescription>
+                    </div>
                   </div>
-                  <p className="text-gray-600 font-medium">
-                    Cargando directorio de clientes...
-                  </p>
                 </div>
-              ) : error ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="p-6 bg-red-50 rounded-full">
-                    <Building2 className="h-12 w-12 text-red-400" />
+
+                <div className="p-4 flex-1 overflow-hidden flex flex-col min-h-[400px]">
+                  <div className="mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Buscar cliente..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 rounded-xl h-12 bg-gray-50 border-gray-200 focus:bg-white"
+                      />
+                    </div>
                   </div>
-                  <div className="text-center space-y-2">
-                    <h3 className="font-semibold text-gray-900">
-                      Error al cargar clientes
-                    </h3>
-                    <p className="text-sm text-gray-500">{error}</p>
+
+                  {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-4 bg-blue-50 rounded-full">
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                      </div>
+                      <p className="text-gray-600 font-medium">
+                        Cargando directorio de clientes...
+                      </p>
+                    </div>
+                  ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-6 bg-red-50 rounded-full">
+                        <Building2 className="h-12 w-12 text-red-400" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <h3 className="font-semibold text-gray-900">
+                          Error al cargar clientes
+                        </h3>
+                        <p className="text-sm text-gray-500">{error}</p>
+                        <Button
+                          onClick={loadClientes}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : filteredClientes.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-6 bg-gray-50 rounded-full">
+                        <Building2 className="h-12 w-12 text-gray-400" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <h3 className="font-semibold text-gray-900">
+                          No hay clientes
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          No se encontraron clientes con esos criterios.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 flex-1 overflow-y-auto px-1">
+                      {filteredClientes.map((cliente, index) => (
+                        <ClienteCard
+                          key={index}
+                          cliente={cliente}
+                          isMobileVersion={true}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t bg-gray-50/80 backdrop-blur-sm rounded-b-3xl">
+                  <div className="text-center text-xs text-gray-500 mb-3">
+                    {filteredClientes.length} de {clientes.length} clientes
+                  </div>
+                  <div className="flex gap-3">
                     <Button
-                      onClick={loadClientes}
+                      type="button"
                       variant="outline"
-                      size="sm"
-                      className="mt-2"
+                      onClick={handleCancel}
+                      className="flex-1 h-11 font-medium rounded-xl border-gray-300"
                     >
-                      Reintentar
+                      Cerrar
+                    </Button>
+                    <Button
+                      onClick={handleNewCliente}
+                      className="flex-1 h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-sm"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar
                     </Button>
                   </div>
                 </div>
-              ) : filteredClientes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="p-6 bg-gray-50 rounded-full">
-                    <Building2 className="h-12 w-12 text-gray-400" />
-                  </div>
-                  <div className="text-center space-y-2">
-                    <h3 className="font-semibold text-gray-900">
-                      No hay clientes
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      No se encontraron clientes con esos criterios.
-                    </p>
-                  </div>
+              </>
+            ) : (
+              <>
+                <div className="p-5 border-b bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-3xl">
+                  <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setView("list")}
+                      className="mr-2 h-8 w-8 p-0 rounded-lg"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    {isEditing ? (
+                      <Edit className="h-5 w-5" />
+                    ) : (
+                      <Plus className="h-5 w-5" />
+                    )}
+                    {isEditing ? "Editar Cliente" : "Agregar Nuevo Cliente"}
+                  </DialogTitle>
+                  <DialogDescription className="text-sm text-gray-600 mt-1 ml-12">
+                    {isEditing
+                      ? "Actualiza la información del cliente"
+                      : `Crea un nuevo contacto`}
+                  </DialogDescription>
                 </div>
-              ) : (
-                <div className="space-y-3 max-h-[50vh] overflow-y-auto px-1">
-                  {filteredClientes.map((cliente, index) => (
-                    <ClienteCard
-                      key={index}
-                      cliente={cliente}
-                      isMobileVersion={true}
+
+                <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+                  <div>
+                    <Label
+                      htmlFor="empresa"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Empresa *
+                    </Label>
+                    <Input
+                      id="empresa"
+                      placeholder="Ej: Textiles González"
+                      value={clienteForm.empresa}
+                      onChange={(e) =>
+                        handleInputChange("empresa", e.target.value)
+                      }
+                      className={`mt-1.5 h-11 ${formErrors.empresa ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
                     />
-                  ))}
+                    {formErrors.empresa && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.empresa}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="contacto"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Contacto
+                    </Label>
+                    <Input
+                      id="contacto"
+                      placeholder="Ej: María González"
+                      value={clienteForm.contacto}
+                      onChange={(e) =>
+                        handleInputChange("contacto", e.target.value)
+                      }
+                      className={`mt-1.5 h-11 ${formErrors.contacto ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.contacto && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.contacto}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="direccion"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Dirección
+                    </Label>
+                    <Input
+                      id="direccion"
+                      placeholder="Ej: Av. Insurgentes Sur 1234"
+                      value={clienteForm.direccion}
+                      onChange={(e) =>
+                        handleInputChange("direccion", e.target.value)
+                      }
+                      className={`mt-1.5 h-11 ${formErrors.direccion ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.direccion && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.direccion}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="telefono"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Teléfono
+                    </Label>
+                    <Input
+                      id="telefono"
+                      placeholder="Ej: 5512345678"
+                      value={clienteForm.telefono}
+                      onChange={(e) =>
+                        handleInputChange("telefono", e.target.value)
+                      }
+                      className={`mt-1.5 h-11 ${formErrors.telefono ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.telefono && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.telefono}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="email"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Email *
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Ej: maria@textilesgonzalez.com"
+                      value={clienteForm.email}
+                      onChange={(e) =>
+                        handleInputChange("email", e.target.value)
+                      }
+                      className={`mt-1.5 h-11 ${formErrors.email ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.email && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.email}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="ubicacion"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Ubicación
+                    </Label>
+                    <Input
+                      id="ubicacion"
+                      placeholder="Ej: CDMX, Mérida, Guadalajara..."
+                      value={clienteForm.ubicacion}
+                      onChange={(e) =>
+                        handleInputChange("ubicacion", e.target.value)
+                      }
+                      className={`mt-1.5 h-11 ${formErrors.ubicacion ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.ubicacion && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.ubicacion}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="comentarios"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Comentarios
+                    </Label>
+                    <Textarea
+                      id="comentarios"
+                      placeholder="Ej: Cliente preferencial, requiere atención especial..."
+                      value={clienteForm.comentarios}
+                      onChange={(e) =>
+                        handleInputChange("comentarios", e.target.value)
+                      }
+                      className={`mt-1.5 min-h-[80px] resize-none ${formErrors.comentarios ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.comentarios && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.comentarios}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <div className="p-4 border-t bg-gray-50/80 backdrop-blur-sm rounded-b-3xl">
-              <div className="text-center text-xs text-gray-500 mb-3">
-                {filteredClientes.length} de {clientes.length} clientes
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCancel}
-                  className="flex-1 h-11 font-medium rounded-xl border-gray-300"
-                >
-                  Cerrar
-                </Button>
-                <Button
-                  onClick={handleNewCliente}
-                  className="flex-1 h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-sm"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Agregar
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={openClienteForm} onOpenChange={setOpenClienteForm}>
-          <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-y-auto p-0 rounded-3xl">
-            <div className="p-5 border-b bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-3xl">
-              <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
-                {isEditing ? (
-                  <Edit className="h-5 w-5" />
-                ) : (
-                  <Plus className="h-5 w-5" />
-                )}
-                {isEditing ? "Editar Cliente" : "Agregar Nuevo Cliente"}
-              </DialogTitle>
-              <DialogDescription className="text-sm text-gray-600 mt-1">
-                {isEditing
-                  ? "Actualiza la información del cliente"
-                  : `Crea un nuevo contacto en el directorio. Se asignará automáticamente a: ${getVendedorForUser(userName, userRole)}`}
-              </DialogDescription>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <Label
-                  htmlFor="empresa"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Empresa *
-                </Label>
-                <Input
-                  id="empresa"
-                  placeholder="Ej: Textiles González"
-                  value={clienteForm.empresa}
-                  onChange={(e) => handleInputChange("empresa", e.target.value)}
-                  className={`mt-1.5 h-11 ${formErrors.empresa ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                />
-                {formErrors.empresa && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.empresa}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="contacto"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Contacto
-                </Label>
-                <Input
-                  id="contacto"
-                  placeholder="Ej: María González"
-                  value={clienteForm.contacto}
-                  onChange={(e) =>
-                    handleInputChange("contacto", e.target.value)
-                  }
-                  className={`mt-1.5 h-11 ${formErrors.contacto ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                />
-                {formErrors.contacto && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.contacto}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="direccion"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Dirección
-                </Label>
-                <Input
-                  id="direccion"
-                  placeholder="Ej: Av. Insurgentes Sur 1234"
-                  value={clienteForm.direccion}
-                  onChange={(e) =>
-                    handleInputChange("direccion", e.target.value)
-                  }
-                  className={`mt-1.5 h-11 ${formErrors.direccion ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                />
-                {formErrors.direccion && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.direccion}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="telefono"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Teléfono
-                </Label>
-                <Input
-                  id="telefono"
-                  placeholder="Ej: 5512345678"
-                  value={clienteForm.telefono}
-                  onChange={(e) =>
-                    handleInputChange("telefono", e.target.value)
-                  }
-                  className={`mt-1.5 h-11 ${formErrors.telefono ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                />
-                {formErrors.telefono && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.telefono}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="email"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Email *
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Ej: maria@textilesgonzalez.com"
-                  value={clienteForm.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                  className={`mt-1.5 h-11 ${formErrors.email ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                />
-                {formErrors.email && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.email}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="ubicacion"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Ubicación
-                </Label>
-                <Input
-                  id="ubicacion"
-                  placeholder="Ej: CDMX, Mérida, Guadalajara..."
-                  value={clienteForm.ubicacion}
-                  onChange={(e) =>
-                    handleInputChange("ubicacion", e.target.value)
-                  }
-                  className={`mt-1.5 h-11 ${formErrors.ubicacion ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                />
-                {formErrors.ubicacion && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.ubicacion}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="comentarios"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Comentarios
-                </Label>
-                <Textarea
-                  id="comentarios"
-                  placeholder="Ej: Cliente preferencial, requiere atención especial..."
-                  value={clienteForm.comentarios}
-                  onChange={(e) =>
-                    handleInputChange("comentarios", e.target.value)
-                  }
-                  className={`mt-1.5 min-h-[80px] resize-none ${formErrors.comentarios ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
-                />
-                {formErrors.comentarios && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    {formErrors.comentarios}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="p-5 border-t bg-gray-50/80 backdrop-blur-sm rounded-b-3xl">
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setOpenClienteForm(false);
-                    setEditingCliente(null);
-                    resetForm();
-                  }}
-                  disabled={isSubmitting}
-                  className="flex-1 h-11 border-gray-300"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSubmitCliente}
-                  disabled={isSubmitting}
-                  className="flex-1 h-11 bg-green-600 hover:bg-green-700 shadow-sm"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isEditing ? "Actualizando..." : "Creando..."}
-                    </>
-                  ) : (
-                    <>
-                      {isEditing ? (
-                        <Edit className="mr-2 h-4 w-4" />
+                <div className="p-5 border-t bg-gray-50/80 backdrop-blur-sm rounded-b-3xl">
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancel}
+                      disabled={isSubmitting}
+                      className="flex-1 h-11 border-gray-300 rounded-xl"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSubmitCliente}
+                      disabled={isSubmitting}
+                      className="flex-1 h-11 bg-green-600 hover:bg-green-700 shadow-sm rounded-xl"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {isEditing ? "Actualizando..." : "Creando..."}
+                        </>
                       ) : (
-                        <Plus className="mr-2 h-4 w-4" />
+                        <>
+                          {isEditing ? (
+                            <Edit className="mr-2 h-4 w-4" />
+                          ) : (
+                            <Plus className="mr-2 h-4 w-4" />
+                          )}
+                          {isEditing ? "Actualizar" : "Crear"}
+                        </>
                       )}
-                      {isEditing ? "Actualizar Cliente" : "Crear Cliente"}
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent className="max-w-[90vw] rounded-3xl">
+            <AlertDialogHeader className="text-center">
+              <AlertDialogTitle className="text-lg">
+                ¿Estás seguro?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-600">
+                Esta acción no se puede deshacer. Se eliminará permanentemente
+                el cliente <strong>{clienteToDelete?.empresa}</strong> del
+                directorio.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex gap-3 sm:gap-3">
+              <AlertDialogCancel
+                disabled={isDeleting}
+                className="flex-1 h-11 rounded-xl border-gray-300"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteCliente}
+                disabled={isDeleting}
+                className="flex-1 h-11 bg-red-600 hover:bg-red-700 focus:ring-red-600 rounded-xl"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Eliminar
+                  </>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </>
     );
   }
@@ -1064,217 +1106,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openClienteForm} onOpenChange={setOpenClienteForm}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {isEditing ? (
-                <Edit className="h-5 w-5" />
-              ) : (
-                <Plus className="h-5 w-5" />
-              )}
-              {isEditing ? "Editar Cliente" : "Agregar Nuevo Cliente"}
-            </DialogTitle>
-            <DialogDescription>
-              {isEditing
-                ? "Actualiza la información del cliente en el directorio."
-                : `Crea un nuevo contacto en el directorio de clientes. Se asignará automáticamente a: ${getVendedorForUser(userName, userRole)}.`}{" "}
-              Los campos marcados con * son obligatorios.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="empresa" className="text-right">
-                Empresa *
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id="empresa"
-                  placeholder="Ej: Textiles González"
-                  value={clienteForm.empresa}
-                  onChange={(e) => handleInputChange("empresa", e.target.value)}
-                  className={formErrors.empresa ? "border-red-500" : ""}
-                />
-                {formErrors.empresa && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.empresa}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="contacto" className="text-right">
-                Contacto
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id="contacto"
-                  placeholder="Ej: María González"
-                  value={clienteForm.contacto}
-                  onChange={(e) =>
-                    handleInputChange("contacto", e.target.value)
-                  }
-                  className={formErrors.contacto ? "border-red-500" : ""}
-                />
-                {formErrors.contacto && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.contacto}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="direccion" className="text-right">
-                Dirección
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id="direccion"
-                  placeholder="Ej: Av. Insurgentes Sur 1234"
-                  value={clienteForm.direccion}
-                  onChange={(e) =>
-                    handleInputChange("direccion", e.target.value)
-                  }
-                  className={formErrors.direccion ? "border-red-500" : ""}
-                />
-                {formErrors.direccion && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.direccion}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="telefono" className="text-right">
-                Teléfono
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id="telefono"
-                  placeholder="Ej: 5512345678"
-                  value={clienteForm.telefono}
-                  onChange={(e) =>
-                    handleInputChange("telefono", e.target.value)
-                  }
-                  className={formErrors.telefono ? "border-red-500" : ""}
-                />
-                {formErrors.telefono && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.telefono}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email *
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Ej: maria@textilesgonzalez.com"
-                  value={clienteForm.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                  className={formErrors.email ? "border-red-500" : ""}
-                />
-                {formErrors.email && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.email}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="ubicacion" className="text-right">
-                Ubicación
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id="ubicacion"
-                  placeholder="Ej: CDMX, Mérida, Guadalajara..."
-                  value={clienteForm.ubicacion}
-                  onChange={(e) =>
-                    handleInputChange("ubicacion", e.target.value)
-                  }
-                  className={formErrors.ubicacion ? "border-red-500" : ""}
-                />
-                {formErrors.ubicacion && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.ubicacion}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label htmlFor="comentarios" className="text-right mt-2">
-                Comentarios
-              </Label>
-              <div className="col-span-3">
-                <Textarea
-                  id="comentarios"
-                  placeholder="Ej: Cliente preferencial, requiere atención especial..."
-                  value={clienteForm.comentarios}
-                  onChange={(e) =>
-                    handleInputChange("comentarios", e.target.value)
-                  }
-                  className={`min-h-[80px] resize-none ${formErrors.comentarios ? "border-red-500" : ""}`}
-                />
-                {formErrors.comentarios && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {formErrors.comentarios}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setOpenClienteForm(false);
-                setEditingCliente(null);
-                resetForm();
-              }}
-              disabled={isSubmitting}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSubmitCliente}
-              disabled={isSubmitting}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isEditing ? "Actualizando..." : "Creando..."}
-                </>
-              ) : (
-                <>
-                  {isEditing ? (
-                    <Edit className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  {isEditing ? "Actualizar Cliente" : "Crear Cliente"}
-                </>
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

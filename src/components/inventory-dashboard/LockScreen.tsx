@@ -50,7 +50,11 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
 
   const uniqueOCs = useMemo(
     () =>
-      Array.from(new Set(inventory.map((item) => item.OC)))
+      Array.from(
+        new Set(
+          inventory.filter((item) => item.Cantidad > 0).map((item) => item.OC)
+        )
+      )
         .filter(Boolean)
         .sort(),
     [inventory]
@@ -58,7 +62,11 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
 
   const uniqueTelas = useMemo(
     () =>
-      Array.from(new Set(inventory.map((item) => item.Tela)))
+      Array.from(
+        new Set(
+          inventory.filter((item) => item.Cantidad > 0).map((item) => item.Tela)
+        )
+      )
         .filter(Boolean)
         .sort(),
     [inventory]
@@ -66,7 +74,13 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
 
   const uniqueColors = useMemo(
     () =>
-      Array.from(new Set(inventory.map((item) => item.Color)))
+      Array.from(
+        new Set(
+          inventory
+            .filter((item) => item.Cantidad > 0)
+            .map((item) => item.Color)
+        )
+      )
         .filter(Boolean)
         .sort(),
     [inventory]
@@ -74,7 +88,13 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
 
   const uniqueUbicaciones = useMemo(
     () =>
-      Array.from(new Set(inventory.map((item) => item.Ubicacion)))
+      Array.from(
+        new Set(
+          inventory
+            .filter((item) => item.Cantidad > 0)
+            .map((item) => item.Ubicacion)
+        )
+      )
         .filter(Boolean)
         .sort(),
     [inventory]
@@ -110,6 +130,8 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
   const filteredInventory = useMemo(
     () =>
       inventory.filter((item) => {
+        const hasQuantity = item.Cantidad > 0;
+
         const matchesSearch = isAdmin
           ? item.OC.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
             item.Tela.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
@@ -133,6 +155,7 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
           ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
 
         return (
+          hasQuantity &&
           matchesSearch &&
           matchesUnit &&
           matchesOC &&
