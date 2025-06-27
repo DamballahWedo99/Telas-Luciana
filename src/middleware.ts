@@ -94,11 +94,12 @@ const protectedApiRoutes = [
   "/api/returns",
   "/api/sales",
   "/api/users",
-  "/api/s3/inventario",
   "/api/s3/fichas-tecnicas",
   "/api/s3/fichas-tecnicas/download",
   "/api/s3/clientes",
 ];
+
+const mixedAccessApiRoutes = ["/api/s3/inventario"];
 
 const rateLimitConfig: Record<
   string,
@@ -188,6 +189,10 @@ function isCronApiRoute(pathname: string): boolean {
   return cronApiRoutes.some((route) => pathname.startsWith(route));
 }
 
+function isMixedAccessApiRoute(pathname: string): boolean {
+  return mixedAccessApiRoutes.some((route) => pathname.startsWith(route));
+}
+
 function validateCronAuth(req: NextRequest): boolean {
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -205,20 +210,44 @@ function validateCronAuth(req: NextRequest): boolean {
 }
 
 function isInternalCronRequest(req: NextRequest): boolean {
-  const internalHeader = req.headers.get("x-internal-request");
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
+  const internalHeaders = [
+    req.headers.get("x-internal-request"),
+    req.headers.get("X-Internal-Request"),
+    req.headers.get("X-INTERNAL-REQUEST"),
+  ];
 
-  if (!internalHeader || internalHeader !== "true") {
+  const hasInternalHeader = internalHeaders.some((header) => header === "true");
+
+  if (!hasInternalHeader) {
+    console.log("❌ No se encontró header interno válido:", {
+      headers: internalHeaders,
+      allHeaders: Object.fromEntries(req.headers.entries()),
+    });
     return false;
   }
 
+  const authHeader = req.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
   if (!cronSecret || !authHeader || !authHeader.startsWith("Bearer ")) {
+    console.log("❌ Falló validación de auth para cron interno:", {
+      hasCronSecret: !!cronSecret,
+      hasAuthHeader: !!authHeader,
+      authPrefix: authHeader?.startsWith("Bearer "),
+    });
     return false;
   }
 
   const token = authHeader.replace("Bearer ", "");
-  return token === cronSecret;
+  const isValid = token === cronSecret;
+
+  console.log("🔍 Validación de cron interno:", {
+    isValid,
+    hasInternalHeader,
+    tokenMatch: isValid,
+  });
+
+  return isValid;
 }
 
 async function safeRateLimit(
@@ -287,6 +316,11 @@ export default async function middleware(req: NextRequest) {
   const baseUrl = getBaseUrl(req);
 
   try {
+    if (isInternalCronRequest(req)) {
+      console.log("✅ Solicitud interna de cron autorizada para:", pathname);
+      return NextResponse.next();
+    }
+
     if (
       pathname.startsWith("/api/") &&
       !isPublicApiRoute(pathname) &&
@@ -334,8 +368,11 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
-    if (isInternalCronRequest(req)) {
-      return NextResponse.next();
+    if (isMixedAccessApiRoute(pathname)) {
+      console.log(
+        "🔄 Ruta de acceso mixto, procediendo con auth de usuario:",
+        pathname
+      );
     }
 
     if (!secret) {

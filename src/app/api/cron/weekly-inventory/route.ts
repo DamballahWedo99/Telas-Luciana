@@ -317,20 +317,34 @@ export async function POST(request: NextRequest) {
     console.log(`📅 Obteniendo inventario para ${currentMonth}/${currentYear}`);
 
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-    const inventoryResponse = await fetch(
-      `${baseUrl}/api/s3/inventario?year=${currentYear}&month=${currentMonth}`,
-      {
-        headers: {
-          "X-Internal-Request": "true",
-          Authorization: `Bearer ${process.env.CRON_SECRET}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const inventoryUrl = `${baseUrl}/api/s3/inventario?year=${currentYear}&month=${currentMonth}`;
+
+    console.log("🔗 URL de inventario:", inventoryUrl);
+    console.log("🔑 Headers que se enviarán:", {
+      "x-internal-request": "true",
+      Authorization: `Bearer ${process.env.CRON_SECRET ? "[PRESENTE]" : "[FALTANTE]"}`,
+      "Content-Type": "application/json",
+    });
+
+    const inventoryResponse = await fetch(inventoryUrl, {
+      headers: {
+        "x-internal-request": "true",
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("📋 Respuesta del inventario:", {
+      status: inventoryResponse.status,
+      statusText: inventoryResponse.statusText,
+      headers: Object.fromEntries(inventoryResponse.headers.entries()),
+    });
 
     if (!inventoryResponse.ok) {
+      const errorText = await inventoryResponse.text();
+      console.error("❌ Error en respuesta del inventario:", errorText);
       throw new Error(
-        `Error al obtener inventario: ${inventoryResponse.status} ${inventoryResponse.statusText}`
+        `Error al obtener inventario: ${inventoryResponse.status} ${inventoryResponse.statusText} - ${errorText}`
       );
     }
 

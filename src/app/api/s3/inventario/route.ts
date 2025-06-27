@@ -50,6 +50,30 @@ interface NormalizedInventoryItem {
   [key: string]: unknown;
 }
 
+function isInternalCronRequest(req: NextRequest): boolean {
+  const internalHeaders = [
+    req.headers.get("x-internal-request"),
+    req.headers.get("X-Internal-Request"),
+    req.headers.get("X-INTERNAL-REQUEST"),
+  ];
+
+  const hasInternalHeader = internalHeaders.some((header) => header === "true");
+
+  if (!hasInternalHeader) {
+    return false;
+  }
+
+  const authHeader = req.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret || !authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  return token === cronSecret;
+}
+
 const fixInvalidJSON = (content: string): string => {
   return content.replace(/: *NaN/g, ": null");
 };
@@ -143,10 +167,23 @@ export async function GET(request: NextRequest) {
       return rateLimitResult;
     }
 
-    const session = await auth();
+    const isInternalRequest = isInternalCronRequest(request);
 
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    if (isInternalRequest) {
+      console.log(
+        "🔓 Acceso autorizado para solicitud interna de cron en /api/s3/inventario"
+      );
+    } else {
+      const session = await auth();
+
+      if (!session || !session.user) {
+        return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      }
+
+      console.log(
+        "🔓 Acceso autorizado para usuario autenticado:",
+        session.user.email
+      );
     }
 
     const { searchParams } = new URL(request.url);
@@ -156,6 +193,10 @@ export async function GET(request: NextRequest) {
       searchParams.get("month") ||
       (new Date().getMonth() + 1).toString().padStart(2, "0");
     const debug = searchParams.get("debug") === "true";
+
+    console.log(
+      `📅 Obteniendo inventario para ${month}/${year} ${isInternalRequest ? "(solicitud interna)" : "(usuario)"}`
+    );
 
     const monthNames = [
       "Enero",
@@ -253,6 +294,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (inventoryData.length > 0) {
+      console.log(
+        `✅ Inventario obtenido exitosamente: ${inventoryData.length} items`
+      );
+
       return NextResponse.json({
         data: inventoryData,
         failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
@@ -260,6 +305,9 @@ export async function GET(request: NextRequest) {
           pendingItemsSkipped,
           totalProcessedItems: inventoryData.length,
           excludePendingActive: true,
+          requestType: isInternalRequest
+            ? "internal_cron"
+            : "user_authenticated",
         },
       });
     } else if (failedFiles.length > 0) {
