@@ -204,6 +204,23 @@ function validateCronAuth(req: NextRequest): boolean {
   return token === cronSecret;
 }
 
+function isInternalCronRequest(req: NextRequest): boolean {
+  const internalHeader = req.headers.get("x-internal-request");
+  const authHeader = req.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!internalHeader || internalHeader !== "true") {
+    return false;
+  }
+
+  if (!cronSecret || !authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  return token === cronSecret;
+}
+
 async function safeRateLimit(
   req: NextRequest,
   config: { type: "auth" | "api" | "contact" | "cron"; message?: string }
@@ -314,6 +331,10 @@ export default async function middleware(req: NextRequest) {
           { status: 401 }
         );
       }
+      return NextResponse.next();
+    }
+
+    if (isInternalCronRequest(req)) {
       return NextResponse.next();
     }
 

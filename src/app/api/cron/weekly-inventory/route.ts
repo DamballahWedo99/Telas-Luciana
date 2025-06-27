@@ -318,7 +318,14 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const inventoryResponse = await fetch(
-      `${baseUrl}/api/s3/inventario?year=${currentYear}&month=${currentMonth}`
+      `${baseUrl}/api/s3/inventario?year=${currentYear}&month=${currentMonth}`,
+      {
+        headers: {
+          "X-Internal-Request": "true",
+          Authorization: `Bearer ${process.env.CRON_SECRET}`,
+          "Content-Type": "application/json",
+        },
+      }
     );
 
     if (!inventoryResponse.ok) {
