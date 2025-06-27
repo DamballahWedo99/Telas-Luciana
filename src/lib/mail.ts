@@ -181,3 +181,84 @@ export async function sendContactEmail(
     return { error: `Error al enviar correo: ${(error as Error).message}` };
   }
 }
+
+export async function sendInventoryEmail(
+  to: string,
+  csvData: string,
+  pdfBuffer: Buffer,
+  fileName: string
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const currentDate = new Date().toLocaleDateString("es-MX", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "America/Mexico_City",
+    });
+
+    console.log(`📧 Enviando reporte de inventario a: ${to}`);
+
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || "administracion@telasytejidosluciana.com",
+      to: [to],
+      subject: `Reporte de Inventario Semanal - ${currentDate}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">📊 Reporte de Inventario Semanal</h2>
+          <p>Buenos días,</p>
+          <p>Adjunto encontrará el reporte de inventario correspondiente al ${currentDate}.</p>
+          
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #495057; margin-top: 0;">📋 Contenido del reporte:</h3>
+            <ul style="color: #666;">
+              <li><strong>Excel (CSV):</strong> Datos completos del inventario para análisis</li>
+              <li><strong>PDF:</strong> Reporte visual formateado para impresión</li>
+            </ul>
+          </div>
+
+          <div style="background-color: #e7f3ff; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff;">
+            <p style="margin: 0; color: #004085;">
+              <strong>📅 Frecuencia:</strong> Este reporte se genera automáticamente cada viernes a las 8:00 PM
+            </p>
+          </div>
+
+          <p style="margin-top: 30px;">Si tiene alguna pregunta sobre este reporte, no dude en contactarnos.</p>
+          
+          <p>Saludos cordiales,<br>
+          <strong>Sistema de Inventario - Telas y Tejidos Luciana</strong></p>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+          <p style="font-size: 12px; color: #666;">
+            Este es un correo automático generado cada viernes. Para cambios en la configuración, contacte al administrador del sistema.
+          </p>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: `${fileName}.csv`,
+          content: Buffer.from(csvData, "utf8"),
+          contentType: "text/csv",
+        },
+        {
+          filename: `${fileName}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+
+    if (error) {
+      console.error(`❌ Error al enviar reporte de inventario a ${to}:`, error);
+      return {
+        error: `Error al enviar correo: ${error.message || "Error desconocido"}`,
+      };
+    }
+
+    console.log(`✅ Reporte de inventario enviado exitosamente: ${data?.id}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`❌ Error al enviar reporte de inventario a ${to}:`, error);
+    return { error: `Error al enviar correo: ${(error as Error).message}` };
+  }
+}

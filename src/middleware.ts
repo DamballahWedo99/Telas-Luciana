@@ -77,6 +77,8 @@ const publicApiRoutes = [
   "/api/contact",
 ];
 
+const cronApiRoutes = ["/api/cron/weekly-inventory", "/api/cron/scheduler"];
+
 const adminRoutes = ["/dashboard/admin", "/dashboard/settings"];
 
 const adminApiRoutes = [
@@ -100,7 +102,7 @@ const protectedApiRoutes = [
 
 const rateLimitConfig: Record<
   string,
-  { type: "auth" | "api" | "contact"; message?: string }
+  { type: "auth" | "api" | "contact" | "cron"; message?: string }
 > = {
   "/api/auth/forgot-password": {
     type: "auth",
@@ -130,6 +132,16 @@ const rateLimitConfig: Record<
     type: "api",
     message:
       "Demasiadas solicitudes de edición. Espera antes de intentar nuevamente.",
+  },
+  "/api/cron/weekly-inventory": {
+    type: "cron",
+    message:
+      "Demasiadas solicitudes de reporte. Espera antes de intentar nuevamente.",
+  },
+  "/api/cron/scheduler": {
+    type: "cron",
+    message:
+      "Demasiadas solicitudes de scheduler. Espera antes de intentar nuevamente.",
   },
 };
 
@@ -172,13 +184,36 @@ function isPublicApiRoute(pathname: string): boolean {
   return publicApiRoutes.some((route) => pathname.startsWith(route));
 }
 
+function isCronApiRoute(pathname: string): boolean {
+  return cronApiRoutes.some((route) => pathname.startsWith(route));
+}
+
+function validateCronAuth(req: NextRequest): boolean {
+  const authHeader = req.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret) {
+    return false;
+  }
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  return token === cronSecret;
+}
+
 async function safeRateLimit(
   req: NextRequest,
-  config: { type: "auth" | "api" | "contact"; message?: string }
+  config: { type: "auth" | "api" | "contact" | "cron"; message?: string }
 ): Promise<NextResponse | null> {
   try {
     const { rateLimit } = await import("./lib/rate-limit");
-    return await rateLimit(req, config);
+    return await rateLimit(req, {
+      type: config.type,
+      message: config.message,
+    });
   } catch (error) {
     console.error("Rate limiting failed:", error);
     return null;
@@ -187,7 +222,7 @@ async function safeRateLimit(
 
 function needsRateLimit(
   pathname: string
-): { type: "auth" | "api" | "contact"; message?: string } | null {
+): { type: "auth" | "api" | "contact" | "cron"; message?: string } | null {
   for (const [route, config] of Object.entries(rateLimitConfig)) {
     if (pathname.startsWith(route)) {
       return config;
@@ -235,7 +270,11 @@ export default async function middleware(req: NextRequest) {
   const baseUrl = getBaseUrl(req);
 
   try {
-    if (pathname.startsWith("/api/") && !isPublicApiRoute(pathname)) {
+    if (
+      pathname.startsWith("/api/") &&
+      !isPublicApiRoute(pathname) &&
+      !isCronApiRoute(pathname)
+    ) {
       if (isDirectBrowserAccess(req) && !isLegitimateApiRequest(req)) {
         return NextResponse.json(
           {
@@ -265,6 +304,16 @@ export default async function middleware(req: NextRequest) {
     }
 
     if (isPublicApiRoute(pathname)) {
+      return NextResponse.next();
+    }
+
+    if (isCronApiRoute(pathname)) {
+      if (!validateCronAuth(req)) {
+        return NextResponse.json(
+          { error: "Unauthorized", message: "Invalid CRON authentication" },
+          { status: 401 }
+        );
+      }
       return NextResponse.next();
     }
 
