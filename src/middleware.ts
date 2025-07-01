@@ -198,6 +198,14 @@ function isCronApiRoute(pathname: string): boolean {
   return cronApiRoutes.some((route) => pathname.startsWith(route));
 }
 
+function isCronGetRoute(pathname: string, method: string): boolean {
+  return isCronApiRoute(pathname) && method === "GET";
+}
+
+function isCronPostRoute(pathname: string, method: string): boolean {
+  return isCronApiRoute(pathname) && method === "POST";
+}
+
 function isInternalAccessRoute(pathname: string): boolean {
   return internalAccessRoutes.some((route) => pathname.startsWith(route));
 }
@@ -325,7 +333,7 @@ export default async function middleware(req: NextRequest) {
     if (
       pathname.startsWith("/api/") &&
       !isPublicApiRoute(pathname) &&
-      !isCronApiRoute(pathname)
+      !isCronGetRoute(pathname, req.method)
     ) {
       if (isDirectBrowserAccess(req) && !isLegitimateApiRequest(req)) {
         return NextResponse.json(
@@ -359,7 +367,11 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
-    if (isCronApiRoute(pathname)) {
+    if (isCronGetRoute(pathname, req.method)) {
+      return NextResponse.next();
+    }
+
+    if (isCronPostRoute(pathname, req.method)) {
       if (!validateCronAuth(req)) {
         return NextResponse.json(
           { error: "Unauthorized", message: "Invalid CRON authentication" },
