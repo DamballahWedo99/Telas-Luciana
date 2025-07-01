@@ -1156,83 +1156,308 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <div className="flex items-center gap-2">
+              {view === "form" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setView("list")}
+                  className="mr-2 h-8 w-8 p-0 rounded-lg"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              )}
               <Building2 className="h-5 w-5" />
               <div>
-                <DialogTitle>Índice de Clientes</DialogTitle>
+                <DialogTitle>
+                  {view === "list"
+                    ? "Índice de Clientes"
+                    : isEditing
+                      ? "Editar Cliente"
+                      : "Agregar Nuevo Cliente"}
+                </DialogTitle>
                 <DialogDescription>
-                  Directorio completo de clientes y sus datos de contacto
+                  {view === "list"
+                    ? "Directorio completo de clientes y sus datos de contacto"
+                    : isEditing
+                      ? "Actualiza la información del cliente"
+                      : "Crea un nuevo contacto"}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden flex flex-col">
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Buscar por empresa, contacto, vendedor o ubicación..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="p-4 bg-blue-50 rounded-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            {view === "list" ? (
+              <>
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      placeholder="Buscar por empresa, contacto, vendedor o ubicación..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
                   </div>
-                  <p className="text-gray-600 font-medium">
-                    Cargando directorio de clientes...
-                  </p>
                 </div>
-              ) : error ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="p-6 bg-red-50 rounded-full">
-                    <Building2 className="h-12 w-12 text-red-400" />
+
+                <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                  {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-4 bg-blue-50 rounded-full">
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                      </div>
+                      <p className="text-gray-600 font-medium">
+                        Cargando directorio de clientes...
+                      </p>
+                    </div>
+                  ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-6 bg-red-50 rounded-full">
+                        <Building2 className="h-12 w-12 text-red-400" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <h3 className="font-semibold text-gray-900">
+                          Error al cargar clientes
+                        </h3>
+                        <p className="text-sm text-gray-500">{error}</p>
+                        <Button
+                          onClick={loadClientes}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : filteredClientes.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Building2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>No se encontraron clientes</p>
+                    </div>
+                  ) : (
+                    filteredClientes.map((cliente, index) => (
+                      <ClienteCard
+                        key={cliente.fileKey || index}
+                        cliente={cliente}
+                      />
+                    ))
+                  )}
+                </div>
+
+                <div className="mt-4 pt-3 border-t flex justify-end">
+                  <Button
+                    onClick={handleNewCliente}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Agregar Cliente
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label
+                        htmlFor="empresa"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Empresa *
+                      </Label>
+                      <Input
+                        id="empresa"
+                        placeholder="Ej: Textiles González"
+                        value={clienteForm.empresa}
+                        onChange={(e) =>
+                          handleInputChange("empresa", e.target.value)
+                        }
+                        className={`mt-1.5 ${formErrors.empresa ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                      />
+                      {formErrors.empresa && (
+                        <p className="text-red-500 text-xs mt-1.5">
+                          {formErrors.empresa}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label
+                        htmlFor="contacto"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Contacto
+                      </Label>
+                      <Input
+                        id="contacto"
+                        placeholder="Ej: María González"
+                        value={clienteForm.contacto}
+                        onChange={(e) =>
+                          handleInputChange("contacto", e.target.value)
+                        }
+                        className={`mt-1.5 ${formErrors.contacto ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                      />
+                      {formErrors.contacto && (
+                        <p className="text-red-500 text-xs mt-1.5">
+                          {formErrors.contacto}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label
+                        htmlFor="direccion"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Dirección
+                      </Label>
+                      <Input
+                        id="direccion"
+                        placeholder="Ej: Av. Insurgentes Sur 1234"
+                        value={clienteForm.direccion}
+                        onChange={(e) =>
+                          handleInputChange("direccion", e.target.value)
+                        }
+                        className={`mt-1.5 ${formErrors.direccion ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                      />
+                      {formErrors.direccion && (
+                        <p className="text-red-500 text-xs mt-1.5">
+                          {formErrors.direccion}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label
+                        htmlFor="telefono"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Teléfono
+                      </Label>
+                      <Input
+                        id="telefono"
+                        placeholder="Ej: 5512345678"
+                        value={clienteForm.telefono}
+                        onChange={(e) =>
+                          handleInputChange("telefono", e.target.value)
+                        }
+                        className={`mt-1.5 ${formErrors.telefono ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                      />
+                      {formErrors.telefono && (
+                        <p className="text-red-500 text-xs mt-1.5">
+                          {formErrors.telefono}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label
+                        htmlFor="email"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Email *
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="Ej: maria@textilesgonzalez.com"
+                        value={clienteForm.email}
+                        onChange={(e) =>
+                          handleInputChange("email", e.target.value)
+                        }
+                        className={`mt-1.5 ${formErrors.email ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                      />
+                      {formErrors.email && (
+                        <p className="text-red-500 text-xs mt-1.5">
+                          {formErrors.email}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label
+                        htmlFor="ubicacion"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Ubicación
+                      </Label>
+                      <Input
+                        id="ubicacion"
+                        placeholder="Ej: CDMX, Mérida, Guadalajara..."
+                        value={clienteForm.ubicacion}
+                        onChange={(e) =>
+                          handleInputChange("ubicacion", e.target.value)
+                        }
+                        className={`mt-1.5 ${formErrors.ubicacion ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                      />
+                      {formErrors.ubicacion && (
+                        <p className="text-red-500 text-xs mt-1.5">
+                          {formErrors.ubicacion}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-center space-y-2">
-                    <h3 className="font-semibold text-gray-900">
-                      Error al cargar clientes
-                    </h3>
-                    <p className="text-sm text-gray-500">{error}</p>
-                    <Button
-                      onClick={loadClientes}
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
+
+                  <div>
+                    <Label
+                      htmlFor="comentarios"
+                      className="text-sm font-medium text-gray-700"
                     >
-                      Reintentar
-                    </Button>
+                      Comentarios
+                    </Label>
+                    <Textarea
+                      id="comentarios"
+                      placeholder="Ej: Cliente preferencial, requiere atención especial..."
+                      value={clienteForm.comentarios}
+                      onChange={(e) =>
+                        handleInputChange("comentarios", e.target.value)
+                      }
+                      className={`mt-1.5 min-h-[80px] resize-none ${formErrors.comentarios ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.comentarios && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.comentarios}
+                      </p>
+                    )}
                   </div>
                 </div>
-              ) : filteredClientes.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Building2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No se encontraron clientes</p>
-                </div>
-              ) : (
-                filteredClientes.map((cliente, index) => (
-                  <ClienteCard
-                    key={cliente.fileKey || index}
-                    cliente={cliente}
-                  />
-                ))
-              )}
-            </div>
 
-            <div className="mt-4 pt-3 border-t flex justify-end">
-              <Button
-                onClick={handleNewCliente}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar Cliente
-              </Button>
-            </div>
+                <div className="mt-4 pt-3 border-t flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancel}
+                    disabled={isSubmitting}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSubmitCliente}
+                    disabled={isSubmitting}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {isEditing ? "Actualizando..." : "Creando..."}
+                      </>
+                    ) : (
+                      <>
+                        {isEditing ? (
+                          <Edit className="mr-2 h-4 w-4" />
+                        ) : (
+                          <Plus className="mr-2 h-4 w-4" />
+                        )}
+                        {isEditing ? "Actualizar" : "Crear"}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>

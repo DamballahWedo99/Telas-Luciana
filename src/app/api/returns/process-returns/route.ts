@@ -213,23 +213,35 @@ const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
       }
     }
 
+    // Campos especiales que deben preservarse incluso si son null
+    const fieldsToPreserve = [
+      "Importacion",
+      "FacturaDragonAzteca",
+      "created_from",
+    ];
+
+    // Procesar todos los demás campos
     Object.keys(rawItem).forEach((key) => {
-      if (
-        ![
-          "OC",
-          "Tela",
-          "Color",
-          "Cantidad",
-          "Costo",
-          "Total",
-          "Unidades",
-          "CDMX",
-          "MID",
-        ].includes(key) &&
-        rawItem[key] !== undefined &&
-        rawItem[key] !== null
-      ) {
-        item[key] = rawItem[key];
+      const skipFields = [
+        "OC",
+        "Tela",
+        "Color",
+        "Cantidad",
+        "Costo",
+        "Total",
+        "Unidades",
+        "CDMX",
+        "MID",
+      ];
+
+      if (!skipFields.includes(key)) {
+        if (fieldsToPreserve.includes(key)) {
+          // Preservar estos campos incluso si son null
+          item[key] = rawItem[key];
+        } else if (rawItem[key] !== undefined && rawItem[key] !== null) {
+          // Para otros campos, mantener la lógica original
+          item[key] = rawItem[key];
+        }
       }
     });
 
@@ -322,6 +334,7 @@ const findItemInFile = async (
 const reorderItemFields = (item: InventoryItem): InventoryItem => {
   const orderedItem: Record<string, unknown> = {};
 
+  // Campos principales en orden específico
   if (item.OC !== undefined) orderedItem.OC = item.OC;
   if (item.Tela !== undefined) orderedItem.Tela = item.Tela;
   if (item.Color !== undefined) orderedItem.Color = item.Color;
@@ -332,13 +345,42 @@ const reorderItemFields = (item: InventoryItem): InventoryItem => {
   if (item.MID !== undefined) orderedItem.MID = item.MID;
   if (item.Total !== undefined) orderedItem.Total = item.Total;
 
+  // Campos especiales que deben preservarse incluso si son null
+  const fieldsToPreserve = [
+    "Importacion",
+    "FacturaDragonAzteca",
+    "created_from",
+  ];
+
+  // Agregar campos especiales que deben preservarse
+  fieldsToPreserve.forEach((field) => {
+    if (item.hasOwnProperty(field)) {
+      orderedItem[field] = item[field];
+    }
+  });
+
+  // Agregar el resto de campos (excluyendo los ya procesados y los campos temporales)
+  const processedFields = [
+    "OC",
+    "Tela",
+    "Color",
+    "Costo",
+    "Cantidad",
+    "Unidades",
+    "CDMX",
+    "MID",
+    "Total",
+    ...fieldsToPreserve,
+  ];
+
+  const excludedFields = ["lastModified", "status", "Ubicacion", "almacen"];
+
   Object.keys(item).forEach((key) => {
     if (
-      !orderedItem.hasOwnProperty(key) &&
-      !["lastModified", "status", "Ubicacion", "almacen"].includes(key) &&
+      !processedFields.includes(key) &&
+      !excludedFields.includes(key) &&
       item[key] !== undefined &&
-      item[key] !== null &&
-      item[key] !== ""
+      item[key] !== "" // Mantener la exclusión de strings vacíos pero permitir null
     ) {
       orderedItem[key] = item[key];
     }

@@ -42,13 +42,16 @@ export const KeyMetricsSection: React.FC<KeyMetricsSectionProps> = ({
       const matchesUbicacion =
         ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
 
+      const hasValidQuantity = item.Cantidad > 0;
+
       return (
         matchesSearch &&
         matchesUnit &&
         matchesOC &&
         matchesTela &&
         matchesColor &&
-        matchesUbicacion
+        matchesUbicacion &&
+        hasValidQuantity
       );
     });
 
