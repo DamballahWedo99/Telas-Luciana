@@ -1,0 +1,51 @@
+name: 📊 Weekly Inventory Report
+
+on:
+  schedule:
+    - cron: "0 1 * 3-10 6"
+    - cron: "0 2 * 11,12,1,2 6"
+  workflow_dispatch:
+
+env:
+  API_URL: "https://telasytejidosluciana.com"
+
+jobs:
+  weekly-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📊 Ejecutar reporte de inventario semanal
+        run: |
+          echo "📊 Ejecutando reporte de inventario semanal..."
+
+          # Ejecutar directamente el reporte de inventario
+          inventory_response=$(curl -s --max-time 60 -w "HTTPSTATUS:%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            "${{ env.API_URL }}/api/cron/weekly-inventory")
+
+          # Extraer código HTTP y body
+          inventory_code=$(echo $inventory_response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          inventory_body=$(echo $inventory_response | sed -e 's/HTTPSTATUS:.*//g')
+
+          echo "📋 Inventory HTTP Status: $inventory_code"
+          echo "📋 Inventory Response: $inventory_body"
+
+          if [ "$inventory_code" = "200" ]; then
+            echo "✅ Reporte de inventario generado y enviado exitosamente"
+          else
+            echo "❌ Error: Reporte de inventario falló con código $inventory_code"
+            echo "📋 Error details: $inventory_body"
+            exit 1
+          fi
+
+      - name: 📈 Resumen de la ejecución
+        if: always()
+        run: |
+          echo "📊 === RESUMEN DE REPORTE SEMANAL ==="
+          echo "🕐 Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "📧 Reporte enviado: $([ $? -eq 0 ] && echo "Sí" || echo "No")"
+          echo "🎯 Próximo reporte: Viernes a las 8:00 PM CDMX"
+          echo "=================================="
