@@ -73,6 +73,7 @@ interface Cliente {
   ubicacion: string;
   comentarios: string;
   fileKey?: string;
+  _optimistic?: boolean;
 }
 
 interface ClientesDialogProps {
@@ -154,6 +155,80 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     }
   };
 
+  const generateOptimisticFileKey = (empresa: string): string => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const empresaSlug = empresa
+      .replace(/\s+/g, "_")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "");
+    return `Directorio/Main/optimistic_${empresaSlug}_${timestamp}.json`;
+  };
+
+  const addClienteOptimistic = (
+    clienteData: CreateClienteFormValues
+  ): Cliente => {
+    const optimisticCliente: Cliente = {
+      empresa: clienteData.empresa,
+      contacto: clienteData.contacto || "",
+      direccion: clienteData.direccion || "",
+      telefono: clienteData.telefono || "",
+      email: clienteData.email,
+      vendedor: clienteData.vendedor || "",
+      ubicacion: clienteData.ubicacion || "",
+      comentarios: clienteData.comentarios || "",
+      fileKey: generateOptimisticFileKey(clienteData.empresa),
+      _optimistic: true,
+    };
+
+    setClientes((prev) => [optimisticCliente, ...prev]);
+    return optimisticCliente;
+  };
+
+  const updateClienteOptimistic = (
+    oldCliente: Cliente,
+    newData: CreateClienteFormValues
+  ): void => {
+    setClientes((prev) =>
+      prev.map((cliente) =>
+        cliente.fileKey === oldCliente.fileKey
+          ? {
+              empresa: newData.empresa,
+              contacto: newData.contacto || "",
+              direccion: newData.direccion || "",
+              telefono: newData.telefono || "",
+              email: newData.email,
+              vendedor: newData.vendedor || "",
+              ubicacion: newData.ubicacion || "",
+              comentarios: newData.comentarios || "",
+              fileKey: oldCliente.fileKey,
+              _optimistic: true,
+            }
+          : cliente
+      )
+    );
+  };
+
+  const removeClienteOptimistic = (clienteToRemove: Cliente): void => {
+    setClientes((prev) =>
+      prev.filter((cliente) => cliente.fileKey !== clienteToRemove.fileKey)
+    );
+  };
+
+  const revertOptimisticChange = (originalClientes: Cliente[]): void => {
+    setClientes(originalClientes);
+  };
+
+  const replaceOptimisticClient = (
+    optimisticFileKey: string,
+    realCliente: Cliente
+  ): void => {
+    setClientes((prev) =>
+      prev.map((cliente) =>
+        cliente.fileKey === optimisticFileKey ? realCliente : cliente
+      )
+    );
+  };
+
   const handleInputChange = (
     field: keyof CreateClienteFormValues,
     value: string
@@ -196,9 +271,17 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     }
 
     setIsSubmitting(true);
+    const isEditing = editingCliente !== null;
+    const originalClientes = [...clientes];
+    let optimisticCliente: Cliente | null = null;
 
     try {
-      const isEditing = editingCliente !== null;
+      if (isEditing) {
+        updateClienteOptimistic(editingCliente, clienteForm);
+      } else {
+        optimisticCliente = addClienteOptimistic(clienteForm);
+      }
+
       const url = "/api/s3/clientes";
       const method = isEditing ? "PUT" : "POST";
       const body = isEditing
@@ -221,15 +304,35 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
         );
       }
 
+      const responseData = await response.json();
+
+      if (!isEditing && optimisticCliente && responseData.data?.cliente) {
+        const realCliente: Cliente = {
+          ...responseData.data.cliente,
+          fileKey: responseData.data.fileKey,
+        };
+        replaceOptimisticClient(optimisticCliente.fileKey!, realCliente);
+      } else if (isEditing) {
+        setClientes((prev) =>
+          prev.map((cliente) =>
+            cliente.fileKey === editingCliente.fileKey
+              ? { ...cliente, _optimistic: false }
+              : cliente
+          )
+        );
+      }
+
       toast.success(
         `Cliente ${isEditing ? "actualizado" : "creado"} exitosamente`
       );
 
       resetForm();
       setView("list");
-      await loadClientes();
     } catch (error) {
       console.error("Error submitting cliente:", error);
+
+      revertOptimisticChange(originalClientes);
+
       toast.error(
         error instanceof Error
           ? error.message
@@ -286,8 +389,12 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     }
 
     setIsDeleting(true);
+    const originalClientes = [...clientes];
 
     try {
+      removeClienteOptimistic(clienteToDelete);
+      setDeleteDialogOpen(false);
+
       const response = await fetch("/api/s3/clientes", {
         method: "DELETE",
         headers: {
@@ -302,11 +409,13 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       }
 
       toast.success("Cliente eliminado exitosamente");
-      setDeleteDialogOpen(false);
       setClienteToDelete(null);
-      await loadClientes();
     } catch (error) {
       console.error("Error deleting cliente:", error);
+
+      revertOptimisticChange(originalClientes);
+      setDeleteDialogOpen(true);
+
       toast.error(
         error instanceof Error ? error.message : "Error al eliminar el cliente"
       );
@@ -410,19 +519,29 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     isMobileVersion?: boolean;
   }) => {
     const canEdit = canEditCliente(cliente);
+    const isOptimistic = cliente._optimistic;
 
     if (isMobileVersion) {
       return (
-        <Card className="bg-white border shadow-sm">
+        <Card
+          className={`bg-white border shadow-sm ${isOptimistic ? "opacity-75 border-dashed border-blue-300" : ""}`}
+        >
           <CardHeader className="pb-3">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-blue-50 rounded-lg flex-shrink-0">
                 <Building2 className="h-5 w-5 text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-gray-900 text-base leading-tight mb-1">
-                  {cliente.empresa}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900 text-base leading-tight mb-1">
+                    {cliente.empresa}
+                  </h3>
+                  {isOptimistic && (
+                    <div className="flex items-center">
+                      <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                    </div>
+                  )}
+                </div>
                 {cliente.contacto && (
                   <div className="flex items-center gap-2 text-gray-600">
                     <User className="h-4 w-4 flex-shrink-0" />
@@ -431,7 +550,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                 )}
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                {canEdit && (
+                {canEdit && !isOptimistic && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -441,7 +560,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                     <Edit className="h-4 w-4" />
                   </Button>
                 )}
-                {canDeleteClients && (
+                {canDeleteClients && !isOptimistic && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -519,7 +638,9 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     }
 
     return (
-      <Card className="bg-white border shadow-sm">
+      <Card
+        className={`bg-white border shadow-sm ${isOptimistic ? "opacity-75 border-dashed border-blue-300" : ""}`}
+      >
         <CardContent className="p-4">
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-4 flex-1">
@@ -532,9 +653,14 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
               <div className="flex-1 min-w-0">
                 <div className="mb-3">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold text-gray-900 text-base">
-                      {cliente.empresa}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 text-base">
+                        {cliente.empresa}
+                      </h3>
+                      {isOptimistic && (
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                      )}
+                    </div>
                     <div className="flex gap-2 flex-wrap">
                       {cliente.vendedor && (
                         <Badge className={getVendedorColor(cliente.vendedor)}>
@@ -600,7 +726,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
 
             <div className="flex-shrink-0 ml-4">
               <div className="flex gap-1">
-                {canEdit && (
+                {canEdit && !isOptimistic && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -611,7 +737,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                     <Edit className="h-4 w-4" />
                   </Button>
                 )}
-                {canDeleteClients && (
+                {canDeleteClients && !isOptimistic && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -719,7 +845,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                     <div className="space-y-3 flex-1 overflow-y-auto px-1">
                       {filteredClientes.map((cliente, index) => (
                         <ClienteCard
-                          key={index}
+                          key={cliente.fileKey || index}
                           cliente={cliente}
                           isMobileVersion={true}
                         />
@@ -1090,7 +1216,10 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                 </div>
               ) : (
                 filteredClientes.map((cliente, index) => (
-                  <ClienteCard key={index} cliente={cliente} />
+                  <ClienteCard
+                    key={cliente.fileKey || index}
+                    cliente={cliente}
+                  />
                 ))
               )}
             </div>

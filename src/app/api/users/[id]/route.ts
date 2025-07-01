@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { InventoryCache } from "@/lib/inventory-cache";
+import { invalidateCachePattern } from "@/lib/cache-middleware";
 
 export async function DELETE(
   request: NextRequest,
@@ -84,6 +86,11 @@ export async function DELETE(
       where: { id: userId },
     });
 
+    await Promise.all([
+      InventoryCache.invalidateUserCache(userId),
+      invalidateCachePattern("cache:api:users*"),
+    ]);
+
     console.log(
       `[USER-DELETE] User ${session.user.email} deleted user ${userToDelete.email}`
     );
@@ -91,11 +98,17 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       message: "Usuario eliminado correctamente",
+      cache: {
+        invalidated: true,
+        warming: "initiated",
+      },
     });
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Error desconocido";
     console.error("Error eliminando usuario:", error);
     return NextResponse.json(
-      { error: "Error al eliminar el usuario" },
+      { error: "Error al eliminar el usuario", details: errorMessage },
       { status: 500 }
     );
   }

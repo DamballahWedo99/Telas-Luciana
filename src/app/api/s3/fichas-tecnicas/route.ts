@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { withCache } from "@/lib/cache-middleware";
 import {
   S3Client,
   ListObjectsV2Command,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
+import { CACHE_TTL } from "@/lib/redis";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -15,7 +17,31 @@ const s3Client = new S3Client({
   },
 });
 
-export async function GET(request: NextRequest) {
+function isInternalRequest(request: NextRequest): boolean {
+  const internalHeaders = [
+    request.headers.get("x-internal-request"),
+    request.headers.get("X-Internal-Request"),
+    request.headers.get("X-INTERNAL-REQUEST"),
+  ];
+
+  const hasInternalHeader = internalHeaders.some((header) => header === "true");
+
+  if (!hasInternalHeader) {
+    return false;
+  }
+
+  const authHeader = request.headers.get("authorization");
+  const internalSecret = process.env.CRON_SECRET;
+
+  if (!internalSecret || !authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  return token === internalSecret;
+}
+
+async function getFichasTecnicasData(request: NextRequest) {
   const startTime = Date.now();
 
   try {
@@ -29,12 +55,17 @@ export async function GET(request: NextRequest) {
       return rateLimitResult;
     }
 
-    const session = await auth();
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    const isInternal = isInternalRequest(request);
+
+    if (!isInternal) {
+      const session = await auth();
+      if (!session || !session.user) {
+        return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      }
     }
 
-    const userRole = session.user.role || "seller";
+    const session = await auth();
+    const userRole = session?.user?.role || "seller";
 
     const command = new ListObjectsV2Command({
       Bucket: "telas-luciana",
@@ -47,10 +78,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ fichas: [] });
     }
 
+    const pdfFiles = response.Contents.filter(
+      (obj) => obj.Key && obj.Key.endsWith(".pdf")
+    );
+
     const fichas = await Promise.all(
-      response.Contents.filter(
-        (obj) => obj.Key && obj.Key.endsWith(".pdf")
-      ).map(async (obj) => {
+      pdfFiles.map(async (obj) => {
         let allowedRoles = ["major_admin"];
 
         try {
@@ -61,18 +94,10 @@ export async function GET(request: NextRequest) {
 
           const headResponse = await s3Client.send(headCommand);
 
-          console.log(`[FICHAS-DEBUG] File: ${obj.Key}`, {
-            metadata: headResponse.Metadata,
-            allowedroles: headResponse.Metadata?.allowedroles,
-          });
-
           if (headResponse.Metadata?.allowedroles) {
             allowedRoles = headResponse.Metadata.allowedroles
               .split("-")
               .filter((role) => role.trim() !== "");
-            console.log(
-              `[FICHAS-DEBUG] Roles from metadata: ${allowedRoles.join(", ")}`
-            );
           } else {
             if (obj.Key && obj.Key.includes("_roles_")) {
               const rolesMatch = obj.Key.match(/_roles_([^._]+)/);
@@ -80,40 +105,24 @@ export async function GET(request: NextRequest) {
                 allowedRoles = rolesMatch[1]
                   .split("-")
                   .filter((role) => role.trim() !== "");
-                console.log(
-                  `[FICHAS-DEBUG] Roles from filename: ${allowedRoles.join(", ")}`
-                );
               }
             } else {
-              console.log(
-                `[FICHAS-DEBUG] No metadata and no roles in filename for ${obj.Key}, using default: major_admin`
-              );
+              allowedRoles = ["major_admin", "admin", "seller"];
             }
           }
-        } catch (error) {
-          console.error(
-            `[FICHAS-DEBUG] Error getting metadata for ${obj.Key}:`,
-            error
-          );
-
+        } catch {
           if (obj.Key && obj.Key.includes("_roles_")) {
             const rolesMatch = obj.Key.match(/_roles_([^._]+)/);
             if (rolesMatch && rolesMatch[1]) {
               allowedRoles = rolesMatch[1]
                 .split("-")
                 .filter((role) => role.trim() !== "");
-              console.log(
-                `[FICHAS-DEBUG] Fallback roles from filename: ${allowedRoles.join(", ")}`
-              );
             }
           }
         }
 
         if (allowedRoles.length === 0) {
           allowedRoles = ["major_admin"];
-          console.log(
-            `[FICHAS-DEBUG] Empty roles detected for ${obj.Key}, defaulting to major_admin`
-          );
         }
 
         const cleanName = obj
@@ -131,40 +140,35 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    const filteredFichas = fichas.filter((ficha) => {
-      let canAccess = false;
+    const finalFichas = isInternal
+      ? fichas
+      : fichas.filter((ficha) => {
+          let canAccess = false;
 
-      if (userRole === "major_admin") {
-        canAccess = true;
-      } else if (userRole === "admin") {
-        canAccess =
-          ficha.allowedRoles.includes("admin") ||
-          ficha.allowedRoles.includes("major_admin");
-      } else if (userRole === "seller") {
-        canAccess = ficha.allowedRoles.includes("seller");
-      }
+          if (userRole === "major_admin") {
+            canAccess = true;
+          } else if (userRole === "admin") {
+            canAccess =
+              ficha.allowedRoles.includes("admin") ||
+              ficha.allowedRoles.includes("major_admin");
+          } else if (userRole === "seller") {
+            canAccess = ficha.allowedRoles.includes("seller");
+          }
 
-      console.log(`[FICHAS-DEBUG] Access check for ${ficha.name}:`, {
-        userRole,
-        allowedRoles: ficha.allowedRoles,
-        canAccess,
-      });
-
-      return canAccess;
-    });
+          return canAccess;
+        });
 
     const duration = Date.now() - startTime;
 
-    console.log(`[FICHAS-TECNICAS] User ${session.user.email} listed fichas:`, {
-      totalFichas: fichas.length,
-      filteredFichas: filteredFichas.length,
-      userRole,
-      duration: `${duration}ms`,
-    });
-
     return NextResponse.json({
-      fichas: filteredFichas,
+      fichas: finalFichas,
       duration: `${duration}ms`,
+      debug: {
+        totalFichas: fichas.length,
+        filteredFichas: finalFichas.length,
+        userRole,
+        isInternal,
+      },
     });
   } catch (error) {
     const duration = Date.now() - startTime;
@@ -179,3 +183,16 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+const getCachedFichasTecnicas = withCache(getFichasTecnicasData, {
+  keyPrefix: "api:s3:fichas-tecnicas",
+  ttl: CACHE_TTL.FICHAS_TECNICAS,
+  skipCache: (req) => {
+    const url = new URL(req.url);
+    return url.searchParams.get("refresh") === "true";
+  },
+  onCacheHit: (key) => console.log(`📦 Cache HIT - Fichas Técnicas: ${key}`),
+  onCacheMiss: (key) => console.log(`💾 Cache MISS - Fichas Técnicas: ${key}`),
+});
+
+export { getCachedFichasTecnicas as GET };

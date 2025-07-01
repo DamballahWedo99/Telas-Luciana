@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { invalidateCachePattern } from "@/lib/cache-middleware";
 
 const s3Client = new S3Client({
   region: process.env.S3_REGION!,
@@ -1046,6 +1047,13 @@ export async function POST(request: NextRequest) {
           returnData,
           session.user.email || session.user.name || ""
         );
+
+        await Promise.all([
+          invalidateCachePattern("cache:api:s3:sold-rolls*"),
+          invalidateCachePattern("cache:api:s3:inventario*"),
+        ]);
+
+        console.log("🗑️ Cache invalidado después de procesar devolución");
       } catch (historyError) {
         console.error("Error actualizando historial:", historyError);
       }
@@ -1072,6 +1080,10 @@ export async function POST(request: NextRequest) {
         historyUpdates: results.historyUpdates,
         manualSales: manualSalesCount,
         rollSales: rollSalesCount,
+      },
+      cache: {
+        invalidated: results.successful.length > 0,
+        patterns: ["sold-rolls", "inventario"],
       },
     };
 

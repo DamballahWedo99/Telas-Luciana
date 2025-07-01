@@ -67,6 +67,7 @@ interface FichaTecnica {
   size: number;
   lastModified: string;
   allowedRoles: string[];
+  _optimistic?: boolean;
 }
 
 interface UploadFormData {
@@ -148,6 +149,76 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
   const userRole = session?.user?.role;
   const isSeller = userRole === "seller";
   const isAdmin = userRole === "admin" || userRole === "major_admin";
+
+  const generateOptimisticKey = (fileName: string): string => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const sanitizedFileName = fileName
+      .replace(/\s+/g, "_")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "");
+    return `Inventario/Fichas Tecnicas/optimistic_${sanitizedFileName}_${timestamp}.pdf`;
+  };
+
+  const addFichaOptimistic = (uploadData: UploadFormData): FichaTecnica => {
+    const allowedRoles =
+      uploadData.tipoPermiso === "admin"
+        ? ["major_admin", "admin"]
+        : ["major_admin", "admin", "seller"];
+
+    const optimisticFicha: FichaTecnica = {
+      key: generateOptimisticKey(uploadData.fileName),
+      name: uploadData.fileName,
+      size: uploadData.archivo?.size || 0,
+      lastModified: new Date().toISOString(),
+      allowedRoles,
+      _optimistic: true,
+    };
+
+    setFichas((prev) => [optimisticFicha, ...prev]);
+    return optimisticFicha;
+  };
+
+  const updateFichaOptimistic = (
+    oldFicha: FichaTecnica,
+    newData: { fileName: string; tipoPermiso: "admin" | "todos" }
+  ): void => {
+    const allowedRoles =
+      newData.tipoPermiso === "admin"
+        ? ["major_admin", "admin"]
+        : ["major_admin", "admin", "seller"];
+
+    setFichas((prev) =>
+      prev.map((ficha) =>
+        ficha.key === oldFicha.key
+          ? {
+              ...ficha,
+              name: newData.fileName,
+              allowedRoles,
+              _optimistic: true,
+            }
+          : ficha
+      )
+    );
+  };
+
+  const removeFichaOptimistic = (fichaToRemove: FichaTecnica): void => {
+    setFichas((prev) =>
+      prev.filter((ficha) => ficha.key !== fichaToRemove.key)
+    );
+  };
+
+  const revertOptimisticChange = (originalFichas: FichaTecnica[]): void => {
+    setFichas(originalFichas);
+  };
+
+  const replaceOptimisticFicha = (
+    optimisticKey: string,
+    realFicha: FichaTecnica
+  ): void => {
+    setFichas((prev) =>
+      prev.map((ficha) => (ficha.key === optimisticKey ? realFicha : ficha))
+    );
+  };
 
   const filteredFichas = useMemo(() => {
     if (!searchQuery.trim()) return fichas;
@@ -245,8 +316,12 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
     if (!fichaToDelete) return;
 
     setDeletingId(fichaToDelete.key);
+    const originalFichas = [...fichas];
 
     try {
+      removeFichaOptimistic(fichaToDelete);
+      setDeleteDialogOpen(false);
+
       const response = await fetch(
         `/api/s3/fichas-tecnicas/delete?key=${encodeURIComponent(
           fichaToDelete.key
@@ -264,8 +339,6 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
       }
 
       toast.success("Ficha técnica eliminada exitosamente");
-      await loadFichas();
-      setDeleteDialogOpen(false);
       setFichaToDelete(null);
 
       setTimeout(() => {
@@ -273,6 +346,10 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
       }, 100);
     } catch (error) {
       console.error("Error deleting ficha técnica:", error);
+
+      revertOptimisticChange(originalFichas);
+      setDeleteDialogOpen(true);
+
       toast.error(
         error instanceof Error
           ? error.message
@@ -318,8 +395,11 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
     }
 
     setEditingId(fichaToEdit.key);
+    const originalFichas = [...fichas];
 
     try {
+      updateFichaOptimistic(fichaToEdit, editForm);
+
       const allowedRoles =
         editForm.tipoPermiso === "admin"
           ? ["major_admin", "admin"]
@@ -342,8 +422,27 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
         throw new Error(errorData.error || "Error al editar la ficha técnica");
       }
 
+      const responseData = await response.json();
+
+      if (responseData.newKey && responseData.newKey !== fichaToEdit.key) {
+        setFichas((prev) =>
+          prev.map((ficha) =>
+            ficha.key === fichaToEdit.key
+              ? { ...ficha, key: responseData.newKey, _optimistic: false }
+              : ficha
+          )
+        );
+      } else {
+        setFichas((prev) =>
+          prev.map((ficha) =>
+            ficha.key === fichaToEdit.key
+              ? { ...ficha, _optimistic: false }
+              : ficha
+          )
+        );
+      }
+
       toast.success("Ficha técnica editada exitosamente");
-      await loadFichas();
       setEditDialogOpen(false);
       setFichaToEdit(null);
       setEditForm({ fileName: "", tipoPermiso: "admin" });
@@ -353,6 +452,9 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
       }, 100);
     } catch (error) {
       console.error("Error editing ficha técnica:", error);
+
+      revertOptimisticChange(originalFichas);
+
       toast.error(
         error instanceof Error
           ? error.message
@@ -375,8 +477,11 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
     }
 
     setIsLoading(true);
+    let optimisticFicha: FichaTecnica | null = null;
 
     try {
+      optimisticFicha = addFichaOptimistic(uploadForm);
+
       const allowedRoles =
         uploadForm.tipoPermiso === "admin"
           ? ["major_admin", "admin"]
@@ -397,6 +502,19 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
         throw new Error(errorData.error || "Error al subir la ficha técnica");
       }
 
+      const responseData = await response.json();
+
+      if (optimisticFicha && responseData.key) {
+        const realFicha: FichaTecnica = {
+          key: responseData.key,
+          name: responseData.fileName || uploadForm.fileName,
+          size: uploadForm.archivo.size,
+          lastModified: new Date().toISOString(),
+          allowedRoles,
+        };
+        replaceOptimisticFicha(optimisticFicha.key, realFicha);
+      }
+
       toast.success("Ficha técnica subida exitosamente");
 
       setUploadForm({
@@ -406,9 +524,13 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
       });
 
       setShowUploadForm(false);
-      await loadFichas();
     } catch (error) {
       console.error("Error uploading ficha técnica:", error);
+
+      if (optimisticFicha) {
+        removeFichaOptimistic(optimisticFicha);
+      }
+
       toast.error(
         error instanceof Error
           ? error.message
@@ -455,106 +577,117 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
   }: {
     ficha: FichaTecnica;
     showAdminControls?: boolean;
-  }) => (
-    <div className="group relative bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-      <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0"></div>
+  }) => {
+    const isOptimistic = ficha._optimistic;
 
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 text-sm leading-5 mb-4 line-clamp-2">
-            {ficha.name}
-          </h3>
+    return (
+      <div
+        className={`group relative bg-white border border-gray-200 rounded-2xl p-6 shadow-sm ${isOptimistic ? "opacity-75 border-dashed border-blue-300" : ""}`}
+      >
+        <div className="flex items-start space-x-4">
+          <div className="flex-shrink-0"></div>
 
-          <div className="flex items-center space-x-4 text-xs text-gray-500 mb-5">
-            <div className="flex items-center space-x-1">
-              <HardDrive className="h-3 w-3" />
-              <span>{formatFileSize(ficha.size)}</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Calendar className="h-3 w-3" />
-              <span>
-                {new Date(ficha.lastModified).toLocaleDateString("es-ES", {
-                  day: "numeric",
-                  month: "short",
-                })}
-              </span>
-            </div>
-          </div>
-
-          {showAdminControls && (
-            <div className="mb-4">
-              <Badge
-                variant={
-                  getPermisoLabel(ficha.allowedRoles) === "Todos los usuarios"
-                    ? "default"
-                    : "secondary"
-                }
-                className="text-xs"
-              >
-                {getPermisoLabel(ficha.allowedRoles)}
-              </Badge>
-            </div>
-          )}
-
-          <div className={`${showAdminControls ? "flex space-x-2" : ""}`}>
-            <Button
-              onClick={() => handleDownload(ficha.key)}
-              disabled={downloadingId === ficha.key}
-              className={`${
-                showAdminControls ? "flex-1" : "w-full"
-              } bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl h-10 text-sm font-medium shadow-sm`}
-            >
-              {downloadingId === ficha.key ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Descargando...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Descargar
-                </>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="font-semibold text-gray-900 text-sm leading-5 line-clamp-2">
+                {ficha.name}
+              </h3>
+              {isOptimistic && (
+                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
               )}
-            </Button>
+            </div>
+
+            <div className="flex items-center space-x-4 text-xs text-gray-500 mb-5">
+              <div className="flex items-center space-x-1">
+                <HardDrive className="h-3 w-3" />
+                <span>{formatFileSize(ficha.size)}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Calendar className="h-3 w-3" />
+                <span>
+                  {new Date(ficha.lastModified).toLocaleDateString("es-ES", {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </span>
+              </div>
+            </div>
 
             {showAdminControls && (
-              <>
-                <Button
-                  onClick={() => handleEditFicha(ficha)}
-                  disabled={editingId === ficha.key}
-                  variant="outline"
-                  size="icon"
-                  className="rounded-xl h-10 w-10"
+              <div className="mb-4">
+                <Badge
+                  variant={
+                    getPermisoLabel(ficha.allowedRoles) === "Todos los usuarios"
+                      ? "default"
+                      : "secondary"
+                  }
+                  className="text-xs"
                 >
-                  {editingId === ficha.key ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Edit className="h-4 w-4" />
-                  )}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setFichaToDelete(ficha);
-                    setDeleteDialogOpen(true);
-                  }}
-                  disabled={deletingId === ficha.key}
-                  variant="destructive"
-                  size="icon"
-                  className="rounded-xl h-10 w-10"
-                >
-                  {deletingId === ficha.key ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                </Button>
-              </>
+                  {getPermisoLabel(ficha.allowedRoles)}
+                </Badge>
+              </div>
             )}
+
+            <div className={`${showAdminControls ? "flex space-x-2" : ""}`}>
+              <Button
+                onClick={() => handleDownload(ficha.key)}
+                disabled={downloadingId === ficha.key || isOptimistic}
+                className={`${
+                  showAdminControls ? "flex-1" : "w-full"
+                } bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl h-10 text-sm font-medium shadow-sm`}
+              >
+                {downloadingId === ficha.key ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Descargando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Descargar
+                  </>
+                )}
+              </Button>
+
+              {showAdminControls && (
+                <>
+                  <Button
+                    onClick={() => handleEditFicha(ficha)}
+                    disabled={editingId === ficha.key || isOptimistic}
+                    variant="outline"
+                    size="icon"
+                    className="rounded-xl h-10 w-10"
+                  >
+                    {editingId === ficha.key ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Edit className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setFichaToDelete(ficha);
+                      setDeleteDialogOpen(true);
+                    }}
+                    disabled={deletingId === ficha.key || isOptimistic}
+                    variant="destructive"
+                    size="icon"
+                    className="rounded-xl h-10 w-10"
+                  >
+                    {deletingId === ficha.key ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (isSeller && isMobile) {
     return (
@@ -1242,63 +1375,81 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {adminFilteredFichas.map((ficha) => (
-                          <TableRow key={ficha.key}>
-                            <TableCell className="font-medium">
-                              {ficha.name}
-                            </TableCell>
-                            <TableCell>{formatFileSize(ficha.size)}</TableCell>
-                            <TableCell>
-                              {new Date(ficha.lastModified).toLocaleDateString(
-                                "es-ES"
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  getPermisoLabel(ficha.allowedRoles) ===
-                                  "Todos los usuarios"
-                                    ? "default"
-                                    : "secondary"
-                                }
-                                className="text-xs"
-                              >
-                                {getPermisoLabel(ficha.allowedRoles)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex space-x-2">
-                                <Button
-                                  onClick={() => handleEditFicha(ficha)}
-                                  disabled={editingId === ficha.key}
-                                  variant="outline"
-                                  size="sm"
-                                >
-                                  {editingId === ficha.key ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Edit className="h-3 w-3" />
+                        {adminFilteredFichas.map((ficha) => {
+                          const isOptimistic = ficha._optimistic;
+
+                          return (
+                            <TableRow
+                              key={ficha.key}
+                              className={isOptimistic ? "opacity-75" : ""}
+                            >
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-2">
+                                  {ficha.name}
+                                  {isOptimistic && (
+                                    <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
                                   )}
-                                </Button>
-                                <Button
-                                  onClick={() => {
-                                    setFichaToDelete(ficha);
-                                    setDeleteDialogOpen(true);
-                                  }}
-                                  disabled={deletingId === ficha.key}
-                                  variant="destructive"
-                                  size="sm"
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {formatFileSize(ficha.size)}
+                              </TableCell>
+                              <TableCell>
+                                {new Date(
+                                  ficha.lastModified
+                                ).toLocaleDateString("es-ES")}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    getPermisoLabel(ficha.allowedRoles) ===
+                                    "Todos los usuarios"
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                  className="text-xs"
                                 >
-                                  {deletingId === ficha.key ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-3 w-3" />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                                  {getPermisoLabel(ficha.allowedRoles)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    onClick={() => handleEditFicha(ficha)}
+                                    disabled={
+                                      editingId === ficha.key || isOptimistic
+                                    }
+                                    variant="outline"
+                                    size="sm"
+                                  >
+                                    {editingId === ficha.key ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Edit className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                  <Button
+                                    onClick={() => {
+                                      setFichaToDelete(ficha);
+                                      setDeleteDialogOpen(true);
+                                    }}
+                                    disabled={
+                                      deletingId === ficha.key || isOptimistic
+                                    }
+                                    variant="destructive"
+                                    size="sm"
+                                  >
+                                    {deletingId === ficha.key ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </ScrollArea>

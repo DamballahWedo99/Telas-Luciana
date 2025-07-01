@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { invalidateAndWarmFichasTecnicas } from "@/lib/cache-warming";
 import {
   S3Client,
   CopyObjectCommand,
@@ -120,6 +121,11 @@ export async function PUT(request: NextRequest) {
           })
         );
 
+        console.log(
+          "🔥 [FICHAS-TECNICAS] Invalidando cache e iniciando warming después de edit..."
+        );
+        await invalidateAndWarmFichasTecnicas();
+
         const duration = Date.now() - startTime;
 
         console.log(
@@ -140,6 +146,10 @@ export async function PUT(request: NextRequest) {
           message: "Ficha técnica editada exitosamente",
           newKey: newKey,
           duration: `${duration}ms`,
+          cache: {
+            invalidated: true,
+            warming: "initiated",
+          },
         });
       } catch (error) {
         const duration = Date.now() - startTime;
@@ -165,6 +175,11 @@ export async function PUT(request: NextRequest) {
           })
         );
 
+        console.log(
+          "🔥 [FICHAS-TECNICAS] Invalidando cache e iniciando warming después de metadata update..."
+        );
+        await invalidateAndWarmFichasTecnicas();
+
         const duration = Date.now() - startTime;
 
         console.log(
@@ -184,6 +199,10 @@ export async function PUT(request: NextRequest) {
           message: "Permisos actualizados exitosamente",
           newKey: key,
           duration: `${duration}ms`,
+          cache: {
+            invalidated: true,
+            warming: "initiated",
+          },
         });
       } catch (error) {
         const duration = Date.now() - startTime;

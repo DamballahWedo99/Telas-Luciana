@@ -6,6 +6,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { withCache, invalidateCachePattern } from "@/lib/cache-middleware";
+import { CACHE_TTL } from "@/lib/redis";
 
 const s3Client = new S3Client({
   region: process.env.S3_REGION!,
@@ -105,7 +107,7 @@ async function readSoldRollsFile(fileKey: string): Promise<SoldRoll[]> {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function getSoldRollsData(request: NextRequest) {
   try {
     const rateLimitResult = await rateLimit(request, {
       type: "api",
@@ -221,13 +223,16 @@ export async function GET(request: NextRequest) {
       )
       .slice(0, limit);
 
-    const groupedByOC = filteredRolls.reduce((acc, roll) => {
-      if (!acc[roll.oc]) {
-        acc[roll.oc] = [];
-      }
-      acc[roll.oc].push(roll);
-      return acc;
-    }, {} as Record<string, SoldRoll[]>);
+    const groupedByOC = filteredRolls.reduce(
+      (acc, roll) => {
+        if (!acc[roll.oc]) {
+          acc[roll.oc] = [];
+        }
+        acc[roll.oc].push(roll);
+        return acc;
+      },
+      {} as Record<string, SoldRoll[]>
+    );
 
     const summary = {
       totalRolls: filteredRolls.length,
@@ -271,13 +276,52 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const getCachedSoldRolls = withCache(getSoldRollsData, {
+  keyPrefix: "api:s3:sold-rolls",
+  ttl: CACHE_TTL.SOLD_ROLLS,
+  skipCache: (req) => {
+    const url = new URL(req.url);
+    return url.searchParams.get("refresh") === "true";
+  },
+  onCacheHit: (key) => console.log(`📦 Cache HIT - Sold Rolls: ${key}`),
+  onCacheMiss: (key) => console.log(`💾 Cache MISS - Sold Rolls: ${key}`),
+});
+
+export { getCachedSoldRolls as GET };
+
+export async function POST() {
+  try {
+    const session = await auth();
+
+    if (
+      !session ||
+      !session.user ||
+      (session.user.role !== "admin" && session.user.role !== "major_admin")
+    ) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    await invalidateCachePattern("cache:api:s3:sold-rolls*");
+
+    return NextResponse.json({
+      success: true,
+      message: "Cache de rollos vendidos invalidado",
+      cache: { invalidated: true },
+    });
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Error desconocido";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}
+
 export async function OPTIONS() {
   return NextResponse.json(
     {},
     {
       headers: {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       },
     }

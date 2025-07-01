@@ -7,6 +7,7 @@ import {
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { newRowSchema, type NewRowFormValues } from "@/lib/zod";
+import { invalidateAndWarmInventory } from "@/lib/cache-warming";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -191,6 +192,9 @@ export async function POST(request: NextRequest) {
 
     await s3Client.send(putCommand);
 
+    console.log("🔥 [CREATE-ROW] Invalidando cache e iniciando warming...");
+    await invalidateAndWarmInventory();
+
     const duration = Date.now() - startTime;
     console.log(`✅ [CREATE-ROW] Row creada exitosamente en ${duration}ms`);
 
@@ -202,6 +206,10 @@ export async function POST(request: NextRequest) {
         fileKey: fileKey,
         rowNumber: nextRowNumber,
         item: inventoryItem,
+      },
+      cache: {
+        invalidated: true,
+        warming: "initiated",
       },
       duration: `${duration}ms`,
     });

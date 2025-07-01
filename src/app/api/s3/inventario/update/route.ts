@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { invalidateAndWarmInventory } from "@/lib/cache-warming";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -508,6 +509,9 @@ export async function POST(request: NextRequest) {
         transferPayload
       );
 
+      console.log("🔥 [UPDATE] Invalidando cache después de transfer...");
+      await invalidateAndWarmInventory();
+
       const duration = Date.now() - startTime;
 
       console.log(`[UPDATE] User ${session.user.email} processed transfer:`, {
@@ -517,6 +521,10 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         ...result,
+        cache: {
+          invalidated: true,
+          warming: "initiated",
+        },
         duration: `${duration}ms`,
       });
     }
@@ -702,6 +710,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("🔥 [UPDATE] Invalidando cache después de modificación...");
+    await invalidateAndWarmInventory();
+
     const duration = Date.now() - startTime;
 
     let operationMessage = "Inventario actualizado correctamente";
@@ -723,6 +734,10 @@ export async function POST(request: NextRequest) {
       fileUpdated: targetFileKey,
       itemsInFile: modifiedData.length,
       lambdaSafe: true,
+      cache: {
+        invalidated: true,
+        warming: "initiated",
+      },
       duration: `${duration}ms`,
     });
   } catch (error) {

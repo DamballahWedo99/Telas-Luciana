@@ -7,6 +7,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { withCache, invalidateCachePattern } from "@/lib/cache-middleware";
+import { CACHE_TTL } from "@/lib/redis";
 
 const s3Client = new S3Client({
   region: process.env.S3_REGION!,
@@ -89,7 +91,7 @@ async function readPackingListFile(
   }
 }
 
-export async function GET(request: NextRequest) {
+async function getRollsData(request: NextRequest) {
   try {
     const rateLimitResult = await rateLimit(request, {
       type: "api",
@@ -183,5 +185,44 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error obteniendo packing list:", error);
     return NextResponse.json([]);
+  }
+}
+
+const getCachedRolls = withCache(getRollsData, {
+  keyPrefix: "api:s3:get-rolls",
+  ttl: CACHE_TTL.ROLLS_DATA,
+  skipCache: (req) => {
+    const url = new URL(req.url);
+    return url.searchParams.get("refresh") === "true";
+  },
+  onCacheHit: (key) => console.log(`📦 Cache HIT - Get Rolls: ${key}`),
+  onCacheMiss: (key) => console.log(`💾 Cache MISS - Get Rolls: ${key}`),
+});
+
+export { getCachedRolls as GET };
+
+export async function POST() {
+  try {
+    const session = await auth();
+
+    if (
+      !session ||
+      !session.user ||
+      (session.user.role !== "admin" && session.user.role !== "major_admin")
+    ) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    await invalidateCachePattern("cache:api:s3:get-rolls*");
+
+    return NextResponse.json({
+      success: true,
+      message: "Cache de rollos invalidado",
+      cache: { invalidated: true },
+    });
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Error desconocido";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

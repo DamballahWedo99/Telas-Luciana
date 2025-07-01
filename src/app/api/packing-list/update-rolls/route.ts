@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { invalidateCachePattern } from "@/lib/cache-middleware";
 
 const s3Client = new S3Client({
   region: process.env.S3_REGION!,
@@ -279,6 +280,8 @@ export async function POST(request: NextRequest) {
 
     await s3Client.send(backupCommand);
 
+    await invalidateCachePattern("cache:api:s3:get-rolls*");
+
     console.log(`[SOLD] User ${session.user.email} marked rolls as sold:`, {
       tela,
       color,
@@ -294,6 +297,7 @@ export async function POST(request: NextRequest) {
       backupFile: `Inventario/Catalogo_Rollos/backups/${backupFileName}`,
       rollsRemoved: soldRolls,
       remainingRolls: updatedEntry?.rolls?.length || 0,
+      cache: { invalidated: true, pattern: "get-rolls" },
     });
   } catch (error) {
     console.error("Error actualizando packing list:", error);

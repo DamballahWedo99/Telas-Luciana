@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { invalidateAndWarmFichasTecnicas } from "@/lib/cache-warming";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
@@ -96,6 +97,11 @@ export async function POST(request: NextRequest) {
 
     await s3Client.send(command);
 
+    console.log(
+      "🔥 [FICHAS-TECNICAS] Invalidando cache e iniciando warming después de upload..."
+    );
+    await invalidateAndWarmFichasTecnicas();
+
     const duration = Date.now() - startTime;
 
     console.log(
@@ -118,6 +124,10 @@ export async function POST(request: NextRequest) {
       fileName,
       allowedRoles,
       duration: `${duration}ms`,
+      cache: {
+        invalidated: true,
+        warming: "initiated",
+      },
     });
   } catch (error) {
     const duration = Date.now() - startTime;

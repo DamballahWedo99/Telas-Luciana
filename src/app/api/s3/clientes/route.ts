@@ -9,6 +9,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { withCache } from "@/lib/cache-middleware";
+import { invalidateAndWarmClientes } from "@/lib/cache-warming";
+import { CACHE_TTL } from "@/lib/redis";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -40,6 +43,30 @@ interface NormalizedClienteItem {
   ubicacion: string;
   comentarios: string;
   fileKey?: string;
+}
+
+function isInternalRequest(request: NextRequest): boolean {
+  const internalHeaders = [
+    request.headers.get("x-internal-request"),
+    request.headers.get("X-Internal-Request"),
+    request.headers.get("X-INTERNAL-REQUEST"),
+  ];
+
+  const hasInternalHeader = internalHeaders.some((header) => header === "true");
+
+  if (!hasInternalHeader) {
+    return false;
+  }
+
+  const authHeader = request.headers.get("authorization");
+  const internalSecret = process.env.CRON_SECRET;
+
+  if (!internalSecret || !authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  return token === internalSecret;
 }
 
 const fixInvalidJSON = (content: string): string => {
@@ -89,18 +116,20 @@ const normalizeClienteItem = (
   return normalizedItem;
 };
 
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimitResult = await rateLimit(request, {
-      type: "api",
-      message:
-        "Demasiadas solicitudes al directorio de clientes. Por favor, inténtalo de nuevo más tarde.",
-    });
+async function getClientesData(request: NextRequest) {
+  const rateLimitResult = await rateLimit(request, {
+    type: "api",
+    message:
+      "Demasiadas solicitudes al directorio de clientes. Por favor, inténtalo de nuevo más tarde.",
+  });
 
-    if (rateLimitResult) {
-      return rateLimitResult;
-    }
+  if (rateLimitResult) {
+    return rateLimitResult;
+  }
 
+  const isInternal = isInternalRequest(request);
+
+  if (!isInternal) {
     const session = await auth();
 
     if (!session || !session.user) {
@@ -114,71 +143,60 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       );
     }
+  }
 
-    const { searchParams } = new URL(request.url);
-    const debug = searchParams.get("debug") === "true";
+  const { searchParams } = new URL(request.url);
+  const debug = searchParams.get("debug") === "true";
 
-    const folderPrefix = "Directorio/Main/";
+  const folderPrefix = "Directorio/Main/";
 
-    const listCommand = new ListObjectsV2Command({
-      Bucket: "telas-luciana",
-      Prefix: folderPrefix,
-    });
+  const listCommand = new ListObjectsV2Command({
+    Bucket: "telas-luciana",
+    Prefix: folderPrefix,
+  });
 
-    const listResponse = await s3Client.send(listCommand);
+  const listResponse = await s3Client.send(listCommand);
 
-    const jsonFiles = (listResponse.Contents || [])
-      .filter((item: _Object) => item.Key && item.Key.endsWith(".json"))
-      .map((item: _Object) => item.Key!);
+  const jsonFiles = (listResponse.Contents || [])
+    .filter((item: _Object) => item.Key && item.Key.endsWith(".json"))
+    .map((item: _Object) => item.Key!);
 
-    if (jsonFiles.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "No se encontraron archivos de clientes JSON en la carpeta Directorio/Main/",
-        },
-        { status: 404 }
-      );
-    }
+  if (jsonFiles.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "No se encontraron archivos de clientes JSON en la carpeta Directorio/Main/",
+      },
+      { status: 404 }
+    );
+  }
 
-    const filesToProcess = debug ? jsonFiles.slice(0, 5) : jsonFiles;
+  const filesToProcess = debug ? jsonFiles.slice(0, 5) : jsonFiles;
 
-    const clientesData: NormalizedClienteItem[] = [];
-    const failedFiles: string[] = [];
+  const clientesData: NormalizedClienteItem[] = [];
+  const failedFiles: string[] = [];
 
-    for (const fileKey of filesToProcess) {
-      try {
-        const getCommand = new GetObjectCommand({
-          Bucket: "telas-luciana",
-          Key: fileKey,
-        });
+  for (const fileKey of filesToProcess) {
+    try {
+      const getCommand = new GetObjectCommand({
+        Bucket: "telas-luciana",
+        Key: fileKey,
+      });
 
-        const fileResponse = await s3Client.send(getCommand);
+      const fileResponse = await s3Client.send(getCommand);
 
-        if (fileResponse.Body) {
-          let fileContent = await fileResponse.Body.transformToString();
+      if (fileResponse.Body) {
+        let fileContent = await fileResponse.Body.transformToString();
 
-          fileContent = fixInvalidJSON(fileContent);
+        fileContent = fixInvalidJSON(fileContent);
 
-          try {
-            const jsonData: unknown = JSON.parse(fileContent);
+        try {
+          const jsonData: unknown = JSON.parse(fileContent);
 
-            if (Array.isArray(jsonData)) {
-              jsonData.forEach((item: unknown) => {
-                const typedItem = item as RawClienteItem;
-                const normalizedItem = normalizeClienteItem(typedItem, fileKey);
-
-                if (
-                  normalizedItem.empresa ||
-                  normalizedItem.contacto ||
-                  normalizedItem.email
-                ) {
-                  clientesData.push(normalizedItem);
-                }
-              });
-            } else {
-              const typedData = jsonData as RawClienteItem;
-              const normalizedItem = normalizeClienteItem(typedData, fileKey);
+          if (Array.isArray(jsonData)) {
+            jsonData.forEach((item: unknown) => {
+              const typedItem = item as RawClienteItem;
+              const normalizedItem = normalizeClienteItem(typedItem, fileKey);
 
               if (
                 normalizedItem.empresa ||
@@ -187,50 +205,69 @@ export async function GET(request: NextRequest) {
               ) {
                 clientesData.push(normalizedItem);
               }
+            });
+          } else {
+            const typedData = jsonData as RawClienteItem;
+            const normalizedItem = normalizeClienteItem(typedData, fileKey);
+
+            if (
+              normalizedItem.empresa ||
+              normalizedItem.contacto ||
+              normalizedItem.email
+            ) {
+              clientesData.push(normalizedItem);
             }
-          } catch {
-            console.error(`Error al parsear JSON de ${fileKey}`);
-            failedFiles.push(fileKey);
           }
+        } catch {
+          console.error(`Error al parsear JSON de ${fileKey}`);
+          failedFiles.push(fileKey);
         }
-      } catch {
-        console.error(`Error al obtener archivo ${fileKey}`);
-        failedFiles.push(fileKey);
       }
+    } catch {
+      console.error(`Error al obtener archivo ${fileKey}`);
+      failedFiles.push(fileKey);
     }
+  }
 
-    if (clientesData.length > 0) {
-      return NextResponse.json({
-        data: clientesData,
-        failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
-        debug: {
-          totalProcessedItems: clientesData.length,
-          filesProcessed: filesToProcess.length,
-          searchedIn: folderPrefix,
-        },
-      });
-    } else if (failedFiles.length > 0) {
-      return NextResponse.json(
-        {
-          error: "No se pudo procesar ningún archivo correctamente",
-          failedFiles,
-        },
-        { status: 500 }
-      );
-    }
-
+  if (clientesData.length > 0) {
+    return NextResponse.json({
+      data: clientesData,
+      failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
+      debug: {
+        totalProcessedItems: clientesData.length,
+        filesProcessed: filesToProcess.length,
+        searchedIn: folderPrefix,
+        isInternal,
+      },
+    });
+  } else if (failedFiles.length > 0) {
     return NextResponse.json(
-      { error: "No se pudo leer el archivo del bucket S3" },
-      { status: 500 }
-    );
-  } catch (error) {
-    console.error("Error al obtener archivo de S3:", error);
-    return NextResponse.json(
-      { error: "Error al obtener archivo de S3" },
+      {
+        error: "No se pudo procesar ningún archivo correctamente",
+        failedFiles,
+      },
       { status: 500 }
     );
   }
+
+  return NextResponse.json(
+    { error: "No se pudo leer el archivo del bucket S3" },
+    { status: 500 }
+  );
 }
+
+const getCachedClientes = withCache(getClientesData, {
+  keyPrefix: "api:s3:clientes",
+  ttl: CACHE_TTL.CLIENTES,
+  skipCache: (req) => {
+    const url = new URL(req.url);
+    return url.searchParams.get("refresh") === "true";
+  },
+  onCacheHit: (key) => console.log(`📦 Cache HIT - Clientes: ${key}`),
+  onCacheMiss: (key) => console.log(`💾 Cache MISS - Clientes: ${key}`),
+});
+
+export { getCachedClientes as GET };
 
 export async function POST(request: NextRequest) {
   try {
@@ -338,6 +375,9 @@ export async function POST(request: NextRequest) {
 
     await s3Client.send(putCommand);
 
+    console.log("🔥 [CLIENTES] Invalidando cache e iniciando warming...");
+    await invalidateAndWarmClientes();
+
     return NextResponse.json({
       message: "Cliente creado exitosamente",
       data: {
@@ -347,11 +387,17 @@ export async function POST(request: NextRequest) {
         vendedorSubfolder: vendedorSubfolder || "Main",
         fullPath: `s3://telas-luciana/${fileKey}`,
       },
+      cache: {
+        invalidated: true,
+        warming: "initiated",
+      },
     });
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Error desconocido";
     console.error("Error al crear cliente en S3:", error);
     return NextResponse.json(
-      { error: "Error al crear cliente en S3" },
+      { error: "Error al crear cliente en S3", details: errorMessage },
       { status: 500 }
     );
   }
@@ -466,6 +512,11 @@ export async function PUT(request: NextRequest) {
 
     await s3Client.send(putCommand);
 
+    console.log(
+      "🔥 [CLIENTES] Invalidando cache e iniciando warming después de update..."
+    );
+    await invalidateAndWarmClientes();
+
     return NextResponse.json({
       message: "Cliente actualizado exitosamente",
       data: {
@@ -476,11 +527,17 @@ export async function PUT(request: NextRequest) {
         fullPath: `s3://telas-luciana/${newFileKey}`,
         previousFileKey: fileKey,
       },
+      cache: {
+        invalidated: true,
+        warming: "initiated",
+      },
     });
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Error desconocido";
     console.error("Error al actualizar cliente en S3:", error);
     return NextResponse.json(
-      { error: "Error al actualizar cliente en S3" },
+      { error: "Error al actualizar cliente en S3", details: errorMessage },
       { status: 500 }
     );
   }
@@ -529,6 +586,11 @@ export async function DELETE(request: NextRequest) {
 
     await s3Client.send(deleteCommand);
 
+    console.log(
+      "🔥 [CLIENTES] Invalidando cache e iniciando warming después de delete..."
+    );
+    await invalidateAndWarmClientes();
+
     return NextResponse.json({
       message: "Cliente eliminado exitosamente",
       data: {
@@ -536,11 +598,17 @@ export async function DELETE(request: NextRequest) {
         deletedBy: session.user.email || "unknown",
         deletedAt: new Date().toISOString(),
       },
+      cache: {
+        invalidated: true,
+        warming: "initiated",
+      },
     });
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Error desconocido";
     console.error("Error al eliminar cliente de S3:", error);
     return NextResponse.json(
-      { error: "Error al eliminar cliente de S3" },
+      { error: "Error al eliminar cliente de S3", details: errorMessage },
       { status: 500 }
     );
   }
