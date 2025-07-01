@@ -576,6 +576,7 @@ const Dashboard = () => {
   const [openNewUser, setOpenNewUser] = useState(false);
 
   const inventoryLoadedRef = useRef(false);
+  const pendingCheckRef = useRef(false);
 
   const { data: session } = useSession();
 
@@ -621,6 +622,39 @@ const Dashboard = () => {
     const month = months.find((m) => m.value === monthNumber);
     return month ? month.label : "";
   }
+
+  const triggerPendingCheck = async () => {
+    if (!session?.user || !isAdmin) return;
+
+    console.log("🔍 [PENDING-CHECK] === EJECUTANDO CHECK MANUAL ===");
+
+    try {
+      const response = await fetch("/api/s3/inventario/check-pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("✅ [PENDING-CHECK] Check ejecutado exitosamente:", result);
+
+        if (result.processed > 0) {
+          toast.success(
+            `✅ Se procesaron ${result.processed} elementos pendientes`
+          );
+          handleNewRowSuccess();
+        } else {
+          console.log(
+            "ℹ️ [PENDING-CHECK] No hay elementos pendientes para procesar"
+          );
+        }
+      }
+    } catch (error) {
+      console.error("❌ [PENDING-CHECK] Error en check manual:", error);
+    }
+  };
 
   const handleNewRowSuccess = () => {
     console.log(
@@ -737,6 +771,14 @@ const Dashboard = () => {
 
         setInventory(parsedData);
         inventoryLoadedRef.current = true;
+
+        if (isAdmin && !pendingCheckRef.current) {
+          pendingCheckRef.current = true;
+
+          setTimeout(() => {
+            triggerPendingCheck();
+          }, 1000);
+        }
       } catch (error) {
         console.error("Error loading inventory from API:", error);
         if (!isMobile) {
@@ -755,7 +797,7 @@ const Dashboard = () => {
     loadInventoryFromAPI();
 
     return () => {};
-  }, [session?.user, isMobile]);
+  }, [session?.user, isMobile, isAdmin]);
 
   const handleLoadHistoricalInventory = async (year: string, month: string) => {
     try {
