@@ -24,7 +24,7 @@ jobs:
             -X POST \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
-            "${{ env.API_URL }}/api/cron/weekly-inventory")
+            "${{ env.API_URL }}/api/cron/weekly-inventory/")
 
           # Extraer código HTTP y body
           inventory_code=$(echo $inventory_response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
