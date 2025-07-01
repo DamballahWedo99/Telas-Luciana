@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import Papa from "papaparse";
@@ -576,7 +576,7 @@ const Dashboard = () => {
   const [openNewUser, setOpenNewUser] = useState(false);
 
   const inventoryLoadedRef = useRef(false);
-  const pendingCheckRef = useRef(false);
+  const pendingCheckRef = useRef(false); // Nueva ref para controlar el check-pending
 
   const { data: session } = useSession();
 
@@ -623,40 +623,7 @@ const Dashboard = () => {
     return month ? month.label : "";
   }
 
-  const triggerPendingCheck = async () => {
-    if (!session?.user || !isAdmin) return;
-
-    console.log("🔍 [PENDING-CHECK] === EJECUTANDO CHECK MANUAL ===");
-
-    try {
-      const response = await fetch("/api/s3/inventario/check-pending", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log("✅ [PENDING-CHECK] Check ejecutado exitosamente:", result);
-
-        if (result.processed > 0) {
-          toast.success(
-            `✅ Se procesaron ${result.processed} elementos pendientes`
-          );
-          handleNewRowSuccess();
-        } else {
-          console.log(
-            "ℹ️ [PENDING-CHECK] No hay elementos pendientes para procesar"
-          );
-        }
-      }
-    } catch (error) {
-      console.error("❌ [PENDING-CHECK] Error en check manual:", error);
-    }
-  };
-
-  const handleNewRowSuccess = () => {
+  const handleNewRowSuccess = useCallback(() => {
     console.log(
       "🔄 [RELOAD-INVENTORY] === RECARGANDO INVENTARIO POST-CREACIÓN ==="
     );
@@ -736,8 +703,44 @@ const Dashboard = () => {
           "🏁 [RELOAD-INVENTORY] === PROCESO DE RECARGA COMPLETADO ==="
         );
       });
-  };
+  }, [session?.user, setInventory]);
 
+  // Función para ejecutar check-pending manualmente (usando useCallback para estabilizar)
+  const triggerPendingCheck = useCallback(async () => {
+    if (!session?.user || !isAdmin) return;
+
+    console.log("🔍 [PENDING-CHECK] === EJECUTANDO CHECK MANUAL ===");
+
+    try {
+      const response = await fetch("/api/s3/inventario/check-pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("✅ [PENDING-CHECK] Check ejecutado exitosamente:", result);
+
+        if (result.processed > 0) {
+          toast.success(
+            `✅ Se procesaron ${result.processed} elementos pendientes`
+          );
+          // Recargar inventario si se procesaron elementos
+          handleNewRowSuccess();
+        } else {
+          console.log(
+            "ℹ️ [PENDING-CHECK] No hay elementos pendientes para procesar"
+          );
+        }
+      }
+    } catch (error) {
+      console.error("❌ [PENDING-CHECK] Error en check manual:", error);
+    }
+  }, [session?.user, isAdmin, handleNewRowSuccess]); // Dependencias estables
+
+  // useEffect principal para cargar inventario y ejecutar check-pending SOLO al montar
   useEffect(() => {
     async function loadInventoryFromAPI() {
       if (!session?.user || inventoryLoadedRef.current) return;
@@ -772,9 +775,12 @@ const Dashboard = () => {
         setInventory(parsedData);
         inventoryLoadedRef.current = true;
 
+        // Ejecutar check-pending SOLO al montar el componente
         if (isAdmin && !pendingCheckRef.current) {
+          console.log("🔍 [PENDING-CHECK] === EJECUTANDO CHECK INICIAL ===");
           pendingCheckRef.current = true;
 
+          // Pequeño delay para que el inventario se cargue primero
           setTimeout(() => {
             triggerPendingCheck();
           }, 1000);
@@ -797,7 +803,7 @@ const Dashboard = () => {
     loadInventoryFromAPI();
 
     return () => {};
-  }, [session?.user, isMobile, isAdmin]);
+  }, [session?.user, isMobile, isAdmin, triggerPendingCheck]);
 
   const handleLoadHistoricalInventory = async (year: string, month: string) => {
     try {
