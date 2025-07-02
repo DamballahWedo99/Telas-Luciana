@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { withCache, invalidateCachePattern } from "@/lib/cache-middleware";
-import { InventoryCache } from "@/lib/inventory-cache";
 import { CACHE_TTL } from "@/lib/redis";
 
 interface UserFilters {
@@ -46,15 +45,27 @@ async function getUsersData(request: NextRequest) {
     filters.isActive = searchParams.get("isActive") === "true";
   }
 
-  const result = await InventoryCache.getUsers(filters);
+  const users = await db.user.findMany({
+    where: filters,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+      lastLogin: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 
   return NextResponse.json({
-    users: result.data,
+    users: users,
     meta: {
-      fromCache: result.fromCache,
-      latency: result.latency,
+      fromCache: false,
+      latency: "0ms",
       timestamp: new Date().toISOString(),
-      count: Array.isArray(result.data) ? result.data.length : 0,
+      count: users.length,
     },
   });
 }
@@ -96,7 +107,6 @@ export async function POST(request: NextRequest) {
     });
 
     await Promise.all([
-      InventoryCache.invalidateUserCache(),
       invalidateCachePattern("cache:api:users*"),
       invalidateCachePattern("cache:dashboard:*"),
     ]);
@@ -138,7 +148,7 @@ export async function PUT(request: NextRequest) {
       data: updateData,
     });
 
-    await InventoryCache.invalidateUserCache(id);
+    await invalidateCachePattern("cache:api:users*");
 
     return NextResponse.json({
       success: true,

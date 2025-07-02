@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
-import { InventoryCache } from "@/lib/inventory-cache";
 import { invalidateCachePattern } from "@/lib/cache-middleware";
 
 export async function DELETE(
@@ -86,10 +85,7 @@ export async function DELETE(
       where: { id: userId },
     });
 
-    await Promise.all([
-      InventoryCache.invalidateUserCache(userId),
-      invalidateCachePattern("cache:api:users*"),
-    ]);
+    await invalidateCachePattern("cache:api:users*");
 
     console.log(
       `[USER-DELETE] User ${session.user.email} deleted user ${userToDelete.email}`

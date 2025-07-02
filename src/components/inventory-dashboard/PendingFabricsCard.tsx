@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 import {
@@ -80,6 +80,8 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   const [showCostsDialog, setShowCostsDialog] = useState(false);
   const [fabricsWithCosts, setFabricsWithCosts] = useState<PendingFabric[]>([]);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+
+  const initialCheckRef = useRef(false);
 
   const formatNumber = (num: number): string => {
     return new Intl.NumberFormat("es-MX", {
@@ -285,9 +287,12 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   );
 
   useEffect(() => {
+    if (!isAdmin || initialCheckRef.current) return;
+
     console.log(
       "🔧 [PendingFabricsCard] TRIGGER 1: Carga inicial del Dashboard"
     );
+    initialCheckRef.current = true;
     checkPendingFiles();
 
     console.log(
@@ -528,7 +533,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
                     </span>
                   </div>
 
-                  {/* Lista resumida de telas */}
                   <div className="mt-2">
                     <div className="flex flex-wrap gap-1">
                       {ocGroup.fabrics.slice(0, 3).map((fabric, index) => (
@@ -577,7 +581,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         </CardContent>
       </Card>
 
-      {/* Modal para asignar costos */}
       <Dialog open={showCostsDialog} onOpenChange={setShowCostsDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
