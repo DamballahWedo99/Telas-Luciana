@@ -6,7 +6,11 @@ import { db } from "./lib/db";
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
   ...authConfig,
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 24 * 60 * 60,
+    updateAge: 0,
+  },
   trustHost: true,
   secret: process.env.NEXTAUTH_SECRET,
 

@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cacheRedis, generateCacheKey } from "./redis";
 
+function normalizeQueryString(search: string): string {
+  if (!search || search === "?") {
+    return "";
+  }
+
+  const searchParams = new URLSearchParams(search);
+  const sortedParams: string[] = [];
+
+  const sortedKeys = Array.from(searchParams.keys()).sort();
+
+  for (const key of sortedKeys) {
+    const values = searchParams.getAll(key);
+    for (const value of values.sort()) {
+      sortedParams.push(`${key}=${value}`);
+    }
+  }
+
+  return sortedParams.length > 0 ? `?${sortedParams.join("&")}` : "";
+}
+
 export function withCache(
   handler: (req: NextRequest) => Promise<NextResponse>,
   options: {
@@ -29,9 +49,12 @@ export function withCache(
     }
 
     const url = new URL(req.url);
+
+    const normalizedSearch = normalizeQueryString(url.search);
+
     const cacheKey = generateCacheKey(keyPrefix, {
       pathname: url.pathname,
-      search: url.search,
+      search: normalizedSearch,
     });
 
     try {
