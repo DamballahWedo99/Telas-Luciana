@@ -10,6 +10,7 @@ import {
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { invalidateAndWarmInventory } from "@/lib/cache-warming";
+import { invalidateCachePattern } from "@/lib/cache-middleware";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -370,6 +371,28 @@ const saveFileSafely = async (
   }
 };
 
+const invalidateInventoryRelatedCaches = async (): Promise<void> => {
+  try {
+    console.log(
+      "🔥 [UPDATE] Invalidando todos los caches relacionados con inventario..."
+    );
+
+    await invalidateAndWarmInventory();
+
+    await invalidateCachePattern("cache:api:s3:sold-rolls:*");
+    console.log("🗑️ Cache de sold-rolls invalidado");
+
+    await invalidateCachePattern("cache:api:s3:rolls-data:*");
+    console.log("🗑️ Cache de rolls-data invalidado");
+
+    console.log(
+      "✅ Invalidación completa de caches relacionados con inventario finalizada"
+    );
+  } catch (error) {
+    console.error("❌ Error invalidando caches relacionados:", error);
+  }
+};
+
 const processTransferWithConsolidation = async (
   jsonFiles: string[],
   transferPayload: TransferPayload
@@ -509,8 +532,7 @@ export async function POST(request: NextRequest) {
         transferPayload
       );
 
-      console.log("🔥 [UPDATE] Invalidando cache después de transfer...");
-      await invalidateAndWarmInventory();
+      await invalidateInventoryRelatedCaches();
 
       const duration = Date.now() - startTime;
 
@@ -524,6 +546,7 @@ export async function POST(request: NextRequest) {
         cache: {
           invalidated: true,
           warming: "initiated",
+          invalidatedCaches: ["inventario", "sold-rolls", "rolls-data"],
         },
         duration: `${duration}ms`,
       });
@@ -710,8 +733,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("🔥 [UPDATE] Invalidando cache después de modificación...");
-    await invalidateAndWarmInventory();
+    await invalidateInventoryRelatedCaches();
 
     const duration = Date.now() - startTime;
 
@@ -737,6 +759,7 @@ export async function POST(request: NextRequest) {
       cache: {
         invalidated: true,
         warming: "initiated",
+        invalidatedCaches: ["inventario", "sold-rolls", "rolls-data"],
       },
       duration: `${duration}ms`,
     });

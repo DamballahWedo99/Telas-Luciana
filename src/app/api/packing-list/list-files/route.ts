@@ -36,19 +36,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log("🔍 Listando archivos en Inventario/Catalogo_Rollos/");
+
     const command = new ListObjectsV2Command({
       Bucket: "telas-luciana",
-      Prefix: "Catalogo_Rollos/",
+      Prefix: "Inventario/Catalogo_Rollos/",
       Delimiter: "/",
     });
 
     const response = await s3Client.send(command);
+    console.log(
+      `📁 Objetos encontrados en S3: ${response.Contents?.length || 0}`
+    );
 
-    const files = response.Contents?.filter(
-      (item) =>
-        item.Key?.endsWith(".json") &&
-        item.Key.includes("packing_lists_con_unidades")
-    ).map((item) => ({
+    const files = response.Contents?.filter((item) => {
+      const key = item.Key || "";
+      const isJson = key.endsWith(".json");
+      const isNotBackup = !key.includes("backup");
+      const isNotRow = !key.includes("_row");
+
+      console.log(
+        `📄 Archivo: ${key}, JSON: ${isJson}, NoBackup: ${isNotBackup}, NoRow: ${isNotRow}`
+      );
+
+      return isJson && isNotBackup && isNotRow;
+    }).map((item) => ({
       key: item.Key,
       lastModified: item.LastModified,
       size: item.Size,

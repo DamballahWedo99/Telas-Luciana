@@ -20,6 +20,19 @@ const s3Client = new S3Client({
 
 const BUCKET_NAME = "telas-luciana";
 
+interface RawRollData {
+  rollo_id: string;
+  OC: string;
+  tela: string;
+  color: string;
+  lote: string;
+  unidad: string;
+  cantidad: number;
+  fecha_ingreso: string;
+  status: string;
+  almacen?: string;
+}
+
 interface ReturnRoll {
   roll_number: number | string;
   fabric_type: string;
@@ -78,20 +91,6 @@ interface RawInventoryItem {
   status?: unknown;
   lastModified?: unknown;
   [key: string]: unknown;
-}
-
-interface PackingListEntry {
-  fabric_type: string;
-  color: string;
-  lot: number;
-  rolls: PackingListRoll[];
-}
-
-interface PackingListRoll {
-  roll_number: number | string;
-  almacen: string;
-  kg?: number;
-  mts?: number;
 }
 
 interface SalesRecord {
@@ -213,14 +212,12 @@ const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
       }
     }
 
-    // Campos especiales que deben preservarse incluso si son null
     const fieldsToPreserve = [
       "Importacion",
       "FacturaDragonAzteca",
       "created_from",
     ];
 
-    // Procesar todos los demás campos
     Object.keys(rawItem).forEach((key) => {
       const skipFields = [
         "OC",
@@ -236,10 +233,8 @@ const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
 
       if (!skipFields.includes(key)) {
         if (fieldsToPreserve.includes(key)) {
-          // Preservar estos campos incluso si son null
           item[key] = rawItem[key];
         } else if (rawItem[key] !== undefined && rawItem[key] !== null) {
-          // Para otros campos, mantener la lógica original
           item[key] = rawItem[key];
         }
       }
@@ -334,7 +329,6 @@ const findItemInFile = async (
 const reorderItemFields = (item: InventoryItem): InventoryItem => {
   const orderedItem: Record<string, unknown> = {};
 
-  // Campos principales en orden específico
   if (item.OC !== undefined) orderedItem.OC = item.OC;
   if (item.Tela !== undefined) orderedItem.Tela = item.Tela;
   if (item.Color !== undefined) orderedItem.Color = item.Color;
@@ -345,21 +339,18 @@ const reorderItemFields = (item: InventoryItem): InventoryItem => {
   if (item.MID !== undefined) orderedItem.MID = item.MID;
   if (item.Total !== undefined) orderedItem.Total = item.Total;
 
-  // Campos especiales que deben preservarse incluso si son null
   const fieldsToPreserve = [
     "Importacion",
     "FacturaDragonAzteca",
     "created_from",
   ];
 
-  // Agregar campos especiales que deben preservarse
   fieldsToPreserve.forEach((field) => {
     if (item.hasOwnProperty(field)) {
       orderedItem[field] = item[field];
     }
   });
 
-  // Agregar el resto de campos (excluyendo los ya procesados y los campos temporales)
   const processedFields = [
     "OC",
     "Tela",
@@ -380,7 +371,7 @@ const reorderItemFields = (item: InventoryItem): InventoryItem => {
       !processedFields.includes(key) &&
       !excludedFields.includes(key) &&
       item[key] !== undefined &&
-      item[key] !== "" // Mantener la exclusión de strings vacíos pero permitir null
+      item[key] !== ""
     ) {
       orderedItem[key] = item[key];
     }
@@ -520,7 +511,6 @@ async function findPackingListFile(
       const key = item.Key || "";
       return (
         key.endsWith(".json") &&
-        key.includes("packing_lists_con_unidades") &&
         !key.includes("backup") &&
         !key.includes("_row")
       );
@@ -528,26 +518,17 @@ async function findPackingListFile(
 
     for (const fileKey of packingListFiles) {
       try {
-        const getCommand = new GetObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: fileKey,
-        });
+        const rawData = await readPackingListFile(fileKey);
+        if (!rawData || rawData.length === 0) continue;
 
-        const response = await s3Client.send(getCommand);
-        const bodyString = await response.Body?.transformToString();
-        if (!bodyString) continue;
-
-        const data: PackingListEntry[] = JSON.parse(bodyString);
-        if (!Array.isArray(data)) continue;
-
-        const foundEntry = data.find(
-          (entry: PackingListEntry) =>
-            entry.fabric_type?.toLowerCase() === tela.toLowerCase() &&
-            entry.color?.toLowerCase() === color.toLowerCase() &&
-            entry.lot === lot
+        const hasMatchingRoll = rawData.some(
+          (rawRoll: RawRollData) =>
+            rawRoll.tela?.toLowerCase() === tela.toLowerCase() &&
+            rawRoll.color?.toLowerCase() === color.toLowerCase() &&
+            rawRoll.lote === lot.toString()
         );
 
-        if (foundEntry) {
+        if (hasMatchingRoll) {
           return fileKey;
         }
       } catch {
@@ -559,6 +540,23 @@ async function findPackingListFile(
   } catch (error) {
     console.error("Error buscando archivo packing list:", error);
     return null;
+  }
+}
+
+async function readPackingListFile(fileKey: string): Promise<RawRollData[]> {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: fileKey,
+    });
+
+    const response = await s3Client.send(command);
+    const bodyString = await response.Body?.transformToString();
+
+    return bodyString ? JSON.parse(bodyString) : [];
+  } catch (error) {
+    console.error(`Error leyendo archivo ${fileKey}:`, error);
+    return [];
   }
 }
 
@@ -697,76 +695,31 @@ async function updatePackingList(
   roll: ReturnRoll
 ): Promise<boolean> {
   try {
-    const getCommand = new GetObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: fileKey,
-    });
+    const rawData = await readPackingListFile(fileKey);
+    if (!rawData || rawData.length === 0) return false;
 
-    const response = await s3Client.send(getCommand);
-    const bodyString = await response.Body?.transformToString();
-    if (!bodyString) return false;
+    const newRollData: RawRollData = {
+      rollo_id: roll.roll_number.toString(),
+      OC: roll.oc,
+      tela: roll.fabric_type,
+      color: roll.color,
+      lote: roll.lot.toString(),
+      unidad: roll.units.toUpperCase(),
+      cantidad: roll.return_quantity,
+      fecha_ingreso:
+        new Date().toISOString().split("T")[0].replace(/-/g, "_") +
+        "_" +
+        new Date().toTimeString().split(" ")[0].replace(/:/g, "-"),
+      status: "pending",
+      almacen: roll.almacen,
+    };
 
-    const data: PackingListEntry[] = JSON.parse(bodyString);
-    if (!Array.isArray(data)) return false;
-
-    let entryFound = false;
-    for (let i = 0; i < data.length; i++) {
-      const entry = data[i];
-      if (
-        entry.fabric_type?.toLowerCase() === roll.fabric_type.toLowerCase() &&
-        entry.color?.toLowerCase() === roll.color.toLowerCase() &&
-        entry.lot === roll.lot
-      ) {
-        const existingRollIndex = entry.rolls?.findIndex(
-          (r: PackingListRoll) => r.roll_number === roll.roll_number
-        );
-
-        if (existingRollIndex >= 0) {
-          const updatedRoll: PackingListRoll = {
-            roll_number: roll.roll_number,
-            almacen: roll.almacen,
-          };
-
-          if (roll.units.toLowerCase() === "kgs") {
-            updatedRoll.kg = roll.return_quantity;
-          } else {
-            updatedRoll.mts = roll.return_quantity;
-          }
-
-          entry.rolls[existingRollIndex] = updatedRoll;
-        } else {
-          if (!entry.rolls) entry.rolls = [];
-
-          const newRoll: PackingListRoll = {
-            roll_number: roll.roll_number,
-            almacen: roll.almacen,
-          };
-
-          if (roll.units.toLowerCase() === "kgs") {
-            newRoll.kg = roll.return_quantity;
-          } else {
-            newRoll.mts = roll.return_quantity;
-          }
-
-          entry.rolls.push(newRoll);
-
-          entry.rolls.sort(
-            (a: PackingListRoll, b: PackingListRoll) =>
-              Number(a.roll_number) - Number(b.roll_number)
-          );
-        }
-
-        entryFound = true;
-        break;
-      }
-    }
-
-    if (!entryFound) return false;
+    const updatedRawData = [...rawData, newRollData];
 
     const putCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: fileKey,
-      Body: JSON.stringify(data, null, 2),
+      Body: JSON.stringify(updatedRawData, null, 2),
       ContentType: "application/json",
     });
 
@@ -1093,6 +1046,7 @@ export async function POST(request: NextRequest) {
         await Promise.all([
           invalidateCachePattern("cache:api:s3:sold-rolls*"),
           invalidateCachePattern("cache:api:s3:inventario*"),
+          invalidateCachePattern("cache:api:s3:get-rolls*"),
         ]);
 
         console.log("🗑️ Cache invalidado después de procesar devolución");
@@ -1125,7 +1079,7 @@ export async function POST(request: NextRequest) {
       },
       cache: {
         invalidated: results.successful.length > 0,
-        patterns: ["sold-rolls", "inventario"],
+        patterns: ["sold-rolls", "inventario", "get-rolls"],
       },
     };
 

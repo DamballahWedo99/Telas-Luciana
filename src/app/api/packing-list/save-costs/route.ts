@@ -6,6 +6,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { invalidateAndWarmInventory } from "@/lib/cache-warming";
+import { invalidateCachePattern } from "@/lib/cache-middleware";
 
 const s3Client = new S3Client({
   region: "us-west-2",
@@ -55,6 +57,28 @@ interface ProcessResponse {
 
 const fixInvalidJSON = (content: string): string => {
   return content.replace(/: *NaN/g, ": null");
+};
+
+const invalidateInventoryRelatedCaches = async (): Promise<void> => {
+  try {
+    console.log(
+      "🔥 [SAVE-COSTS] Invalidando todos los caches relacionados con inventario..."
+    );
+
+    await invalidateAndWarmInventory();
+
+    await invalidateCachePattern("cache:api:s3:sold-rolls:*");
+    console.log("🗑️ Cache de sold-rolls invalidado");
+
+    await invalidateCachePattern("cache:api:s3:rolls-data:*");
+    console.log("🗑️ Cache de rolls-data invalidado");
+
+    console.log(
+      "✅ Invalidación completa de caches relacionados con inventario finalizada"
+    );
+  } catch (error) {
+    console.error("❌ Error invalidando caches relacionados:", error);
+  }
 };
 
 export async function POST(request: NextRequest) {
@@ -220,6 +244,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await invalidateInventoryRelatedCaches();
+
     console.log(
       `[COSTS] User ${session.user.email} updated costs for ${updatedCount} items`
     );
@@ -238,7 +264,14 @@ export async function POST(request: NextRequest) {
       response.errors = errors;
     }
 
-    return NextResponse.json(response);
+    return NextResponse.json({
+      ...response,
+      cache: {
+        invalidated: true,
+        warming: "initiated",
+        invalidatedCaches: ["inventario", "sold-rolls", "rolls-data"],
+      },
+    });
   } catch (error) {
     console.error("Error guardando costos:", error);
     return NextResponse.json(

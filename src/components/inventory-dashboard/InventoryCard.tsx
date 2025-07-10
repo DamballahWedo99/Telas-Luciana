@@ -118,6 +118,20 @@ interface ReturnRollData {
   original_sold_date: string;
 }
 
+interface PackingListRollData {
+  rollo_id: string;
+  OC: string;
+  tela: string;
+  color: string;
+  lote: string;
+  unidad: string;
+  cantidad: number;
+  fecha_ingreso: string;
+  status: string;
+  almacen?: string;
+  weight?: number;
+}
+
 interface ZodError {
   path: (string | number)[];
   message: string;
@@ -240,12 +254,6 @@ interface FormData {
 }
 
 function processInventoryData(data: unknown[]): InventoryItem[] {
-  console.log(
-    "🔄 [InventoryCard] Iniciando processInventoryData con",
-    data.length,
-    "elementos"
-  );
-
   const safeParseNumeric = (
     value: string | number | null | undefined
   ): number => {
@@ -276,32 +284,10 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
     return true;
   });
 
-  console.log(
-    `✅ [InventoryCard] Filtrados ${
-      data.length - filteredData.length
-    } items pending. Procesando ${filteredData.length} items válidos.`
-  );
-
   const processedItems: InventoryItem[] = [];
 
-  filteredData.forEach((item: unknown, index: number) => {
+  filteredData.forEach((item: unknown) => {
     const typedItem = item as RawInventoryItem;
-
-    console.log(
-      `\n--- [InventoryCard] Procesando item ${index + 1}/${
-        filteredData.length
-      } ---`
-    );
-    console.log("Tela:", typedItem.Tela, "Color:", typedItem.Color);
-    console.log("Datos raw:", {
-      OC: typedItem.OC,
-      Ubicacion: typedItem.Ubicacion,
-      almacen: typedItem.almacen,
-      CDMX: typedItem.CDMX,
-      MID: typedItem.MID,
-      Cantidad: typedItem.Cantidad,
-      status: typedItem.status || "success",
-    });
 
     const costo = safeParseNumeric(typedItem.Costo);
     const cantidad = safeParseNumeric(typedItem.Cantidad);
@@ -340,16 +326,7 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
           ? typedItem.MID
           : parseNumericValue(typedItem.MID);
 
-      console.log(
-        "📊 [InventoryCard] Cantidades - CDMX:",
-        cantidadCDMX,
-        "MID:",
-        cantidadMID
-      );
-
       if (cantidadCDMX > 0 && cantidadMID > 0) {
-        console.log("🔄 [InventoryCard] Creando dos entradas separadas");
-
         const cdmxItem = {
           OC: String(typedItem.OC || ""),
           Tela: String(typedItem.Tela || ""),
@@ -370,7 +347,6 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
           ),
         };
 
-        console.log("✅ [InventoryCard] Item CDMX creado:", cdmxItem);
         processedItems.push(cdmxItem);
 
         const meridaItem = {
@@ -393,7 +369,6 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
           ),
         };
 
-        console.log("✅ [InventoryCard] Item Mérida creado:", meridaItem);
         processedItems.push(meridaItem);
 
         return;
@@ -443,11 +418,6 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
           ubicacion
         );
       }
-
-      console.log(
-        "⚠️ [InventoryCard] No hay columnas CDMX/MID ni almacen, usando ubicación:",
-        ubicacion
-      );
     }
 
     const finalItem = {
@@ -469,13 +439,6 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
           ""
       ),
     };
-
-    console.log("✅ [InventoryCard] Item final creado:", {
-      Tela: finalItem.Tela,
-      Color: finalItem.Color,
-      Cantidad: finalItem.Cantidad,
-      Ubicacion: finalItem.Ubicacion,
-    });
 
     processedItems.push(finalItem);
   });
@@ -709,10 +672,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           .sort((a, b) => a - b);
         setAvailableLotsForReturns(lotsForFirstOC);
       }
-
-      toast.success(
-        `Cargados ${availableRolls.length} rollos disponibles para devolución`
-      );
     } catch (error) {
       console.error("❌ [RETURNS] Error cargando rollos vendidos:", error);
       toast.error(
@@ -918,9 +877,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       }
 
       if (result.summary.successful > 0) {
-        toast.success(
-          `✅ Devolución exitosa: ${result.summary.successful} rollos procesados`
-        );
+        toast.success("Devolución exitosa");
 
         if (result.results.successful.length > 0) {
           const updatedInventory = [...inventory];
@@ -971,14 +928,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             `⚠️ ${result.summary.failed} rollos no pudieron ser procesados completamente`
           );
         }
+
+        setOpenReturnsDialog(false);
       } else {
         toast.error(
           `❌ No se pudieron procesar las devoluciones: ${result.message}`
         );
-      }
-
-      if (result.summary.successful > 0) {
-        setOpenReturnsDialog(false);
       }
     } catch (error) {
       console.error("❌ [RETURNS] Error procesando devoluciones:", error);
@@ -1030,10 +985,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           inventory[selectedItemIndex].FacturaDragonAzteca || "",
       };
 
-      console.log("🔍 [EDIT] Enviando oldItem completo:", oldItem);
-      console.log("📝 [EDIT] Enviando newItem:", editingItem);
-
-      // Mapear ubicación para la API
       const locationForAPI =
         editingItem.Ubicacion === "Mérida" ? "MID" : "CDMX";
 
@@ -1070,9 +1021,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
           throw new Error(errorData.error || "Error al actualizar inventario");
         }
-
-        const result = await response.json();
-        console.log("✅ [EDIT] Actualización exitosa:", result);
 
         toast.success("Producto actualizado correctamente");
       } catch (error) {
@@ -1366,7 +1314,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         setCurrentViewingYear(currentYear);
         setCurrentViewingMonth(currentMonth);
 
-        toast.success("✅ Inventario actualizado");
+        toast.success("Inventario actualizado con éxito");
       }
     } catch (error) {
       console.error("Error recargando inventario:", error);
@@ -1402,9 +1350,24 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       }
 
       const data: PackingListEntry[] = await response.json();
-      setPackingListData(data);
 
-      if (data.length === 0) {
+      let normalizedData: PackingListEntry[];
+      if (Array.isArray(data)) {
+        normalizedData = data;
+      } else if (data && typeof data === "object") {
+        const keys = Object.keys(data)
+          .filter((key) => !isNaN(Number(key)))
+          .sort((a, b) => Number(a) - Number(b));
+        normalizedData = keys.map(
+          (key) => data[key as keyof typeof data]
+        ) as PackingListEntry[];
+      } else {
+        normalizedData = [];
+      }
+
+      setPackingListData(normalizedData);
+
+      if (normalizedData.length === 0) {
         toast.info(
           `No se encontraron rollos en el packing list para ${tela} ${color}`
         );
@@ -1415,7 +1378,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         return;
       }
 
-      const matchingEntries = data.filter(
+      const matchingEntries = normalizedData.filter(
         (entry) => entry.fabric_type === tela && entry.color === color
       );
 
@@ -1429,30 +1392,46 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         const lots: number[] = [];
 
         matchingEntries.forEach((entry) => {
-          if (!lots.includes(entry.lot)) {
-            lots.push(entry.lot);
+          const lotNumber =
+            typeof entry.lot === "string" ? parseInt(entry.lot) : entry.lot;
+
+          if (!lots.includes(lotNumber)) {
+            lots.push(lotNumber);
           }
 
-          const rollsFromLocation = entry.rolls.filter((roll) => {
-            const rollLocation = roll.almacen === "CDMX" ? "CDMX" : "Mérida";
-            const matches = rollLocation === ubicacion;
+          const rollsFromLocation = (
+            entry.rolls as unknown as PackingListRollData[]
+          )
+            .filter((roll) => {
+              const rollLocation = roll.almacen === "CDMX" ? "CDMX" : "Mérida";
+              const matches = rollLocation === ubicacion;
 
-            if (!matches) {
-              console.log(
-                `⏭️ [PACKING-LIST] Rollo ${roll.roll_number} omitido: está en ${rollLocation}, necesitamos ${ubicacion}`
-              );
-            }
+              if (!matches) {
+                console.log(
+                  `⏭️ [PACKING-LIST] Rollo ${roll.rollo_id} omitido: está en ${rollLocation}, necesitamos ${ubicacion}`
+                );
+              }
 
-            return matches;
-          });
+              return matches;
+            })
+            .map((roll: PackingListRollData) => {
+              const mappedRoll: Roll = {
+                roll_number: parseInt(roll.rollo_id),
+                almacen: roll.almacen || "",
+              };
 
-          console.log(
-            `📍 [PACKING-LIST] Lote ${entry.lot}: ${rollsFromLocation.length}/${entry.rolls.length} rollos en ${ubicacion}`
-          );
+              if (roll.unidad === "KG" || roll.unidad === "KGS") {
+                mappedRoll.kg = roll.weight || roll.cantidad;
+              } else {
+                mappedRoll.mts = roll.weight || roll.cantidad;
+              }
+
+              return mappedRoll;
+            });
 
           if (rollsFromLocation.length > 0) {
-            const existingRolls = groupedByLot.get(entry.lot) || [];
-            groupedByLot.set(entry.lot, [
+            const existingRolls = groupedByLot.get(lotNumber) || [];
+            groupedByLot.set(lotNumber, [
               ...existingRolls,
               ...rollsFromLocation,
             ]);
@@ -1463,11 +1442,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           const rollsInLot = groupedByLot.get(lot) || [];
           return rollsInLot.length > 0;
         });
-
-        console.log(
-          `✅ [PACKING-LIST] Lotes con rollos en ${ubicacion}:`,
-          lotsWithRolls
-        );
 
         setAvailableLots(lotsWithRolls.sort((a, b) => a - b));
         setRollsGroupedByLot(groupedByLot);
@@ -1526,7 +1500,21 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
       const data: PackingListEntry[] = await response.json();
 
-      const matchingEntries = data.filter(
+      let normalizedData: PackingListEntry[];
+      if (Array.isArray(data)) {
+        normalizedData = data;
+      } else if (data && typeof data === "object") {
+        const keys = Object.keys(data)
+          .filter((key) => !isNaN(Number(key)))
+          .sort((a, b) => Number(a) - Number(b));
+        normalizedData = keys.map(
+          (key) => data[key as keyof typeof data]
+        ) as PackingListEntry[];
+      } else {
+        normalizedData = [];
+      }
+
+      const matchingEntries = normalizedData.filter(
         (entry) => entry.fabric_type === tela && entry.color === color
       );
 
@@ -1535,21 +1523,33 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         const lots: number[] = [];
 
         matchingEntries.forEach((entry) => {
-          if (!lots.includes(entry.lot)) {
-            lots.push(entry.lot);
+          const lotNumber =
+            typeof entry.lot === "string" ? parseInt(entry.lot) : entry.lot;
+
+          if (!lots.includes(lotNumber)) {
+            lots.push(lotNumber);
           }
 
-          const cdmxRolls = entry.rolls.filter(
-            (roll) => roll.almacen === "CDMX"
-          );
+          const cdmxRolls = (entry.rolls as unknown as PackingListRollData[])
+            .filter((roll) => roll.almacen === "CDMX")
+            .map((roll: PackingListRollData) => {
+              const mappedRoll: Roll = {
+                roll_number: parseInt(roll.rollo_id),
+                almacen: roll.almacen || "",
+              };
 
-          console.log(
-            `📍 [TRANSFER-PACKING-LIST] Lote ${entry.lot}: ${cdmxRolls.length}/${entry.rolls.length} rollos en CDMX`
-          );
+              if (roll.unidad === "KG" || roll.unidad === "KGS") {
+                mappedRoll.kg = roll.weight || roll.cantidad;
+              } else {
+                mappedRoll.mts = roll.weight || roll.cantidad;
+              }
+
+              return mappedRoll;
+            });
 
           if (cdmxRolls.length > 0) {
-            const existingRolls = groupedByLot.get(entry.lot) || [];
-            groupedByLot.set(entry.lot, [...existingRolls, ...cdmxRolls]);
+            const existingRolls = groupedByLot.get(lotNumber) || [];
+            groupedByLot.set(lotNumber, [...existingRolls, ...cdmxRolls]);
           }
         });
 
@@ -1716,7 +1716,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           Modo: sellMode,
         });
 
-        // Mapear ubicación del inventario a formato de API
         const locationForAPI = item.Ubicacion === "Mérida" ? "MID" : "CDMX";
 
         const inventoryUpdatePayload = {
@@ -1753,9 +1752,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             errorData.error || "Error al actualizar inventario en S3"
           );
         }
-
-        const inventoryResult = await inventoryUpdateResponse.json();
-        console.log("✅ [SELL] Inventario actualizado en S3:", inventoryResult);
 
         const updatedInventory = [...inventory];
 
@@ -1848,9 +1844,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 salesError.error || "Error al guardar historial de ventas"
               );
             }
-
-            const salesResult = await salesResponse.json();
-            console.log("✅ [SELL] Historial guardado:", salesResult);
           }
 
           if (sellMode === "rolls" && selectedRolls.length > 0) {
@@ -1878,21 +1871,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
             await loadPackingListData(item.Tela, item.Color, item.Ubicacion);
 
-            toast.success(
-              `✅ Venta completada: ${quantityToSell.toFixed(2)} ${
-                item.Unidades
-              } de ${item.Tela} ${
-                item.Color
-              }. Inventario, packing list e historial actualizados.`
-            );
+            toast.success("Venta completada con éxito");
           } else {
-            toast.success(
-              `✅ Venta manual completada: ${quantityToSell.toFixed(2)} ${
-                item.Unidades
-              } de ${item.Tela} ${
-                item.Color
-              }. Inventario e historial actualizados.`
-            );
+            toast.success("Venta completada con éxito");
           }
         } catch (error) {
           console.error("❌ [SELL] Error en procesos secundarios:", error);
@@ -2025,8 +2006,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       let updatePayload: TransferUpdatePayload;
 
       if (existingMeridaItem) {
-        console.log("✅ CONSOLIDANDO CON ITEM EXISTENTE EN MÉRIDA");
-
         updatePayload = {
           transferType: "consolidate",
           oldItem,
@@ -2151,21 +2130,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             );
           }
 
-          console.log("✅ TRASLADO CON CONSOLIDACIÓN COMPLETADO EN S3");
           inventoryUpdateSuccess = true;
 
           if (inventoryResponseData.operation === "consolidate") {
-            toast.success(
-              `✅ Traslado consolidado: ${quantityToTransfer.toFixed(2)} ${
-                item.Unidades
-              } agregados al item existente en Mérida`
-            );
+            toast.success("Traslado realizado exitosamente");
           } else if (inventoryResponseData.operation === "create") {
-            toast.success(
-              `✅ Nuevo item creado en Mérida: ${quantityToTransfer.toFixed(
-                2
-              )} ${item.Unidades}`
-            );
+            toast.success("Nuevo item creado en Mérida");
           }
         } catch (inventoryError) {
           console.error(
@@ -2247,11 +2217,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               }
             }
 
-            console.log(
-              "✅ PACKING LIST ACTUALIZADO:",
-              packingListResponseData
-            );
-
             await loadTransferPackingListData(item.Tela, item.Color);
             packingListUpdateSuccess = true;
           } catch (error) {
@@ -2274,9 +2239,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             "⚠️ Traslado completado con consolidación, pero con errores en packing list."
           );
         } else if (transferMode === "rolls" && packingListUpdateSuccess) {
-          toast.success(
-            "✅ Traslado con consolidación y packing list actualizados correctamente."
-          );
+          toast.success("Traslado realizado exitosamente.");
         }
 
         setOpenTransferDialog(false);
