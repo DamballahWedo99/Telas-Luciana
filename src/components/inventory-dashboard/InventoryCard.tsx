@@ -119,7 +119,7 @@ interface ReturnRollData {
 }
 
 interface PackingListRollData {
-  rollo_id: string;
+  roll_number: number;
   OC: string;
   tela: string;
   color: string;
@@ -337,7 +337,10 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
           Total: costo * cantidadCDMX,
           Ubicacion: "CDMX",
           Importacion: normalizeImportacion(
-            typedItem.Importacion || typedItem["Importación"] || ""
+            typedItem.Importacion ||
+              typedItem["Importación"] ||
+              typedItem["Importaci\u00f3n"] ||
+              ""
           ),
           FacturaDragonAzteca: String(
             typedItem["Factura Dragón Azteca"] ||
@@ -359,7 +362,10 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
           Total: costo * cantidadMID,
           Ubicacion: "Mérida",
           Importacion: normalizeImportacion(
-            typedItem.Importacion || typedItem["Importación"] || ""
+            typedItem.Importacion ||
+              typedItem["Importación"] ||
+              typedItem["Importaci\u00f3n"] ||
+              ""
           ),
           FacturaDragonAzteca: String(
             typedItem["Factura Dragón Azteca"] ||
@@ -430,7 +436,10 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
       Total: costo * cantidadFinal,
       Ubicacion: ubicacion,
       Importacion: normalizeImportacion(
-        typedItem.Importacion || typedItem["Importación"] || ""
+        typedItem.Importacion ||
+          typedItem["Importación"] ||
+          typedItem["Importaci\u00f3n"] ||
+          ""
       ),
       FacturaDragonAzteca: String(
         typedItem["Factura Dragón Azteca"] ||
@@ -1406,24 +1415,18 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               const rollLocation = roll.almacen === "CDMX" ? "CDMX" : "Mérida";
               const matches = rollLocation === ubicacion;
 
-              if (!matches) {
-                console.log(
-                  `⏭️ [PACKING-LIST] Rollo ${roll.rollo_id} omitido: está en ${rollLocation}, necesitamos ${ubicacion}`
-                );
-              }
-
               return matches;
             })
             .map((roll: PackingListRollData) => {
               const mappedRoll: Roll = {
-                roll_number: parseInt(roll.rollo_id),
+                roll_number: roll.roll_number,
                 almacen: roll.almacen || "",
               };
 
               if (roll.unidad === "KG" || roll.unidad === "KGS") {
-                mappedRoll.kg = roll.weight || roll.cantidad;
+                mappedRoll.kg = roll.weight;
               } else {
-                mappedRoll.mts = roll.weight || roll.cantidad;
+                mappedRoll.mts = roll.weight;
               }
 
               return mappedRoll;
@@ -1534,14 +1537,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             .filter((roll) => roll.almacen === "CDMX")
             .map((roll: PackingListRollData) => {
               const mappedRoll: Roll = {
-                roll_number: parseInt(roll.rollo_id),
+                roll_number: roll.roll_number,
                 almacen: roll.almacen || "",
               };
 
               if (roll.unidad === "KG" || roll.unidad === "KGS") {
-                mappedRoll.kg = roll.weight || roll.cantidad;
+                mappedRoll.kg = roll.weight;
               } else {
-                mappedRoll.mts = roll.weight || roll.cantidad;
+                mappedRoll.mts = roll.weight;
               }
 
               return mappedRoll;
