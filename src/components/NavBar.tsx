@@ -199,53 +199,45 @@ export default function Navbar({
         </TooltipProvider>
 
         {isMajorAdmin && (
-          <div className="flex items-center gap-2">
+          <Sheet>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant={
-                      currentView === "inventory" ? "default" : "outline"
-                    }
-                    size="icon"
-                    onClick={() => onViewChange("inventory")}
-                    className={
-                      currentView === "inventory"
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : ""
-                    }
-                  >
-                    <LayoutDashboardIcon className="h-4 w-4" />
-                  </Button>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="icon">
+                      <LayoutDashboardIcon className="h-4 w-4" />
+                    </Button>
+                  </SheetTrigger>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Dashboard de Inventario</p>
+                  <p>Dashboards</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={currentView === "orders" ? "default" : "outline"}
-                    size="icon"
-                    onClick={() => onViewChange("orders")}
-                    className={
-                      currentView === "orders"
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : ""
-                    }
-                  >
-                    <BarChart className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Dashboard de Pedidos</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+            <SheetContent side="right" className="w-80">
+              <SheetHeader>
+                <SheetTitle>Seleccionar Dashboard</SheetTitle>
+              </SheetHeader>
+              <div className="flex flex-col gap-4 mt-8">
+                <Button
+                  variant={currentView === "inventory" ? "default" : "ghost"}
+                  className="justify-start h-12 text-base"
+                  onClick={() => onViewChange("inventory")}
+                >
+                  <LayoutDashboardIcon className="mr-3 h-5 w-5" />
+                  Dashboard de Inventario
+                </Button>
+                <Button
+                  variant={currentView === "orders" ? "default" : "ghost"}
+                  className="justify-start h-12 text-base"
+                  onClick={() => onViewChange("orders")}
+                >
+                  <BarChart className="mr-3 h-5 w-5" />
+                  Dashboard de Pedidos
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
         )}
 
         <Button
