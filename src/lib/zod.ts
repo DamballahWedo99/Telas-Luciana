@@ -187,9 +187,152 @@ export const newRowSchema = z.object({
   Importacion: z.enum(["DA", "HOY", ""]).optional(),
 });
 
+export const editOrderSchema = z.object({
+  proveedor: z
+    .string()
+    .min(1, { message: "El proveedor es obligatorio" })
+    .max(50, { message: "El proveedor no puede tener más de 50 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El proveedor contiene caracteres no permitidos" }),
+  incoterm: z
+    .string()
+    .min(1, { message: "El incoterm es obligatorio" })
+    .max(20, { message: "El incoterm no puede tener más de 20 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El incoterm contiene caracteres no permitidos" }),
+  transportista: z
+    .string()
+    .min(1, { message: "El transportista es obligatorio" })
+    .max(50, { message: "El transportista no puede tener más de 50 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El transportista contiene caracteres no permitidos" }),
+  agente_aduanal: z
+    .string()
+    .max(50, { message: "El agente aduanal no puede tener más de 50 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El agente aduanal contiene caracteres no permitidos" })
+    .optional()
+    .or(z.literal("")),
+  fecha_pedido: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .refine((val) => {
+      if (!val) return true; // Permitir vacío
+      const year = parseInt(val.split('-')[0]);
+      const currentYear = new Date().getFullYear();
+      return year <= currentYear;
+    }, { message: "No se permiten fechas futuras" })
+    .optional()
+    .or(z.literal("")),
+  sale_origen: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .refine((val) => {
+      if (!val) return true;
+      const year = parseInt(val.split('-')[0]);
+      const currentYear = new Date().getFullYear();
+      return year <= currentYear;
+    }, { message: "No se permiten fechas futuras" })
+    .optional()
+    .or(z.literal("")),
+  pago_credito: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .refine((val) => {
+      if (!val) return true;
+      const year = parseInt(val.split('-')[0]);
+      const currentYear = new Date().getFullYear();
+      return year <= currentYear;
+    }, { message: "No se permiten fechas futuras" })
+    .optional()
+    .or(z.literal("")),
+  llega_a_Lazaro: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .refine((val) => {
+      if (!val) return true;
+      const year = parseInt(val.split('-')[0]);
+      const currentYear = new Date().getFullYear();
+      return year <= currentYear;
+    }, { message: "No se permiten fechas futuras" })
+    .optional()
+    .or(z.literal("")),
+  llega_a_Manzanillo: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .refine((val) => {
+      if (!val) return true;
+      const year = parseInt(val.split('-')[0]);
+      const currentYear = new Date().getFullYear();
+      return year <= currentYear;
+    }, { message: "No se permiten fechas futuras" })
+    .optional()
+    .or(z.literal("")),
+  llega_almacen_proveedor: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .refine((val) => {
+      if (!val) return true;
+      const year = parseInt(val.split('-')[0]);
+      const currentYear = new Date().getFullYear();
+      return year <= currentYear;
+    }, { message: "No se permiten fechas futuras" })
+    .optional()
+    .or(z.literal("")),
+  pedimento: z
+    .string()
+    .max(30, { message: "El pedimento no puede tener más de 30 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El pedimento contiene caracteres no permitidos" })
+    .optional()
+    .or(z.literal("")),
+  factura_proveedor: z
+    .string()
+    .max(30, { message: "La factura del proveedor no puede tener más de 30 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "La factura del proveedor contiene caracteres no permitidos" })
+    .optional()
+    .or(z.literal("")),
+  reporte_inspeccion: z
+    .string()
+    .max(50, { message: "El reporte de inspección no puede tener más de 50 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El reporte de inspección contiene caracteres no permitidos" })
+    .optional()
+    .or(z.literal("")),
+  pedimento_tránsito: z
+    .string()
+    .max(30, { message: "El pedimento de tránsito no puede tener más de 30 caracteres" })
+    .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El pedimento de tránsito contiene caracteres no permitidos" })
+    .optional()
+    .or(z.literal("")),
+  precio_m_fob_usd: z
+    .number({ message: "El precio FOB debe ser un número" })
+    .min(0, { message: "El precio FOB debe ser mayor o igual a 0" })
+    .max(999999.99, { message: "El precio FOB no puede ser mayor a 999,999.99" }),
+  tipo_de_cambio: z
+    .number({ message: "El tipo de cambio debe ser un número" })
+    .min(0.0001, { message: "El tipo de cambio debe ser mayor a 0" })
+    .max(99.9999, { message: "El tipo de cambio no puede ser mayor a 99.9999" }),
+  venta: z
+    .number({ message: "El precio de venta debe ser un número" })
+    .min(0.01, { message: "El precio de venta debe ser mayor a 0" })
+    .max(999999.99, { message: "El precio de venta no puede ser mayor a 999,999.99" }),
+});
+
+export const editTelaSchema = z.object({
+  venta: z
+    .number({ message: "El precio de venta debe ser un número" })
+    .min(0.01, { message: "El precio de venta debe ser mayor a 0" })
+    .max(999999.99, { message: "El precio de venta no puede ser mayor a 999,999.99" }),
+  m_factura: z
+    .number({ message: "Los metros factura deben ser un número" })
+    .min(0.01, { message: "Los metros factura deben ser mayor a 0" })
+    .max(999999.99, { message: "Los metros factura no pueden ser mayor a 999,999.99" }),
+  total_factura: z
+    .number({ message: "El total factura debe ser un número" })
+    .min(0.01, { message: "El total factura debe ser mayor a 0" })
+    .max(999999.99, { message: "El total factura no puede ser mayor a 999,999.99" }),
+});
+
 export type NewRowFormValues = z.infer<typeof newRowSchema>;
 export type LoginFormValues = z.infer<typeof loginSchema>;
 export type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 export type CreateClienteFormValues = z.infer<typeof createClienteSchema>;
+export type EditOrderFormValues = z.infer<typeof editOrderSchema>;
+export type EditTelaFormValues = z.infer<typeof editTelaSchema>;

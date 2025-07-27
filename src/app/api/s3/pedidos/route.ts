@@ -221,4 +221,148 @@ const getCachedPedidos = withCache(getPedidosData, {
   onCacheMiss: (key) => console.log(`💾 Cache MISS - Pedidos: ${key}`),
 });
 
-export { getCachedPedidos as GET };
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+
+async function updatePedidoData(request: NextRequest) {
+  const rateLimitResult = await rateLimit(request, {
+    type: "api",
+    message: "Demasiadas solicitudes de actualización. Por favor, inténtalo de nuevo más tarde.",
+  });
+
+  if (rateLimitResult) {
+    return rateLimitResult;
+  }
+
+  const session = await auth();
+
+  if (!session || !session.user) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
+  const userRole = session.user.role;
+  if (!userRole || (userRole !== "admin" && userRole !== "major_admin")) {
+    return NextResponse.json(
+      { error: "No tienes permisos para editar pedidos" },
+      { status: 403 }
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const { updatedOrder } = body;
+
+    if (!updatedOrder || !updatedOrder.orden_de_compra) {
+      return NextResponse.json(
+        { error: "Datos de pedido inválidos" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`🔄 Actualizando pedido: ${updatedOrder.orden_de_compra}`);
+
+    // Obtener lista de archivos JSON en S3
+    const folderPrefix = "Pedidos/json/";
+    const listCommand = new ListObjectsV2Command({
+      Bucket: "telas-luciana",
+      Prefix: folderPrefix,
+    });
+
+    const listResponse = await s3Client.send(listCommand);
+    const jsonFiles = (listResponse.Contents || [])
+      .filter((item: _Object) => item.Key && item.Key.endsWith(".json"))
+      .map((item: _Object) => item.Key!);
+
+    let filesUpdated = 0;
+    const updatedFiles: string[] = [];
+
+    // Buscar TODOS los archivos que contienen registros con esta orden de compra específica
+    for (const fileKey of jsonFiles) {
+      try {
+        const getCommand = new GetObjectCommand({
+          Bucket: "telas-luciana",
+          Key: fileKey,
+        });
+
+        const fileResponse = await s3Client.send(getCommand);
+        
+        if (fileResponse.Body) {
+          let fileContent = await fileResponse.Body.transformToString();
+          fileContent = fixInvalidJSON(fileContent);
+
+          const jsonData: unknown = JSON.parse(fileContent);
+          let fileData: PedidoData[] = [];
+
+          // Normalizar datos a array
+          if (Array.isArray(jsonData)) {
+            fileData = jsonData as PedidoData[];
+          } else {
+            fileData = [jsonData as PedidoData];
+          }
+
+          // Verificar si este archivo contiene la orden de compra + tela + color específicos
+          const hasTargetOrder = fileData.some(item => 
+            item.orden_de_compra === updatedOrder.orden_de_compra &&
+            item["pedido_cliente.tipo_tela"] === updatedOrder["pedido_cliente.tipo_tela"] &&
+            item["pedido_cliente.color"] === updatedOrder["pedido_cliente.color"]
+          );
+
+          if (hasTargetOrder) {
+            // Actualizar solo el registro específico en este archivo
+            const updatedFileData = fileData.map(item => {
+              if (item.orden_de_compra === updatedOrder.orden_de_compra &&
+                  item["pedido_cliente.tipo_tela"] === updatedOrder["pedido_cliente.tipo_tela"] &&
+                  item["pedido_cliente.color"] === updatedOrder["pedido_cliente.color"]) {
+                return { ...item, ...updatedOrder };
+              }
+              return item;
+            });
+
+            // Guardar el archivo actualizado (sobrescribir el mismo archivo)
+            const putCommand = new PutObjectCommand({
+              Bucket: "telas-luciana",
+              Key: fileKey,
+              Body: JSON.stringify(updatedFileData.length === 1 ? updatedFileData[0] : updatedFileData, null, 2),
+              ContentType: "application/json",
+            });
+
+            await s3Client.send(putCommand);
+            
+            filesUpdated++;
+            updatedFiles.push(fileKey);
+            console.log(`✅ Archivo actualizado: ${fileKey}`);
+            
+            // NO hacer break aquí - continuar buscando en todos los archivos
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Error procesando archivo ${fileKey}:`, error);
+        continue;
+      }
+    }
+
+    if (filesUpdated === 0) {
+      return NextResponse.json(
+        { error: "No se encontró el pedido especificado para actualizar" },
+        { status: 404 }
+      );
+    }
+
+    console.log(`✅ Pedido actualizado en ${filesUpdated} archivo(s): ${updatedOrder.orden_de_compra}`);
+
+    return NextResponse.json({
+      success: true,
+      message: "Pedido actualizado exitosamente",
+      updatedOrder,
+      filesUpdated,
+      updatedFiles,
+    });
+  } catch (error) {
+    console.error("❌ Error actualizando pedido:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
+  }
+}
+
+export { getCachedPedidos as GET, updatePedidoData as PUT };

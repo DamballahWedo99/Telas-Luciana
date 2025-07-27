@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import {
   ChevronUpIcon,
   ChevronDownIcon,
-  Upload,
-  Loader2,
   ShoppingCartIcon,
   XCircleIcon,
   Search,
@@ -11,6 +11,7 @@ import {
   AlertCircle,
   ChevronLeftIcon,
   ChevronRightIcon,
+  EditIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,7 @@ import {
   PaginationItem,
   PaginationLink,
 } from "@/components/ui/pagination";
-import { EmptyState } from "./EmptyState";
+import { EditOrderModal } from "./EditOrderModal";
 
 interface PedidoData {
   num_archivo?: number;
@@ -104,8 +105,6 @@ interface OrdersFilterSectionProps {
   ordenDeCompraOptions: string[];
   tipoTelaOptions: string[];
   colorOptions: string[];
-  handleFileUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  fileUploading?: boolean;
   resetFilters: () => void;
 }
 
@@ -455,11 +454,35 @@ const OrdersTable: React.FC<{
     <div className="bg-white rounded shadow-sm mb-6">
       <div className="border rounded-md overflow-hidden">
         <div className="h-[500px] overflow-auto relative">
-          <table className="w-full text-sm border-collapse min-w-[2500px]">
+          <table className="w-full text-sm border-collapse min-w-[4000px]">
             <thead className="bg-white sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[180px]">
                   Orden de Compra
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[150px]">
+                  Proveedor
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Contacto
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[150px]">
+                  Email
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
+                  Origen
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Incoterm
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Transportista
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Agente Aduanal
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Pedimento
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[180px]">
                   Tipo de Tela
@@ -467,11 +490,29 @@ const OrdersTable: React.FC<{
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
                   Color
                 </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
+                  M Pedidos
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[80px]">
+                  Unidad
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Precio FOB USD
+                </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
                   Total Factura (USD)
                 </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
+                  M Factura
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Tipo Cambio
+                </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
                   Total MXP
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Total Gastos
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
                   T. Cambio
@@ -490,6 +531,18 @@ const OrdersTable: React.FC<{
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[160px]">
                   DDP USD/Unidad S/IVA
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Factura Proveedor
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
+                  Fracción
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[80px]">
+                  Año
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
+                  Venta
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
                   Fecha Pedido
@@ -512,7 +565,7 @@ const OrdersTable: React.FC<{
               {!hasData ? (
                 <tr>
                   <td
-                    colSpan={16}
+                    colSpan={33}
                     className="p-2 align-middle text-center h-24"
                   >
                     No se encontraron resultados para los filtros seleccionados
@@ -533,16 +586,58 @@ const OrdersTable: React.FC<{
                         {row.orden_de_compra || "-"}
                       </td>
                       <td className="p-2 align-middle">
+                        {row.proveedor || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.contacto || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.email || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.origen || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.incoterm || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.transportista || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.agente_aduanal || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.pedimento || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
                         {row["pedido_cliente.tipo_tela"] || "-"}
                       </td>
                       <td className="p-2 align-middle">
                         {row["pedido_cliente.color"] || "-"}
                       </td>
                       <td className="p-2 align-middle">
+                        {formatCurrency(row["pedido_cliente.total_m_pedidos"] || 0)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row["pedido_cliente.unidad"] || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        ${formatCurrency(row.precio_m_fob_usd || 0)}
+                      </td>
+                      <td className="p-2 align-middle">
                         ${formatCurrency(row.total_factura || 0)}
                       </td>
                       <td className="p-2 align-middle">
+                        {formatCurrency(row.m_factura || 0)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {formatCurrency(row.tipo_de_cambio || 0)}
+                      </td>
+                      <td className="p-2 align-middle">
                         $MXN {formatCurrency(calculatedData.totalMxp)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        ${formatCurrency(row.total_gastos || 0)}
                       </td>
                       <td className="p-2 align-middle">
                         {(calculatedData.tCambio * 100).toFixed(2)}%
@@ -561,6 +656,18 @@ const OrdersTable: React.FC<{
                       </td>
                       <td className="p-2 align-middle">
                         ${formatCurrency(calculatedData.ddpUsdUnidadSIva)}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.factura_proveedor || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.fraccion || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.Year || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        ${formatCurrency(row.venta || 0)}
                       </td>
                       <td className="p-2 align-middle">
                         {formatDate(row.fecha_pedido)}
@@ -656,8 +763,6 @@ interface OrdersCardProps {
   setColorFilter: React.Dispatch<React.SetStateAction<string>>;
   ubicacionFilter: string;
   setUbicacionFilter: React.Dispatch<React.SetStateAction<string>>;
-  handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  fileUploading: boolean;
   resetFilters: () => void;
   formatDate: (dateString?: string) => string;
   formatCurrency: (value: number, decimals?: number) => string;
@@ -666,6 +771,8 @@ interface OrdersCardProps {
   goToPage: (page: number) => void;
   ordersCollapsed: boolean;
   setOrdersCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+  onDataUpdate?: () => void;
+  loading?: boolean;
 }
 
 export const OrdersCard: React.FC<OrdersCardProps> = ({
@@ -682,8 +789,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   setColorFilter,
   ubicacionFilter,
   setUbicacionFilter,
-  handleFileUpload,
-  fileUploading,
   resetFilters,
   formatDate,
   formatCurrency,
@@ -692,12 +797,54 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   goToPage,
   ordersCollapsed,
   setOrdersCollapsed,
+  onDataUpdate,
+  loading = false,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const triggerFileUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+  const handleSaveOrder = async (updatedOrders: PedidoData[]) => {
+    try {
+      let totalFilesUpdated = 0;
+      
+      // Procesar cada orden individualmente
+      for (const updatedOrder of updatedOrders) {
+        const response = await fetch("/api/s3/pedidos", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ updatedOrder }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Error al guardar el pedido");
+        }
+
+        const result = await response.json();
+        totalFilesUpdated += result.filesUpdated || 0;
+      }
+
+      // Mostrar toast de éxito
+      toast.success(`Pedidos actualizados exitosamente`, {
+        description: `${updatedOrders.length} telas actualizadas en ${totalFilesUpdated} archivo(s)`,
+        duration: 3000,
+      });
+      
+      // Actualizar datos sin refrescar la página
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+      
+      console.log(`✅ ${updatedOrders.length} telas guardadas en ${totalFilesUpdated} archivos`);
+    } catch (error) {
+      console.error("❌ Error guardando pedidos:", error);
+      
+      // Mostrar toast de error
+      toast.error("Error al guardar los pedidos", {
+        description: error instanceof Error ? error.message : "Error desconocido",
+        duration: 5000,
+      });
     }
   };
 
@@ -729,8 +876,8 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           ubicacionFilter === "almacen"
             ? "llega_almacen_proveedor"
             : ubicacionFilter === "transito"
-            ? "llega_a_Lazaro"
-            : "fecha_pedido";
+              ? "llega_a_Lazaro"
+              : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
       }
@@ -760,8 +907,8 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           ubicacionFilter === "almacen"
             ? "llega_almacen_proveedor"
             : ubicacionFilter === "transito"
-            ? "llega_a_Lazaro"
-            : "fecha_pedido";
+              ? "llega_a_Lazaro"
+              : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
       }
@@ -793,8 +940,8 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           ubicacionFilter === "almacen"
             ? "llega_almacen_proveedor"
             : ubicacionFilter === "transito"
-            ? "llega_a_Lazaro"
-            : "fecha_pedido";
+              ? "llega_a_Lazaro"
+              : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
       }
@@ -826,14 +973,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           </CardDescription>
         </div>
         <div className="flex space-x-2">
-          <input
-            type="file"
-            id="file-upload"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            accept=".csv"
-            className="hidden"
-          />
           <TooltipProvider>
             {isFilterActive && (
               <TooltipProvider>
@@ -850,30 +989,28 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
               </TooltipProvider>
             )}
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={triggerFileUpload}
-                  disabled={fileUploading}
-                >
-                  {fileUploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />{" "}
-                      Cargando...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" /> Cargar CSV
-                    </>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Cargar archivo CSV de pedidos</p>
-              </TooltipContent>
-            </Tooltip>
+            <EditOrderModal
+              data={data}
+              isOpen={isEditModalOpen}
+              onClose={() => setIsEditModalOpen(false)}
+              onSave={handleSaveOrder}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsEditModalOpen(true)}
+                  >
+                    <EditIcon className="h-4 w-4 mr-2" />
+                    Editar
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Editar Orden de Compra</p>
+                </TooltipContent>
+              </Tooltip>
+            </EditOrderModal>
           </TooltipProvider>
 
           <TooltipProvider>
@@ -901,49 +1038,53 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
 
       {!ordersCollapsed && (
         <>
-          <CardContent className="pt-0 pb-4">
-            {data.length > 0 ? (
-              <OrdersFilterSection
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                ordenDeCompraFilter={ordenDeCompraFilter}
-                setOrdenDeCompraFilter={setOrdenDeCompraFilter}
-                tipoTelaFilter={tipoTelaFilter}
-                setTipoTelaFilter={setTipoTelaFilter}
-                colorFilter={colorFilter}
-                setColorFilter={setColorFilter}
-                ubicacionFilter={ubicacionFilter}
-                setUbicacionFilter={setUbicacionFilter}
-                ordenDeCompraOptions={filteredOptions.ordenDeCompraOptions}
-                tipoTelaOptions={filteredOptions.tipoTelaOptions}
-                colorOptions={filteredOptions.colorOptions}
-                handleFileUpload={handleFileUpload}
-                fileUploading={fileUploading}
-                resetFilters={resetFilters}
-              />
-            ) : null}
-          </CardContent>
+          {loading ? (
+            <CardContent className="pt-0 pb-4">
+              <div className="flex items-center justify-center min-h-[400px]">
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+                  <div className="text-lg font-semibold text-gray-600">
+                    Cargando datos históricos...
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          ) : (
+            <>
+              <CardContent className="pt-0 pb-4">
+                {data.length > 0 ? (
+                  <OrdersFilterSection
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    ordenDeCompraFilter={ordenDeCompraFilter}
+                    setOrdenDeCompraFilter={setOrdenDeCompraFilter}
+                    tipoTelaFilter={tipoTelaFilter}
+                    setTipoTelaFilter={setTipoTelaFilter}
+                    colorFilter={colorFilter}
+                    setColorFilter={setColorFilter}
+                    ubicacionFilter={ubicacionFilter}
+                    setUbicacionFilter={setUbicacionFilter}
+                    ordenDeCompraOptions={filteredOptions.ordenDeCompraOptions}
+                    tipoTelaOptions={filteredOptions.tipoTelaOptions}
+                    colorOptions={filteredOptions.colorOptions}
+                    resetFilters={resetFilters}
+                  />
+                ) : null}
+              </CardContent>
 
-          <CardContent>
-            {data.length > 0 ? (
-              <OrdersTable
-                filteredData={filteredData}
-                paginatedData={paginatedData}
-                formatDate={formatDate}
-                formatCurrency={formatCurrency}
-                currentPage={currentPage}
-                totalPages={totalPages}
-                goToPage={goToPage}
-              />
-            ) : (
-              <EmptyState
-                title="No hay datos para mostrar"
-                description="No se encontraron datos de pedidos. Intenta cargar un archivo CSV con datos de pedidos."
-                handleFileUpload={handleFileUpload}
-                fileUploading={fileUploading}
-              />
-            )}
-          </CardContent>
+              <CardContent>
+                <OrdersTable
+                  filteredData={filteredData}
+                  paginatedData={paginatedData}
+                  formatDate={formatDate}
+                  formatCurrency={formatCurrency}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  goToPage={goToPage}
+                />
+              </CardContent>
+            </>
+          )}
         </>
       )}
     </Card>

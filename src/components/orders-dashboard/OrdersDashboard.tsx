@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
-import Papa from "papaparse";
-import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { OrdersMetricsCard } from "./OrdersMetricsCard";
 import { OrdersChartsCard } from "./OrdersChartsCard";
 import { OrdersCard } from "./OrdersCard";
-import { EmptyState } from "./EmptyState";
 
 interface PedidoData {
   num_archivo?: number;
@@ -100,7 +97,6 @@ const PedidosDashboard: React.FC = () => {
   const [filteredData, setFilteredData] = useState<PedidoData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [fileUploading, setFileUploading] = useState<boolean>(false);
 
   const [metricsCollapsed, setMetricsCollapsed] = useState<boolean>(false);
   const [chartsCollapsed, setChartsCollapsed] = useState<boolean>(false);
@@ -125,7 +121,6 @@ const PedidosDashboard: React.FC = () => {
   const [barChartData, setBarChartData] = useState<BarChartDataItem[]>([]);
   const [timelineData, setTimelineData] = useState<TimelineDataItem[]>([]);
   const [deliveryData, setDeliveryData] = useState<DeliveryDataItem[]>([]);
-
 
   const prepareChartData = useCallback((filteredRows: PedidoData[]) => {
     console.log(
@@ -300,143 +295,6 @@ const PedidosDashboard: React.FC = () => {
     [prepareChartData]
   );
 
-  const processCSVData = useCallback(
-    (csvData: string) => {
-      Papa.parse<Record<string, string | number>>(csvData, {
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        complete: (result) => {
-          if (result.errors && result.errors.length > 0) {
-            console.error("❌ Errores en CSV:", result.errors);
-            setError(`Error al analizar CSV: ${result.errors[0].message}`);
-            setLoading(false);
-            return;
-          }
-
-          try {
-            console.log("📄 Columnas encontradas en CSV:", result.meta.fields);
-            console.log(
-              "📊 Primeras 3 filas de datos:",
-              result.data.slice(0, 3)
-            );
-
-            const rows: PedidoData[] = result.data.map((row) => {
-              const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
-              const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
-
-              return {
-                ...row,
-                total_mxp: totalMxp,
-              };
-            });
-
-            const ordenGroups: Record<string, { totalMxpSum: number }> = {};
-            rows.forEach((row) => {
-              const ordenDeCompra = row.orden_de_compra || "";
-              if (!ordenGroups[ordenDeCompra]) {
-                ordenGroups[ordenDeCompra] = {
-                  totalMxpSum: 0,
-                };
-              }
-              ordenGroups[ordenDeCompra].totalMxpSum += row.total_mxp || 0;
-            });
-
-            const processedData: PedidoData[] = rows.map((row) => {
-              const ordenDeCompra = row.orden_de_compra || "";
-              const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
-              const totalGastos = Number(row.total_gastos) || 0;
-              const mFactura = Number(row.m_factura) || 1;
-              const totalMxp = row.total_mxp || 0;
-
-              const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1;
-
-              const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
-
-              const gastosMxp = tCambio * totalGastos;
-              const ddpTotalMxp = gastosMxp + totalMxp;
-              const ddpMxpUnidad = mFactura > 0 ? ddpTotalMxp / mFactura : 0;
-              const ddpUsdUnidad =
-                tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
-              const ddpUsdUnidadSIva = ddpUsdUnidad / 1.16;
-
-              return {
-                ...row,
-                t_cambio: tCambio,
-                gastos_mxp: gastosMxp,
-                ddp_total_mxp: ddpTotalMxp,
-                ddp_mxp_unidad: ddpMxpUnidad,
-                ddp_usd_unidad: ddpUsdUnidad,
-                ddp_usd_unidad_s_iva: ddpUsdUnidadSIva,
-              };
-            });
-
-            const tipoTelaSet = new Set<string>();
-            const colorSet = new Set<string>();
-            const ordenSet = new Set<string>();
-
-            processedData.forEach((row) => {
-              const tipoTela =
-                row["pedido_cliente.tipo_tela"] ||
-                row["pedido_cliente_tipo_tela"] ||
-                row["tipo_tela"] ||
-                row["tela"] ||
-                "Sin Especificar";
-
-              const color =
-                row["pedido_cliente.color"] ||
-                row["pedido_cliente_color"] ||
-                row["color"] ||
-                "Sin Especificar";
-
-              const orden = row["orden_de_compra"] || "Sin Orden";
-
-              tipoTelaSet.add(String(tipoTela).trim());
-              colorSet.add(String(color).trim());
-              ordenSet.add(String(orden).trim());
-            });
-
-            const tipoTelaArray = Array.from(tipoTelaSet).sort();
-            const colorArray = Array.from(colorSet).sort();
-            const ordenArray = Array.from(ordenSet).sort();
-
-            console.log(`✅ Opciones extraídas:`);
-            console.log(`   - Telas (${tipoTelaArray.length}):`, tipoTelaArray);
-            console.log(`   - Colores (${colorArray.length}):`, colorArray);
-            console.log(
-              `   - Órdenes (${ordenArray.length}):`,
-              ordenArray.slice(0, 10),
-              "..."
-            );
-
-            setData(processedData);
-            setFilteredData(processedData);
-            calculateTotals(processedData);
-            setError(null);
-          } catch (err: unknown) {
-            console.error("❌ Error procesando datos:", err);
-            const errorMessage =
-              err instanceof Error ? err.message : String(err);
-            setError(`Error al procesar los datos: ${errorMessage}`);
-          } finally {
-            setLoading(false);
-            setFileUploading(false);
-          }
-        },
-        error: (parseError: unknown) => {
-          console.error("❌ Error parseando CSV:", parseError);
-          const errorMessage =
-            parseError instanceof Error
-              ? parseError.message
-              : String(parseError);
-          setError(`Error al analizar CSV: ${errorMessage}`);
-          setLoading(false);
-          setFileUploading(false);
-        },
-      });
-    },
-    [calculateTotals]
-  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -445,27 +303,29 @@ const PedidosDashboard: React.FC = () => {
         setError(null);
 
         const response = await fetch("/api/s3/pedidos");
-        
+
         if (!response.ok) {
           throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
 
         const result = await response.json();
-        
+
         if (result.error) {
           throw new Error(result.error);
         }
 
         if (result.data && Array.isArray(result.data)) {
-          const processedData: PedidoData[] = result.data.map((row: PedidoData) => {
-            const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
-            const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
+          const processedData: PedidoData[] = result.data.map(
+            (row: PedidoData) => {
+              const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+              const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
 
-            return {
-              ...row,
-              total_mxp: totalMxp,
-            };
-          });
+              return {
+                ...row,
+                total_mxp: totalMxp,
+              };
+            }
+          );
 
           const ordenGroups: Record<string, { totalMxpSum: number }> = {};
           processedData.forEach((row) => {
@@ -520,7 +380,6 @@ const PedidosDashboard: React.FC = () => {
         setError(`Error al obtener los datos: ${errorMessage}`);
       } finally {
         setLoading(false);
-        setFileUploading(false);
       }
     };
 
@@ -671,6 +530,71 @@ const PedidosDashboard: React.FC = () => {
     setUbicacionFilter("all");
   };
 
+  // Función para refrescar datos después de una actualización
+  const handleDataUpdate = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/s3/pedidos?refresh=true");
+      
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.data && Array.isArray(result.data)) {
+        const processedData = result.data.map((row: PedidoData) => {
+          const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+          const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
+          return { ...row, total_mxp: totalMxp };
+        });
+
+        // Calcular campos DDP igual que en el useEffect original
+        const ordenGroups: Record<string, { totalMxpSum: number }> = {};
+        processedData.forEach((row: PedidoData) => {
+          const ordenDeCompra = row.orden_de_compra || "";
+          if (!ordenGroups[ordenDeCompra]) {
+            ordenGroups[ordenDeCompra] = { totalMxpSum: 0 };
+          }
+          ordenGroups[ordenDeCompra].totalMxpSum += row.total_mxp || 0;
+        });
+
+        const finalData = processedData.map((row: PedidoData) => {
+          const ordenDeCompra = row.orden_de_compra || "";
+          const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+          const totalGastos = Number(row.total_gastos) || 0;
+          const mFactura = Number(row.m_factura) || 1;
+          const totalMxp = row.total_mxp || 0;
+          const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1;
+          const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
+          const gastosMxp = tCambio * totalGastos;
+          const ddpTotalMxp = gastosMxp + totalMxp;
+          const ddpMxpUnidad = mFactura > 0 ? ddpTotalMxp / mFactura : 0;
+          const ddpUsdUnidad = tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
+          const ddpUsdUnidadSIva = ddpUsdUnidad / 1.16;
+
+          return {
+            ...row,
+            t_cambio: tCambio,
+            gastos_mxp: gastosMxp,
+            ddp_total_mxp: ddpTotalMxp,
+            ddp_mxp_unidad: ddpMxpUnidad,
+            ddp_usd_unidad: ddpUsdUnidad,
+            ddp_usd_unidad_s_iva: ddpUsdUnidadSIva,
+          };
+        });
+
+        setData(finalData);
+        setFilteredData(finalData);
+        calculateTotals(finalData);
+      }
+    } catch (error) {
+      console.error("❌ Error refrescando datos:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [calculateTotals]);
+
   const totalPages = Math.ceil(filteredData.length / recordsPerPage);
   const paginatedData = filteredData.slice(
     (currentPage - 1) * recordsPerPage,
@@ -702,54 +626,15 @@ const PedidosDashboard: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setFileUploading(true);
-    setError(null);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const csvData = e.target?.result as string;
-      if (csvData) {
-        processCSVData(csvData);
-      } else {
-        setError("No se pudo leer el archivo. Inténtalo de nuevo.");
-        setFileUploading(false);
-      }
-    };
-    reader.onerror = () => {
-      setError("Error al leer el archivo. Inténtalo de nuevo.");
-      setFileUploading(false);
-    };
-    reader.readAsText(file);
-  };
 
   return (
     <div className="max-w-7xl">
-      {loading ? (
-        <div className="flex items-center justify-center min-h-[80vh]">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-            <div className="text-lg font-semibold">
-              Cargando datos históricos...
-            </div>
-          </div>
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="flex flex-col gap-6">
           <Alert variant="destructive" className="mb-2">
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-
-          <EmptyState
-            title="Cargar archivo CSV de pedidos"
-            description="Puedes cargar un archivo CSV con los datos de pedidos para visualizar en el dashboard. El archivo debe tener columnas como: orden_de_compra, total_factura, tipo_de_cambio, etc."
-            handleFileUpload={handleFileUpload}
-            fileUploading={fileUploading}
-          />
         </div>
       ) : (
         <div className="space-y-6">
@@ -789,8 +674,6 @@ const PedidosDashboard: React.FC = () => {
             setColorFilter={setColorFilter}
             ubicacionFilter={ubicacionFilter}
             setUbicacionFilter={setUbicacionFilter}
-            handleFileUpload={handleFileUpload}
-            fileUploading={fileUploading}
             resetFilters={resetFilters}
             formatDate={formatDate}
             formatCurrency={formatCurrency}
@@ -799,6 +682,8 @@ const PedidosDashboard: React.FC = () => {
             goToPage={goToPage}
             ordersCollapsed={ordersCollapsed}
             setOrdersCollapsed={setOrdersCollapsed}
+            onDataUpdate={handleDataUpdate}
+            loading={loading}
           />
         </div>
       )}
