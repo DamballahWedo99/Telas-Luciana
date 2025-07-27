@@ -45,16 +45,41 @@ import {
 import { EmptyState } from "./EmptyState";
 
 interface PedidoData {
-  orden_de_compra?: string;
-  total_factura?: number;
-  tipo_de_cambio?: number;
-  total_gastos?: number;
-  m_factura?: number;
+  num_archivo?: number;
+  proveedor?: string;
+  contacto?: string;
+  email?: string;
+  teléfono?: number;
+  celular?: number;
+  origen?: string;
+  incoterm?: string;
+  transportista?: string;
+  agente_aduanal?: string;
+  pedimento?: string;
   fecha_pedido?: string;
   sale_origen?: string;
+  pago_credito?: string | null;
   llega_a_Lazaro?: string;
   llega_a_Manzanillo?: string;
   llega_almacen_proveedor?: string;
+  factura_proveedor?: string;
+  orden_de_compra?: string;
+  reporte_inspeccion?: string | null;
+  pedimento_tránsito?: string | null;
+  "pedido_cliente.tipo_tela"?: string;
+  "pedido_cliente.color"?: string;
+  "pedido_cliente.total_m_pedidos"?: number;
+  "pedido_cliente.unidad"?: string;
+  precio_m_fob_usd?: number;
+  total_x_color_fob_usd?: number;
+  m_factura?: number;
+  total_factura?: number;
+  fraccion?: string;
+  "supplier_percent_diff or upon negotiation"?: number;
+  Year?: number;
+  total_gastos?: number;
+  tipo_de_cambio?: number;
+  venta?: number;
   total_mxp?: number;
   t_cambio?: number;
   gastos_mxp?: number;
@@ -62,9 +87,7 @@ interface PedidoData {
   ddp_mxp_unidad?: number;
   ddp_usd_unidad?: number;
   ddp_usd_unidad_s_iva?: number;
-  "pedido_cliente.tipo_tela"?: string;
-  "pedido_cliente.color"?: string;
-  [key: string]: string | number | undefined;
+  [key: string]: string | number | null | undefined;
 }
 
 interface OrdersFilterSectionProps {

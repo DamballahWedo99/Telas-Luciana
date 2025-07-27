@@ -9,16 +9,41 @@ import { OrdersCard } from "./OrdersCard";
 import { EmptyState } from "./EmptyState";
 
 interface PedidoData {
-  orden_de_compra?: string;
-  total_factura?: number;
-  tipo_de_cambio?: number;
-  total_gastos?: number;
-  m_factura?: number;
+  num_archivo?: number;
+  proveedor?: string;
+  contacto?: string;
+  email?: string;
+  teléfono?: number;
+  celular?: number;
+  origen?: string;
+  incoterm?: string;
+  transportista?: string;
+  agente_aduanal?: string;
+  pedimento?: string;
   fecha_pedido?: string;
   sale_origen?: string;
+  pago_credito?: string | null;
   llega_a_Lazaro?: string;
   llega_a_Manzanillo?: string;
   llega_almacen_proveedor?: string;
+  factura_proveedor?: string;
+  orden_de_compra?: string;
+  reporte_inspeccion?: string | null;
+  pedimento_tránsito?: string | null;
+  "pedido_cliente.tipo_tela"?: string;
+  "pedido_cliente.color"?: string;
+  "pedido_cliente.total_m_pedidos"?: number;
+  "pedido_cliente.unidad"?: string;
+  precio_m_fob_usd?: number;
+  total_x_color_fob_usd?: number;
+  m_factura?: number;
+  total_factura?: number;
+  fraccion?: string;
+  "supplier_percent_diff or upon negotiation"?: number;
+  Year?: number;
+  total_gastos?: number;
+  tipo_de_cambio?: number;
+  venta?: number;
   total_mxp?: number;
   t_cambio?: number;
   gastos_mxp?: number;
@@ -26,9 +51,7 @@ interface PedidoData {
   ddp_mxp_unidad?: number;
   ddp_usd_unidad?: number;
   ddp_usd_unidad_s_iva?: number;
-  "pedido_cliente.tipo_tela"?: string;
-  "pedido_cliente.color"?: string;
-  [key: string]: string | number | undefined;
+  [key: string]: string | number | null | undefined;
 }
 
 interface TotalsData {
@@ -103,9 +126,6 @@ const PedidosDashboard: React.FC = () => {
   const [timelineData, setTimelineData] = useState<TimelineDataItem[]>([]);
   const [deliveryData, setDeliveryData] = useState<DeliveryDataItem[]>([]);
 
-  const isFsAvailable = (): boolean => {
-    return window.fs !== undefined && typeof window.fs.readFile === "function";
-  };
 
   const prepareChartData = useCallback((filteredRows: PedidoData[]) => {
     console.log(
@@ -422,30 +442,90 @@ const PedidosDashboard: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        setError(null);
 
-        if (isFsAvailable() && window.fs) {
-          const csvData = await window.fs.readFile("Pedidos_clean.csv", {
-            encoding: "utf8",
+        const response = await fetch("/api/s3/pedidos");
+        
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        if (result.data && Array.isArray(result.data)) {
+          const processedData: PedidoData[] = result.data.map((row: PedidoData) => {
+            const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+            const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
+
+            return {
+              ...row,
+              total_mxp: totalMxp,
+            };
           });
-          processCSVData(csvData);
+
+          const ordenGroups: Record<string, { totalMxpSum: number }> = {};
+          processedData.forEach((row) => {
+            const ordenDeCompra = row.orden_de_compra || "";
+            if (!ordenGroups[ordenDeCompra]) {
+              ordenGroups[ordenDeCompra] = {
+                totalMxpSum: 0,
+              };
+            }
+            ordenGroups[ordenDeCompra].totalMxpSum += row.total_mxp || 0;
+          });
+
+          const finalData: PedidoData[] = processedData.map((row) => {
+            const ordenDeCompra = row.orden_de_compra || "";
+            const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+            const totalGastos = Number(row.total_gastos) || 0;
+            const mFactura = Number(row.m_factura) || 1;
+            const totalMxp = row.total_mxp || 0;
+
+            const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1;
+
+            const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
+
+            const gastosMxp = tCambio * totalGastos;
+            const ddpTotalMxp = gastosMxp + totalMxp;
+            const ddpMxpUnidad = mFactura > 0 ? ddpTotalMxp / mFactura : 0;
+            const ddpUsdUnidad =
+              tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
+            const ddpUsdUnidadSIva = ddpUsdUnidad / 1.16;
+
+            return {
+              ...row,
+              t_cambio: tCambio,
+              gastos_mxp: gastosMxp,
+              ddp_total_mxp: ddpTotalMxp,
+              ddp_mxp_unidad: ddpMxpUnidad,
+              ddp_usd_unidad: ddpUsdUnidad,
+              ddp_usd_unidad_s_iva: ddpUsdUnidadSIva,
+            };
+          });
+
+          setData(finalData);
+          setFilteredData(finalData);
+          calculateTotals(finalData);
+          setError(null);
         } else {
-          setError(
-            "No se pudo acceder al sistema de archivos. Por favor, sube un archivo CSV con los datos de pedidos."
-          );
-          setLoading(false);
+          throw new Error("No se recibieron datos válidos del servidor");
         }
       } catch (fetchError: unknown) {
         const errorMessage =
           fetchError instanceof Error ? fetchError.message : String(fetchError);
-        setError(
-          `Error al leer el archivo: ${errorMessage}. Por favor, sube un archivo CSV manualmente.`
-        );
+        setError(`Error al obtener los datos: ${errorMessage}`);
+      } finally {
         setLoading(false);
+        setFileUploading(false);
       }
     };
 
     fetchData();
-  }, [processCSVData]);
+  }, [calculateTotals]);
 
   const applyFilters = useCallback(() => {
     if (!data.length) return;
@@ -649,7 +729,7 @@ const PedidosDashboard: React.FC = () => {
   return (
     <div className="max-w-7xl">
       {loading ? (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex items-center justify-center min-h-[80vh]">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
             <div className="text-lg font-semibold">

@@ -23,6 +23,7 @@ export const generateCacheKey = (
 
 export const CACHE_TTL = {
   INVENTORY: 604800,
+  ORDERS: 604800,
   USER_DATA: 86400,
   CLIENTES: 604800,
   FICHAS_TECNICAS: 604800,
