@@ -81,6 +81,27 @@ interface DeliveryDataItem {
   total: number;
 }
 
+interface YearlyOrdersDataItem {
+  year: number;
+  totalFactura: number;
+  orderCount: number;
+}
+
+interface TelaVolumeDataItem {
+  tipoTela: string;
+  totalMetros: number;
+  totalValor: number;
+  orderCount: number;
+}
+
+interface PriceComparisonDataItem {
+  tipoTela: string;
+  fobUsd: number;
+  ddpUsd: number;
+  metrosKg: number;
+  unidad: string;
+}
+
 declare global {
   interface Window {
     fs?: {
@@ -121,6 +142,9 @@ const PedidosDashboard: React.FC = () => {
   const [barChartData, setBarChartData] = useState<BarChartDataItem[]>([]);
   const [timelineData, setTimelineData] = useState<TimelineDataItem[]>([]);
   const [deliveryData, setDeliveryData] = useState<DeliveryDataItem[]>([]);
+  const [yearlyOrdersData, setYearlyOrdersData] = useState<YearlyOrdersDataItem[]>([]);
+  const [telaVolumeData, setTelaVolumeData] = useState<TelaVolumeDataItem[]>([]);
+  const [priceComparisonData, setPriceComparisonData] = useState<PriceComparisonDataItem[]>([]);
 
   const prepareChartData = useCallback((filteredRows: PedidoData[]) => {
     console.log(
@@ -228,34 +252,180 @@ const PedidosDashboard: React.FC = () => {
 
     const deliveryData: DeliveryDataItem[] = [];
     filteredRows.forEach((row) => {
-      if (!row.fecha_pedido || !row.llega_almacen_proveedor) return;
+      // Debug específico para las órdenes mencionadas
+      const ordenCompra = String(row.orden_de_compra || "");
+      const targetOrders = ["C01-DEPOR-RHM1-01-01-16", "C01-DEPOR-POL1-POLMO1-01-06-20", "C01-DEPOR-FEL01-01-01-22"];
+      
+      if (targetOrders.includes(ordenCompra)) {
+        console.log(`🔍 Debug orden ${ordenCompra}:`, {
+          fecha_pedido: row.fecha_pedido,
+          llega_almacen_proveedor: row.llega_almacen_proveedor,
+          llega_a_Lazaro: row.llega_a_Lazaro,
+          llega_a_Manzanillo: row.llega_a_Manzanillo,
+          sale_origen: row.sale_origen
+        });
+      }
+
+      // Intentar múltiples campos para fecha de entrega (en orden de preferencia)
+      const fechaEntrega = row.llega_almacen_proveedor || 
+                          row.llega_a_Manzanillo || 
+                          row.llega_a_Lazaro || 
+                          row["llega_a_Lazaro?"] || 
+                          row.sale_origen;
+      
+      if (!row.fecha_pedido || !fechaEntrega) {
+        if (targetOrders.includes(ordenCompra)) {
+          console.log(`❌ Orden ${ordenCompra} descartada: fecha_pedido=${row.fecha_pedido}, fechaEntrega=${fechaEntrega}`);
+        }
+        return;
+      }
 
       try {
         const orderDate = new Date(String(row.fecha_pedido));
-        const deliveryDate = new Date(String(row.llega_almacen_proveedor));
+        const deliveryDate = new Date(String(fechaEntrega));
 
-        if (isNaN(orderDate.getTime()) || isNaN(deliveryDate.getTime())) return;
+        if (isNaN(orderDate.getTime()) || isNaN(deliveryDate.getTime())) {
+          if (targetOrders.includes(ordenCompra)) {
+            console.log(`❌ Orden ${ordenCompra} descartada: fechas inválidas`, {
+              orderDate: orderDate.toString(),
+              deliveryDate: deliveryDate.toString()
+            });
+          }
+          return;
+        }
 
         const diffTime = Math.abs(deliveryDate.getTime() - orderDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays > 0 && diffDays < 365) {
           deliveryData.push({
-            orden: String(row.orden_de_compra || ""),
+            orden: ordenCompra,
             days: diffDays,
             total: Number(row.total_factura) || 0,
           });
+          
+          if (targetOrders.includes(ordenCompra)) {
+            console.log(`✅ Orden ${ordenCompra} agregada: ${diffDays} días, $${Number(row.total_factura) || 0}`);
+          }
+        } else {
+          if (targetOrders.includes(ordenCompra)) {
+            console.log(`❌ Orden ${ordenCompra} descartada: días fuera de rango (${diffDays})`);
+          }
         }
-      } catch {}
+      } catch (error) {
+        if (targetOrders.includes(ordenCompra)) {
+          console.log(`❌ Error procesando orden ${ordenCompra}:`, error);
+        }
+      }
     });
 
     deliveryData.sort((a, b) => a.days - b.days);
+
+    console.log(`📊 Datos de entrega procesados: ${deliveryData.length} órdenes con tiempos de entrega`);
+    console.log(`📋 Total órdenes procesadas: ${filteredRows.length}`);
+    
+    // Debug adicional: contar órdenes por estado de fechas
+    let conFechaPedido = 0;
+    let conFechaEntrega = 0;
+    let conAmbasFechas = 0;
+    
+    filteredRows.forEach((row) => {
+      if (row.fecha_pedido) conFechaPedido++;
+      const fechaEntrega = row.llega_almacen_proveedor || row.llega_a_Manzanillo || row.llega_a_Lazaro || row["llega_a_Lazaro?"] || row.sale_origen;
+      if (fechaEntrega) conFechaEntrega++;
+      if (row.fecha_pedido && fechaEntrega) conAmbasFechas++;
+    });
+    
+    console.log(`📅 Órdenes con fecha_pedido: ${conFechaPedido}`);
+    console.log(`🚚 Órdenes con fecha_entrega: ${conFechaEntrega}`);
+    console.log(`✅ Órdenes con ambas fechas: ${conAmbasFechas}`);
+
+    // 1. Preparar datos para gráfica de órdenes por año
+    const yearGroups: Record<number, { totalFactura: number; orderCount: number }> = {};
+    filteredRows.forEach((row) => {
+      const year = row.Year || new Date(row.fecha_pedido || "").getFullYear();
+      if (year && !isNaN(year)) {
+        if (!yearGroups[year]) {
+          yearGroups[year] = { totalFactura: 0, orderCount: 0 };
+        }
+        yearGroups[year].totalFactura += Number(row.total_factura) || 0;
+        yearGroups[year].orderCount += 1;
+      }
+    });
+
+    const yearlyOrdersData: YearlyOrdersDataItem[] = Object.keys(yearGroups)
+      .map((year) => ({
+        year: parseInt(year),
+        totalFactura: yearGroups[parseInt(year)].totalFactura,
+        orderCount: yearGroups[parseInt(year)].orderCount,
+      }))
+      .sort((a, b) => a.year - b.year);
+
+    // 2. Preparar datos para volumen por tipo de tela
+    const telaVolumeGroups: Record<string, { totalMetros: number; totalValor: number; orderCount: number }> = {};
+    filteredRows.forEach((row) => {
+      const tela = row["pedido_cliente.tipo_tela"] || "Sin Especificar";
+      const metros = Number(row["pedido_cliente.total_m_pedidos"]) || 0;
+      const valor = Number(row.total_factura) || 0;
+      
+      if (!telaVolumeGroups[tela]) {
+        telaVolumeGroups[tela] = { totalMetros: 0, totalValor: 0, orderCount: 0 };
+      }
+      telaVolumeGroups[tela].totalMetros += metros;
+      telaVolumeGroups[tela].totalValor += valor;
+      telaVolumeGroups[tela].orderCount += 1;
+    });
+
+    const telaVolumeData: TelaVolumeDataItem[] = Object.keys(telaVolumeGroups)
+      .map((tela) => ({
+        tipoTela: tela,
+        totalMetros: telaVolumeGroups[tela].totalMetros,
+        totalValor: telaVolumeGroups[tela].totalValor,
+        orderCount: telaVolumeGroups[tela].orderCount,
+      }))
+      .sort((a, b) => b.totalValor - a.totalValor)
+      .slice(0, 15); // Top 15 telas
+
+    // 3. Preparar datos para comparación FOB vs DDP
+    const priceGroups: Record<string, { fobSum: number; ddpSum: number; metrosSum: number; count: number; unidad: string }> = {};
+    filteredRows.forEach((row) => {
+      const tela = row["pedido_cliente.tipo_tela"] || "Sin Especificar";
+      const fob = Number(row.precio_m_fob_usd) || 0;
+      const ddp = Number(row.ddp_usd_unidad) || 0;
+      const metros = Number(row["pedido_cliente.total_m_pedidos"]) || 0;
+      const unidad = row["pedido_cliente.unidad"] || "m";
+      
+      if (fob > 0 && ddp > 0) {
+        if (!priceGroups[tela]) {
+          priceGroups[tela] = { fobSum: 0, ddpSum: 0, metrosSum: 0, count: 0, unidad };
+        }
+        priceGroups[tela].fobSum += fob;
+        priceGroups[tela].ddpSum += ddp;
+        priceGroups[tela].metrosSum += metros;
+        priceGroups[tela].count += 1;
+      }
+    });
+
+    const priceComparisonData: PriceComparisonDataItem[] = Object.keys(priceGroups)
+      .filter((tela) => priceGroups[tela].count > 0)
+      .map((tela) => ({
+        tipoTela: tela,
+        fobUsd: priceGroups[tela].fobSum / priceGroups[tela].count,
+        ddpUsd: priceGroups[tela].ddpSum / priceGroups[tela].count,
+        metrosKg: priceGroups[tela].metrosSum / priceGroups[tela].count,
+        unidad: priceGroups[tela].unidad,
+      }))
+      .sort((a, b) => b.ddpUsd - a.ddpUsd)
+      .slice(0, 10); // Top 10 telas por precio DDP
 
     console.log(`✅ Datos de gráficos preparados:`, {
       colores: pieData.length,
       ordenes: barData.length,
       timeline: timelineData.length,
       delivery: deliveryData.length,
+      yearlyOrders: yearlyOrdersData.length,
+      telaVolume: telaVolumeData.length,
+      priceComparison: priceComparisonData.length,
     });
 
     return {
@@ -263,6 +433,9 @@ const PedidosDashboard: React.FC = () => {
       barData,
       timelineData,
       deliveryData,
+      yearlyOrdersData,
+      telaVolumeData,
+      priceComparisonData,
     };
   }, []);
 
@@ -291,6 +464,9 @@ const PedidosDashboard: React.FC = () => {
       setBarChartData(chartData.barData);
       setTimelineData(chartData.timelineData);
       setDeliveryData(chartData.deliveryData);
+      setYearlyOrdersData(chartData.yearlyOrdersData);
+      setTelaVolumeData(chartData.telaVolumeData);
+      setPriceComparisonData(chartData.priceComparisonData);
     },
     [prepareChartData]
   );
@@ -650,6 +826,9 @@ const PedidosDashboard: React.FC = () => {
             barChartData={barChartData}
             timelineData={timelineData}
             deliveryData={deliveryData}
+            yearlyOrdersData={yearlyOrdersData}
+            telaVolumeData={telaVolumeData}
+            priceComparisonData={priceComparisonData}
             chartsCollapsed={chartsCollapsed}
             setChartsCollapsed={setChartsCollapsed}
             dataLength={data.length}

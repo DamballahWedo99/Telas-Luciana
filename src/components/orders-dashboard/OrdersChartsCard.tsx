@@ -47,11 +47,35 @@ interface DeliveryDataItem {
   total: number;
 }
 
+interface YearlyOrdersDataItem {
+  year: number;
+  totalFactura: number;
+  orderCount: number;
+}
+
+interface TelaVolumeDataItem {
+  tipoTela: string;
+  totalMetros: number;
+  totalValor: number;
+  orderCount: number;
+}
+
+interface PriceComparisonDataItem {
+  tipoTela: string;
+  fobUsd: number;
+  ddpUsd: number;
+  metrosKg: number;
+  unidad: string;
+}
+
 interface OrdersChartsCardProps {
   pieChartData: ChartDataItem[];
   barChartData: BarChartDataItem[];
   timelineData: TimelineDataItem[];
   deliveryData: DeliveryDataItem[];
+  yearlyOrdersData: YearlyOrdersDataItem[];
+  telaVolumeData: TelaVolumeDataItem[];
+  priceComparisonData: PriceComparisonDataItem[];
   chartsCollapsed: boolean;
   setChartsCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   dataLength: number;
@@ -68,6 +92,9 @@ export const OrdersChartsCard: React.FC<OrdersChartsCardProps> = ({
   barChartData,
   timelineData,
   deliveryData,
+  yearlyOrdersData,
+  telaVolumeData,
+  priceComparisonData,
   chartsCollapsed,
   setChartsCollapsed,
   dataLength,
@@ -99,6 +126,12 @@ export const OrdersChartsCard: React.FC<OrdersChartsCardProps> = ({
         return "Evolución Mensual";
       case "delivery":
         return "Tiempos de Entrega";
+      case "yearly":
+        return "Órdenes por Año";
+      case "tela-volume":
+        return "Volumen por Tipo de Tela";
+      case "price-comparison":
+        return "Comparación FOB vs DDP";
       default:
         return "Visualización";
     }
@@ -351,6 +384,9 @@ export const OrdersChartsCard: React.FC<OrdersChartsCardProps> = ({
                   barChartData={barChartData}
                   timelineData={timelineData}
                   deliveryData={deliveryData}
+                  yearlyOrdersData={yearlyOrdersData}
+                  telaVolumeData={telaVolumeData}
+                  priceComparisonData={priceComparisonData}
                   onTabChange={setActiveTab}
                 />
 
