@@ -15,6 +15,8 @@ import {
   Plus,
   Search,
   Edit,
+  Eye,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -134,6 +136,10 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [fichaToEdit, setFichaToEdit] = useState<FichaTecnica | null>(null);
   const [editingId, setEditingId] = useState<string>("");
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [fichaToPreview, setFichaToPreview] = useState<FichaTecnica | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
 
   const [uploadForm, setUploadForm] = useState<UploadFormData>({
     fileName: "",
@@ -379,6 +385,19 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
     }, 50);
   }, []);
 
+  const handleCancelPreview = useCallback(() => {
+    setPreviewDialogOpen(false);
+    setFichaToPreview(null);
+    if (previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl("");
+    }
+
+    setTimeout(() => {
+      removePointerEventsFromBody();
+    }, 50);
+  }, [previewUrl]);
+
   const handleEditFicha = (ficha: FichaTecnica) => {
     setFichaToEdit(ficha);
     setEditForm({
@@ -541,6 +560,45 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
     }
   };
 
+  const handlePreview = async (ficha: FichaTecnica) => {
+    if (ficha._optimistic) {
+      toast.error("Espera a que se complete la subida del archivo");
+      return;
+    }
+
+    setFichaToPreview(ficha);
+    setPreviewLoading(true);
+    setPreviewDialogOpen(true);
+
+    try {
+      const response = await fetch(
+        `/api/s3/fichas-tecnicas/download?key=${encodeURIComponent(ficha.key)}`
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Error al cargar la vista previa"
+        );
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      setPreviewUrl(url);
+    } catch (error) {
+      console.error("Error loading preview:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Error al cargar la vista previa"
+      );
+      setPreviewDialogOpen(false);
+      setFichaToPreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -628,26 +686,38 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
               </div>
             )}
 
-            <div className={`${showAdminControls ? "flex space-x-2" : ""}`}>
-              <Button
-                onClick={() => handleDownload(ficha.key)}
-                disabled={downloadingId === ficha.key || isOptimistic}
-                className={`${
-                  showAdminControls ? "flex-1" : "w-full"
-                } bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl h-10 text-sm font-medium shadow-sm`}
-              >
-                {downloadingId === ficha.key ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Descargando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Descargar
-                  </>
-                )}
-              </Button>
+            <div className={`${showAdminControls ? "flex space-x-2" : "flex flex-col space-y-2"}`}>
+              <div className={`${showAdminControls ? "flex space-x-2 flex-1" : "flex space-x-2"}`}>
+                <Button
+                  onClick={() => handlePreview(ficha)}
+                  disabled={isOptimistic}
+                  className={`${
+                    showAdminControls ? "flex-1" : "flex-1"
+                  } bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl h-10 text-sm font-medium shadow-sm`}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Vista previa
+                </Button>
+                <Button
+                  onClick={() => handleDownload(ficha.key)}
+                  disabled={downloadingId === ficha.key || isOptimistic}
+                  className={`${
+                    showAdminControls ? "flex-1" : "flex-1"
+                  } bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl h-10 text-sm font-medium shadow-sm`}
+                >
+                  {downloadingId === ficha.key ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Descargando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Descargar
+                    </>
+                  )}
+                </Button>
+              </div>
 
               {showAdminControls && (
                 <>
@@ -1415,6 +1485,14 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
                               <TableCell>
                                 <div className="flex space-x-2">
                                   <Button
+                                    onClick={() => handlePreview(ficha)}
+                                    disabled={isOptimistic}
+                                    variant="outline"
+                                    size="sm"
+                                  >
+                                    <Eye className="h-3 w-3" />
+                                  </Button>
+                                  <Button
                                     onClick={() => handleEditFicha(ficha)}
                                     disabled={
                                       editingId === ficha.key || isOptimistic
@@ -1583,6 +1661,55 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={previewDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCancelPreview();
+          }
+        }}
+      >
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full p-0 overflow-hidden [&>button]:hidden">
+          <div className="w-full h-full bg-gray-100 relative">
+            {/* Botón flotante para regresar */}
+            <Button
+              onClick={handleCancelPreview}
+              variant="ghost"
+              className="absolute bottom-6 right-6 z-50 bg-white/90 hover:bg-white text-gray-800 hover:text-gray-900 rounded-full px-6 py-2 backdrop-blur-sm shadow-lg border border-gray-200"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Regresar
+            </Button>
+            
+            {previewLoading ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="p-4 bg-white rounded-full shadow-lg">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  </div>
+                  <p className="text-gray-600 font-medium">
+                    Cargando vista previa...
+                  </p>
+                </div>
+              </div>
+            ) : previewUrl ? (
+              <iframe
+                src={previewUrl}
+                className="w-full h-full border-0"
+                title={`Vista previa de ${fichaToPreview?.name}`}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center space-y-2">
+                  <FileText className="h-12 w-12 text-gray-400 mx-auto" />
+                  <p className="text-gray-500">No se pudo cargar la vista previa</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
