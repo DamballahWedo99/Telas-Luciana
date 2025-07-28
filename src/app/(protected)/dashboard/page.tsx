@@ -9,6 +9,7 @@ import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
 import ClientesDialog from "@/components/directorio/ClientesDialog";
+import ProveedoresDialog from "@/components/proveedores/ProveedoresDialog";
 import Navbar from "@/components/NavBar";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useUserVerification } from "@/hooks/useUserVerification";
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
   const [openClientes, setOpenClientes] = useState(false);
+  const [openProveedores, setOpenProveedores] = useState(false);
 
   useUserVerification();
 
@@ -83,6 +85,10 @@ export default function DashboardPage() {
     setOpenClientes(true);
   };
 
+  const handleOpenProveedores = () => {
+    setOpenProveedores(true);
+  };
+
   if (status === "loading") {
     return <LoadingScreen />;
   }
@@ -102,6 +108,7 @@ export default function DashboardPage() {
             onViewChange={handleViewChange}
             onOpenFichasTecnicas={handleOpenFichasTecnicas}
             onOpenClientes={handleOpenClientes}
+            onOpenProveedores={handleOpenProveedores}
             onLogout={handleLogout}
           />
         </div>
@@ -116,6 +123,11 @@ export default function DashboardPage() {
         />
 
         <ClientesDialog open={openClientes} setOpen={setOpenClientes} />
+
+        <ProveedoresDialog
+          open={openProveedores}
+          setOpen={setOpenProveedores}
+        />
       </div>
     </div>
   );

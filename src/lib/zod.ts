@@ -328,11 +328,56 @@ export const editTelaSchema = z.object({
     .max(999999.99, { message: "El total factura no puede ser mayor a 999,999.99" }),
 });
 
+export const createProveedorSchema = z.object({
+  Empresa: z
+    .string()
+    .min(1, { message: "El nombre de la empresa es obligatorio" })
+    .max(200, {
+      message: "El nombre de la empresa no puede tener más de 200 caracteres",
+    })
+    .regex(/^[^<>]+$/, {
+      message: "El nombre de la empresa no puede contener los caracteres < o >",
+    }),
+  "Nombre de contacto": z
+    .string()
+    .max(100, { message: "El nombre de contacto no puede tener más de 100 caracteres" })
+    .regex(/^[^<>]*$/, {
+      message: "El nombre de contacto no puede contener los caracteres < o >",
+    })
+    .optional()
+    .or(z.literal("")),
+  Teléfono: z
+    .string()
+    .max(50, { message: "El teléfono no puede tener más de 50 caracteres" })
+    .regex(/^[0-9\s\-\+\(\)]*$/, {
+      message:
+        "El teléfono solo puede contener números, espacios, guiones, + y paréntesis",
+    })
+    .optional()
+    .or(z.literal("")),
+  Correo: z
+    .string()
+    .min(1, { message: "El correo electrónico es obligatorio" })
+    .email({ message: "Por favor, ingrese un correo electrónico válido" })
+    .regex(/^[^\s<>]+$/, {
+      message: "El correo no puede contener espacios ni caracteres < o >",
+    }),
+  Producto: z
+    .string()
+    .max(100, { message: "El producto no puede tener más de 100 caracteres" })
+    .regex(/^[^<>]*$/, {
+      message: "El producto no puede contener los caracteres < o >",
+    })
+    .optional()
+    .or(z.literal("")),
+});
+
 export type NewRowFormValues = z.infer<typeof newRowSchema>;
 export type LoginFormValues = z.infer<typeof loginSchema>;
 export type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 export type CreateClienteFormValues = z.infer<typeof createClienteSchema>;
+export type CreateProveedorFormValues = z.infer<typeof createProveedorSchema>;
 export type EditOrderFormValues = z.infer<typeof editOrderSchema>;
 export type EditTelaFormValues = z.infer<typeof editTelaSchema>;

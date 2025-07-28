@@ -22,6 +22,7 @@ import {
   FileText,
   NotebookTabs,
   Menu,
+  Building2,
 } from "lucide-react";
 
 type ViewType = "inventory" | "orders";
@@ -33,6 +34,7 @@ interface NavbarProps {
   onViewChange: (view: ViewType) => void;
   onOpenFichasTecnicas: () => void;
   onOpenClientes: () => void;
+  onOpenProveedores: () => void;
   onLogout: () => void;
 }
 
@@ -62,6 +64,7 @@ export default function Navbar({
   onViewChange,
   onOpenFichasTecnicas,
   onOpenClientes,
+  onOpenProveedores,
   onLogout,
 }: NavbarProps) {
   const isMobile = useIsMobile();
@@ -116,6 +119,15 @@ export default function Navbar({
                   >
                     <NotebookTabs className="mr-3 h-5 w-5" />
                     Directorio de Clientes
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="justify-start h-12 text-base"
+                    onClick={() => handleMenuAction(onOpenProveedores)}
+                  >
+                    <Building2 className="mr-3 h-5 w-5" />
+                    Proveedores
                   </Button>
 
                   {isMajorAdmin && (
@@ -194,6 +206,19 @@ export default function Navbar({
             </TooltipTrigger>
             <TooltipContent>
               <p>Directorio de Clientes</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={onOpenProveedores}>
+                <Building2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Proveedores</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
