@@ -155,28 +155,28 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     }
   };
 
-  const generateOptimisticFileKey = (empresa: string): string => {
+  const generateOptimisticFileKey = (contacto: string): string => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const empresaSlug = empresa
+    const contactoSlug = contacto
       .replace(/\s+/g, "_")
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, "");
-    return `Directorio/Main/optimistic_${empresaSlug}_${timestamp}.json`;
+    return `Directorio/Main/optimistic_${contactoSlug}_${timestamp}.json`;
   };
 
   const addClienteOptimistic = (
     clienteData: CreateClienteFormValues
   ): Cliente => {
     const optimisticCliente: Cliente = {
-      empresa: clienteData.empresa,
-      contacto: clienteData.contacto || "",
+      empresa: clienteData.empresa || "",
+      contacto: clienteData.contacto,
       direccion: clienteData.direccion || "",
-      telefono: clienteData.telefono || "",
-      email: clienteData.email,
+      telefono: clienteData.telefono,
+      email: clienteData.email || "",
       vendedor: clienteData.vendedor || "",
       ubicacion: clienteData.ubicacion || "",
       comentarios: clienteData.comentarios || "",
-      fileKey: generateOptimisticFileKey(clienteData.empresa),
+      fileKey: generateOptimisticFileKey(clienteData.contacto),
       _optimistic: true,
     };
 
@@ -192,11 +192,11 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       prev.map((cliente) =>
         cliente.fileKey === oldCliente.fileKey
           ? {
-              empresa: newData.empresa,
-              contacto: newData.contacto || "",
+              empresa: newData.empresa || "",
+              contacto: newData.contacto,
               direccion: newData.direccion || "",
-              telefono: newData.telefono || "",
-              email: newData.email,
+              telefono: newData.telefono,
+              email: newData.email || "",
               vendedor: newData.vendedor || "",
               ubicacion: newData.ubicacion || "",
               comentarios: newData.comentarios || "",
@@ -909,11 +909,11 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="empresa"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Empresa *
+                      Empresa
                     </Label>
                     <Input
                       id="empresa"
-                      placeholder="Ej: Textiles González"
+                      placeholder="Ej: Textiles González (opcional)"
                       value={clienteForm.empresa}
                       onChange={(e) =>
                         handleInputChange("empresa", e.target.value)
@@ -932,7 +932,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="contacto"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Contacto
+                      Nombre de la persona *
                     </Label>
                     <Input
                       id="contacto"
@@ -978,7 +978,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="telefono"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Teléfono
+                      Teléfono *
                     </Label>
                     <Input
                       id="telefono"
@@ -1001,12 +1001,12 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="email"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Email *
+                      Email
                     </Label>
                     <Input
                       id="email"
                       type="email"
-                      placeholder="Ej: maria@textilesgonzalez.com"
+                      placeholder="Ej: maria@textilesgonzalez.com (opcional)"
                       value={clienteForm.email}
                       onChange={(e) =>
                         handleInputChange("email", e.target.value)
@@ -1265,11 +1265,11 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="empresa"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Empresa *
+                        Empresa
                       </Label>
                       <Input
                         id="empresa"
-                        placeholder="Ej: Textiles González"
+                        placeholder="Ej: Textiles González (opcional)"
                         value={clienteForm.empresa}
                         onChange={(e) =>
                           handleInputChange("empresa", e.target.value)
@@ -1288,7 +1288,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="contacto"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Contacto
+                        Nombre de la persona *
                       </Label>
                       <Input
                         id="contacto"
@@ -1334,7 +1334,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="telefono"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Teléfono
+                        Teléfono *
                       </Label>
                       <Input
                         id="telefono"
@@ -1357,12 +1357,12 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="email"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Email *
+                        Email
                       </Label>
                       <Input
                         id="email"
                         type="email"
-                        placeholder="Ej: maria@textilesgonzalez.com"
+                        placeholder="Ej: maria@textilesgonzalez.com (opcional)"
                         value={clienteForm.email}
                         onChange={(e) =>
                           handleInputChange("email", e.target.value)

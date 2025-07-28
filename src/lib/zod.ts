@@ -81,21 +81,21 @@ export const createUserSchema = z.object({
 export const createClienteSchema = z.object({
   empresa: z
     .string()
-    .min(1, { message: "El nombre de la empresa es obligatorio" })
     .max(100, {
       message: "El nombre de la empresa no puede tener más de 100 caracteres",
     })
-    .regex(/^[^<>]+$/, {
-      message: "El nombre de la empresa no puede contener los caracteres < o >",
-    }),
-  contacto: z
-    .string()
-    .max(50, { message: "El contacto no puede tener más de 50 caracteres" })
     .regex(/^[^<>]*$/, {
-      message: "El contacto no puede contener los caracteres < o >",
+      message: "El nombre de la empresa no puede contener los caracteres < o >",
     })
     .optional()
     .or(z.literal("")),
+  contacto: z
+    .string()
+    .min(1, { message: "El nombre de la persona es obligatorio" })
+    .max(50, { message: "El contacto no puede tener más de 50 caracteres" })
+    .regex(/^[^<>]+$/, {
+      message: "El contacto no puede contener los caracteres < o >",
+    }),
   direccion: z
     .string()
     .max(200, { message: "La dirección no puede tener más de 200 caracteres" })
@@ -106,20 +106,20 @@ export const createClienteSchema = z.object({
     .or(z.literal("")),
   telefono: z
     .string()
+    .min(1, { message: "El teléfono es obligatorio" })
     .max(20, { message: "El teléfono no puede tener más de 20 caracteres" })
-    .regex(/^[0-9\s\-\+\(\)]*$/, {
+    .regex(/^[0-9\s\-\+\(\)]+$/, {
       message:
         "El teléfono solo puede contener números, espacios, guiones, + y paréntesis",
+    }),
+  email: z
+    .string()
+    .email({ message: "Por favor, ingrese un correo electrónico válido" })
+    .regex(/^[^\s<>]*$/, {
+      message: "El correo no puede contener espacios ni caracteres < o >",
     })
     .optional()
     .or(z.literal("")),
-  email: z
-    .string()
-    .min(1, { message: "El correo electrónico es obligatorio" })
-    .email({ message: "Por favor, ingrese un correo electrónico válido" })
-    .regex(/^[^\s<>]+$/, {
-      message: "El correo no puede contener espacios ni caracteres < o >",
-    }),
   vendedor: z
     .string()
     .max(50, { message: "El vendedor no puede tener más de 50 caracteres" })
