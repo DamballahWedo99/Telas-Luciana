@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import Papa from "papaparse";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   ChevronUpIcon,
   ChevronDownIcon,
@@ -12,6 +15,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EditIcon,
+  DownloadIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +40,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Pagination,
   PaginationContent,
@@ -801,6 +811,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   loading = false,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleSaveOrder = async (updatedOrders: PedidoData[]) => {
     try {
@@ -960,6 +971,187 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     };
   }, [data, ordenDeCompraFilter, tipoTelaFilter, colorFilter, ubicacionFilter]);
 
+  const calculateRowData = (row: PedidoData) => {
+    const ordenDeCompra = row.orden_de_compra || "";
+    const totalFactura = row.total_factura || 0;
+    const tipoDeCambio = row.tipo_de_cambio || 0;
+    const totalGastos = row.total_gastos || 0;
+    const mFactura = row.m_factura || 1;
+
+    const totalMxp = totalFactura * tipoDeCambio;
+
+    const ordenGroups: Record<string, { totalMxpSum: number }> = {};
+    filteredData.forEach((r) => {
+      const oc = r.orden_de_compra || "";
+      const tf = r.total_factura || 0;
+      const tc = r.tipo_de_cambio || 0;
+      const tm = tf * tc;
+      if (!ordenGroups[oc]) {
+        ordenGroups[oc] = { totalMxpSum: 0 };
+      }
+      ordenGroups[oc].totalMxpSum += tm;
+    });
+
+    const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1;
+    const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
+    const gastosMxp = tCambio * totalGastos;
+    const ddpTotalMxp = gastosMxp + totalMxp;
+    const ddpMxpUnidad = mFactura > 0 ? ddpTotalMxp / mFactura : 0;
+    const ddpUsdUnidad = tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
+    const ddpUsdUnidadSIva = ddpUsdUnidad / 1.16;
+
+    return {
+      totalMxp,
+      tCambio,
+      gastosMxp,
+      ddpTotalMxp,
+      ddpMxpUnidad,
+      ddpUsdUnidad,
+      ddpUsdUnidadSIva,
+    };
+  };
+
+  const handleExportCSV = () => {
+    setIsExporting(true);
+    try {
+      const dataToExport = filteredData.map((row) => {
+        const calculatedData = calculateRowData(row);
+        return {
+          "Orden de Compra": row.orden_de_compra || "-",
+          "Proveedor": row.proveedor || "-",
+          "Contacto": row.contacto || "-",
+          "Email": row.email || "-",
+          "Origen": row.origen || "-",
+          "Incoterm": row.incoterm || "-",
+          "Transportista": row.transportista || "-",
+          "Agente Aduanal": row.agente_aduanal || "-",
+          "Pedimento": row.pedimento || "-",
+          "Tipo de Tela": row["pedido_cliente.tipo_tela"] || "-",
+          "Color": row["pedido_cliente.color"] || "-",
+          "M Pedidos": formatCurrency(row["pedido_cliente.total_m_pedidos"] || 0),
+          "Unidad": row["pedido_cliente.unidad"] || "-",
+          "Precio FOB USD": `$${formatCurrency(row.precio_m_fob_usd || 0)}`,
+          "Total Factura (USD)": `$${formatCurrency(row.total_factura || 0)}`,
+          "M Factura": formatCurrency(row.m_factura || 0),
+          "Tipo Cambio": formatCurrency(row.tipo_de_cambio || 0),
+          "Total MXP": `$MXN ${formatCurrency(calculatedData.totalMxp)}`,
+          "Total Gastos": `$${formatCurrency(row.total_gastos || 0)}`,
+          "T. Cambio": `${(calculatedData.tCambio * 100).toFixed(2)}%`,
+          "Gastos MXP": `$MXN ${formatCurrency(calculatedData.gastosMxp)}`,
+          "DDP Total MXP": `$MXN ${formatCurrency(calculatedData.ddpTotalMxp)}`,
+          "DDP MXP/Unidad": `$MXN ${formatCurrency(calculatedData.ddpMxpUnidad)}`,
+          "DDP USD/Unidad": `$${formatCurrency(calculatedData.ddpUsdUnidad)}`,
+          "DDP USD/Unidad S/IVA": `$${formatCurrency(calculatedData.ddpUsdUnidadSIva)}`,
+          "Factura Proveedor": row.factura_proveedor || "-",
+          "Fracción": row.fraccion || "-",
+          "Año": row.Year || "-",
+          "Venta": `$${formatCurrency(row.venta || 0)}`,
+          "Fecha Pedido": formatDate(row.fecha_pedido),
+          "Sale Origen": formatDate(row.sale_origen),
+          "Llega a Lázaro": formatDate(row.llega_a_Lazaro),
+          "Llega a Manzanillo": formatDate(row.llega_a_Manzanillo),
+          "Llega Almacén": formatDate(row.llega_almacen_proveedor),
+        };
+      });
+
+      const csv = Papa.unparse(dataToExport);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `ordenes-compra-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Archivo CSV exportado exitosamente");
+    } catch (error) {
+      console.error("Error exportando CSV:", error);
+      toast.error("Error al exportar el archivo CSV");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPDF = () => {
+    setIsExporting(true);
+    try {
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      doc.setFontSize(16);
+      doc.text("Reporte de Órdenes de Compra", 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Fecha de generación: ${new Date().toLocaleDateString('es-ES')}`, 14, 22);
+      doc.text(`Total de pedidos: ${filteredData.length}`, 14, 28);
+
+      const tableData = filteredData.map((row) => {
+        const calculatedData = calculateRowData(row);
+        return [
+          row.orden_de_compra || "-",
+          row.proveedor || "-",
+          row["pedido_cliente.tipo_tela"] || "-",
+          row["pedido_cliente.color"] || "-",
+          formatCurrency(row["pedido_cliente.total_m_pedidos"] || 0),
+          row["pedido_cliente.unidad"] || "-",
+          `$${formatCurrency(row.precio_m_fob_usd || 0)}`,
+          `$${formatCurrency(row.total_factura || 0)}`,
+          formatCurrency(row.tipo_de_cambio || 0),
+          `$MXN ${formatCurrency(calculatedData.totalMxp)}`,
+          `$MXN ${formatCurrency(calculatedData.ddpTotalMxp)}`,
+          formatDate(row.fecha_pedido),
+          formatDate(row.llega_almacen_proveedor),
+        ];
+      });
+
+      autoTable(doc, {
+        head: [[
+          "OC",
+          "Proveedor",
+          "Tipo Tela",
+          "Color",
+          "M Pedidos",
+          "Unidad",
+          "Precio FOB",
+          "Total Factura",
+          "Tipo Cambio",
+          "Total MXP",
+          "DDP Total MXP",
+          "Fecha Pedido",
+          "Llega Almacén",
+        ]],
+        body: tableData,
+        startY: 35,
+        styles: {
+          fontSize: 6,
+          cellPadding: 1,
+        },
+        headStyles: {
+          fillColor: [41, 128, 185],
+          textColor: 255,
+          fontSize: 7,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        margin: { top: 35, right: 14, bottom: 20, left: 14 },
+      });
+
+      doc.save(`ordenes-compra-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success("Archivo PDF exportado exitosamente");
+    } catch (error) {
+      console.error("Error exportando PDF:", error);
+      toast.error("Error al exportar el archivo PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <Card className="mb-6 shadow">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -1011,6 +1203,33 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
                 </TooltipContent>
               </Tooltip>
             </EditOrderModal>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={isExporting}>
+                      {isExporting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <DownloadIcon className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={handleExportCSV} disabled={isExporting}>
+                      Exportar CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
+                      Exportar PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Exportar datos</p>
+              </TooltipContent>
+            </Tooltip>
           </TooltipProvider>
 
           <TooltipProvider>
