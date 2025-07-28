@@ -30,6 +30,7 @@ type ViewType = "inventory" | "orders";
 interface NavbarProps {
   currentView: ViewType;
   isMajorAdmin: boolean;
+  canAccessProveedores: boolean;
   isLoggingOut: boolean;
   onViewChange: (view: ViewType) => void;
   onOpenFichasTecnicas: () => void;
@@ -60,6 +61,7 @@ function useIsMobile() {
 export default function Navbar({
   currentView,
   isMajorAdmin,
+  canAccessProveedores,
   isLoggingOut,
   onViewChange,
   onOpenFichasTecnicas,
@@ -121,14 +123,16 @@ export default function Navbar({
                     Directorio de Clientes
                   </Button>
 
-                  <Button
-                    variant="ghost"
-                    className="justify-start h-12 text-base"
-                    onClick={() => handleMenuAction(onOpenProveedores)}
-                  >
-                    <Building2 className="mr-3 h-5 w-5" />
-                    Proveedores
-                  </Button>
+                  {canAccessProveedores && (
+                    <Button
+                      variant="ghost"
+                      className="justify-start h-12 text-base"
+                      onClick={() => handleMenuAction(onOpenProveedores)}
+                    >
+                      <Building2 className="mr-3 h-5 w-5" />
+                      Proveedores
+                    </Button>
+                  )}
 
                   {isMajorAdmin && (
                     <>
@@ -210,18 +214,20 @@ export default function Navbar({
           </Tooltip>
         </TooltipProvider>
 
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={onOpenProveedores}>
-                <Building2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Proveedores</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {canAccessProveedores && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={onOpenProveedores}>
+                  <Building2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Proveedores</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
 
         {isMajorAdmin && (
           <Sheet>

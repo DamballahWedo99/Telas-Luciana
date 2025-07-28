@@ -590,66 +590,420 @@ export default function ProveedoresDialog({ open, setOpen }: ProveedoresDialogPr
 
   if (isMobile) {
     return (
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[90vh] p-0">
-          <div className="flex flex-col h-full">
-            <DialogHeader className="p-4 pb-2 border-b">
-              <div className="flex items-center justify-between">
-                {view === "form" ? (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        resetForm();
-                        setView("list");
-                      }}
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                    <div>
-                      <DialogTitle>
-                        {editingProveedor ? "Editar" : "Agregar"} Proveedor
+      <>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-w-[95vw] h-[85vh] overflow-hidden p-0 rounded-3xl [&>button]:hidden">
+            {view === "list" ? (
+              <>
+                <div className="p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-3xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-100 rounded-2xl">
+                      <Package className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <DialogTitle className="text-lg font-semibold">
+                        Directorio de Proveedores
                       </DialogTitle>
+                      <DialogDescription className="text-sm text-gray-600">
+                        Directorio completo de proveedores
+                      </DialogDescription>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between w-full">
-                    <DialogTitle>Proveedores ({filteredProveedores.length})</DialogTitle>
+                </div>
+
+                <div className="p-4 flex-1 overflow-hidden flex flex-col min-h-[400px]">
+                  <div className="mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Buscar proveedores..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 rounded-xl h-12 bg-gray-50 border-gray-200 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-4 bg-blue-50 rounded-full">
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                      </div>
+                      <p className="text-gray-600 font-medium">
+                        Cargando directorio de proveedores...
+                      </p>
+                    </div>
+                  ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-6 bg-red-50 rounded-full">
+                        <Package className="h-12 w-12 text-red-400" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <h3 className="font-semibold text-gray-900">
+                          Error al cargar proveedores
+                        </h3>
+                        <p className="text-sm text-gray-500">{error}</p>
+                        <Button
+                          onClick={loadProveedores}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : filteredProveedores.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="p-6 bg-gray-50 rounded-full">
+                        <Package className="h-12 w-12 text-gray-400" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <h3 className="font-semibold text-gray-900">
+                          No hay proveedores
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          No se encontraron proveedores con esos criterios.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 flex-1 overflow-y-auto px-1">
+                      {filteredProveedores.map((proveedor, index) => (
+                        <Card
+                          key={proveedor.fileKey || index}
+                          className={`bg-white border shadow-sm ${proveedor._optimistic ? "opacity-75 border-dashed border-blue-300" : ""}`}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 bg-blue-50 rounded-lg flex-shrink-0">
+                                <Package className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-semibold text-gray-900 text-base leading-tight mb-1">
+                                    {proveedor.Empresa}
+                                  </h3>
+                                  {proveedor._optimistic && (
+                                    <div className="flex items-center">
+                                      <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                                    </div>
+                                  )}
+                                </div>
+                                {proveedor["Nombre de contacto"] && (
+                                  <div className="flex items-center gap-2 text-gray-600">
+                                    <User className="h-4 w-4 flex-shrink-0" />
+                                    <span className="text-sm">{proveedor["Nombre de contacto"]}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex gap-1 flex-shrink-0">
+                                {canEdit && !proveedor._optimistic && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditProveedor(proveedor)}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {canDelete && !proveedor._optimistic && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setProveedorToDelete(proveedor);
+                                      setDeleteDialogOpen(true);
+                                    }}
+                                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:border-red-300"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="pt-0">
+                            <div className="space-y-3">
+                              <div className="space-y-2 text-sm">
+                                {proveedor.Correo && (
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                    <span className="text-gray-600 text-xs break-all">
+                                      {proveedor.Correo}
+                                    </span>
+                                  </div>
+                                )}
+                                {proveedor.Teléfono && (
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                    <span className="text-gray-600">{proveedor.Teléfono}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {proveedor.Producto && (
+                                <div className="mt-3">
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Package className="h-3 w-3 mr-1" />
+                                    {proveedor.Producto}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t bg-gray-50/80 backdrop-blur-sm rounded-b-3xl">
+                  <div className="text-center text-xs text-gray-500 mb-3">
+                    {filteredProveedores.length} de {proveedores.length} proveedores
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setOpen(false)}
+                      className="flex-1 h-11 font-medium rounded-xl border-gray-300"
+                    >
+                      Cerrar
+                    </Button>
                     {canEdit && (
                       <Button
-                        size="sm"
                         onClick={() => setView("form")}
-                        disabled={isLoading}
+                        className="flex-1 h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-sm"
                       >
-                        <Plus className="h-4 w-4 mr-1" />
+                        <Plus className="h-4 w-4 mr-2" />
                         Agregar
                       </Button>
                     )}
                   </div>
-                )}
-              </div>
-              {view === "list" && (
-                <div className="mt-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-5 border-b bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-3xl">
+                  <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        resetForm();
+                        setView("list");
+                      }}
+                      className="mr-2 h-8 w-8 p-0 rounded-lg"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    {editingProveedor ? (
+                      <Edit className="h-5 w-5" />
+                    ) : (
+                      <Plus className="h-5 w-5" />
+                    )}
+                    {editingProveedor ? "Editar Proveedor" : "Agregar Nuevo Proveedor"}
+                  </DialogTitle>
+                  <DialogDescription className="text-sm text-gray-600 mt-1 ml-12">
+                    {editingProveedor
+                      ? "Actualiza la información del proveedor"
+                      : "Crea un nuevo proveedor"}
+                  </DialogDescription>
+                </div>
+
+                <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+                  <div>
+                    <Label
+                      htmlFor="Empresa"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Empresa *
+                    </Label>
                     <Input
-                      placeholder="Buscar proveedores..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
+                      id="Empresa"
+                      placeholder="Ej: Textiles González"
+                      value={proveedorForm.Empresa}
+                      onChange={(e) => handleInputChange("Empresa", e.target.value)}
+                      className={`mt-1.5 h-11 ${formErrors.Empresa ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
                     />
+                    {formErrors.Empresa && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.Empresa}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="nombre-contacto"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Nombre de contacto
+                    </Label>
+                    <Input
+                      id="nombre-contacto"
+                      placeholder="Ej: María González"
+                      value={proveedorForm["Nombre de contacto"]}
+                      onChange={(e) => handleInputChange("Nombre de contacto", e.target.value)}
+                      className={`mt-1.5 h-11 ${formErrors["Nombre de contacto"] ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors["Nombre de contacto"] && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors["Nombre de contacto"]}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="Correo"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Correo *
+                    </Label>
+                    <Input
+                      id="Correo"
+                      type="email"
+                      placeholder="Ej: maria@textilesgonzalez.com"
+                      value={proveedorForm.Correo}
+                      onChange={(e) => handleInputChange("Correo", e.target.value)}
+                      className={`mt-1.5 h-11 ${formErrors.Correo ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.Correo && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.Correo}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="Teléfono"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Teléfono
+                    </Label>
+                    <Input
+                      id="Teléfono"
+                      placeholder="Ej: 5512345678"
+                      value={proveedorForm.Teléfono}
+                      onChange={(e) => handleInputChange("Teléfono", e.target.value)}
+                      className={`mt-1.5 h-11 ${formErrors.Teléfono ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.Teléfono && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.Teléfono}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor="Producto"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Producto
+                    </Label>
+                    <Input
+                      id="Producto"
+                      placeholder="Ej: Textiles, hilos, algodón..."
+                      value={proveedorForm.Producto}
+                      onChange={(e) => handleInputChange("Producto", e.target.value)}
+                      className={`mt-1.5 h-11 ${formErrors.Producto ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                    />
+                    {formErrors.Producto && (
+                      <p className="text-red-500 text-xs mt-1.5">
+                        {formErrors.Producto}
+                      </p>
+                    )}
                   </div>
                 </div>
-              )}
-            </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              {view === "list" ? renderListView() : renderFormView()}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+                <div className="p-5 border-t bg-gray-50/80 backdrop-blur-sm rounded-b-3xl">
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        resetForm();
+                        setView("list");
+                      }}
+                      disabled={isSubmitting}
+                      className="flex-1 h-11 border-gray-300 rounded-xl"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSubmitProveedor}
+                      disabled={isSubmitting}
+                      className="flex-1 h-11 bg-green-600 hover:bg-green-700 shadow-sm rounded-xl"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {editingProveedor ? "Actualizando..." : "Creando..."}
+                        </>
+                      ) : (
+                        <>
+                          {editingProveedor ? (
+                            <Edit className="mr-2 h-4 w-4" />
+                          ) : (
+                            <Plus className="mr-2 h-4 w-4" />
+                          )}
+                          {editingProveedor ? "Actualizar" : "Crear"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent className="max-w-[90vw] rounded-3xl">
+            <AlertDialogHeader className="text-center">
+              <AlertDialogTitle className="text-lg">
+                ¿Estás seguro?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-600">
+                Esta acción no se puede deshacer. Se eliminará permanentemente
+                el proveedor <strong>{proveedorToDelete?.Empresa}</strong> del
+                directorio.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex gap-3 sm:gap-3">
+              <AlertDialogCancel
+                disabled={isDeleting}
+                className="flex-1 h-11 rounded-xl border-gray-300"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteProveedor}
+                disabled={isDeleting}
+                className="flex-1 h-11 bg-red-600 hover:bg-red-700 focus:ring-red-600 rounded-xl"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Eliminar
+                  </>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
     );
   }
 

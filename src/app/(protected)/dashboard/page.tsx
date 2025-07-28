@@ -28,6 +28,7 @@ export default function DashboardPage() {
   useUserVerification();
 
   const isMajorAdmin = session?.user?.role === "major_admin";
+  const canAccessProveedores = session?.user?.role === "admin" || session?.user?.role === "major_admin";
 
   useEffect(() => {
     console.log("📊 [Dashboard] Estado actual:", {
@@ -104,6 +105,7 @@ export default function DashboardPage() {
           <Navbar
             currentView={currentView}
             isMajorAdmin={isMajorAdmin}
+            canAccessProveedores={canAccessProveedores}
             isLoggingOut={isLoggingOut}
             onViewChange={handleViewChange}
             onOpenFichasTecnicas={handleOpenFichasTecnicas}
