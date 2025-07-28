@@ -9,7 +9,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
-import { withCache } from "@/lib/cache-middleware";
+import { withCache, invalidateCachePattern } from "@/lib/cache-middleware";
 import { CACHE_TTL } from "@/lib/redis";
 
 const s3Client = new S3Client({
@@ -319,6 +319,14 @@ export async function POST(request: NextRequest) {
 
     await s3Client.send(putCommand);
 
+    // Invalidar cache de proveedores después de crear
+    try {
+      const invalidatedCount = await invalidateCachePattern("cache:api:s3:proveedores*");
+      console.log(`🗑️ Cache de proveedores invalidado después de crear: ${invalidatedCount} entradas eliminadas`);
+    } catch (error) {
+      console.error("Error invalidando cache de proveedores:", error);
+    }
+
     return NextResponse.json({
       message: "Proveedor creado exitosamente",
       data: {
@@ -438,6 +446,14 @@ export async function PUT(request: NextRequest) {
 
     await s3Client.send(putCommand);
 
+    // Invalidar cache de proveedores después de actualizar
+    try {
+      const invalidatedCount = await invalidateCachePattern("cache:api:s3:proveedores*");
+      console.log(`🗑️ Cache de proveedores invalidado después de actualizar: ${invalidatedCount} entradas eliminadas`);
+    } catch (error) {
+      console.error("Error invalidando cache de proveedores:", error);
+    }
+
     return NextResponse.json({
       message: "Proveedor actualizado exitosamente",
       data: {
@@ -501,6 +517,14 @@ export async function DELETE(request: NextRequest) {
     });
 
     await s3Client.send(deleteCommand);
+
+    // Invalidar cache de proveedores después de eliminar
+    try {
+      const invalidatedCount = await invalidateCachePattern("cache:api:s3:proveedores*");
+      console.log(`🗑️ Cache de proveedores invalidado después de eliminar: ${invalidatedCount} entradas eliminadas`);
+    } catch (error) {
+      console.error("Error invalidando cache de proveedores:", error);
+    }
 
     return NextResponse.json({
       message: "Proveedor eliminado exitosamente",

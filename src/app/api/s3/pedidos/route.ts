@@ -7,7 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
-import { withCache } from "@/lib/cache-middleware";
+import { withCache, invalidateCachePattern } from "@/lib/cache-middleware";
 import { CACHE_TTL } from "@/lib/redis";
 
 const s3Client = new S3Client({
@@ -348,6 +348,14 @@ async function updatePedidoData(request: NextRequest) {
     }
 
     console.log(`✅ Pedido actualizado en ${filesUpdated} archivo(s): ${updatedOrder.orden_de_compra}`);
+
+    // Invalidar cache de pedidos después de actualizar
+    try {
+      const invalidatedCount = await invalidateCachePattern("cache:api:s3:pedidos*");
+      console.log(`🗑️ Cache de pedidos invalidado: ${invalidatedCount} entradas eliminadas`);
+    } catch (error) {
+      console.error("Error invalidando cache de pedidos:", error);
+    }
 
     return NextResponse.json({
       success: true,

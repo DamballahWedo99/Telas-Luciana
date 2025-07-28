@@ -38,11 +38,35 @@ interface DeliveryDataItem {
   total: number;
 }
 
+interface YearlyOrdersDataItem {
+  year: number;
+  totalFactura: number;
+  orderCount: number;
+}
+
+interface TelaVolumeDataItem {
+  tipoTela: string;
+  totalMetros: number;
+  totalValor: number;
+  orderCount: number;
+}
+
+interface PriceComparisonDataItem {
+  tipoTela: string;
+  fobUsd: number;
+  ddpUsd: number;
+  metrosKg: number;
+  unidad: string;
+}
+
 interface PedidosChartsProps {
   pieChartData: ChartDataItem[];
   barChartData: BarChartDataItem[];
   timelineData: TimelineDataItem[];
   deliveryData: DeliveryDataItem[];
+  yearlyOrdersData: YearlyOrdersDataItem[];
+  telaVolumeData: TelaVolumeDataItem[];
+  priceComparisonData: PriceComparisonDataItem[];
   onTabChange?: (value: string) => void;
 }
 
