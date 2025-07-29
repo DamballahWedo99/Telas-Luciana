@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-import { OrdersMetricsCard } from "./OrdersMetricsCard";
+import { OrdersMetricsSection } from "./OrdersMetricsSection";
 import { OrdersChartsCard } from "./OrdersChartsCard";
 import { OrdersCard } from "./OrdersCard";
 
@@ -124,7 +124,6 @@ const PedidosDashboard: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [metricsCollapsed, setMetricsCollapsed] = useState<boolean>(false);
   const [chartsCollapsed, setChartsCollapsed] = useState<boolean>(false);
   const [ordersCollapsed, setOrdersCollapsed] = useState<boolean>(false);
 
@@ -867,11 +866,9 @@ const PedidosDashboard: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          <OrdersMetricsCard
+          <OrdersMetricsSection
             totals={totals}
             filteredDataLength={filteredData.length}
-            metricsCollapsed={metricsCollapsed}
-            setMetricsCollapsed={setMetricsCollapsed}
           />
 
           <OrdersChartsCard
