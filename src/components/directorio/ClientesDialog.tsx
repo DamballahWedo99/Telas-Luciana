@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import {
   Dialog,
@@ -25,6 +25,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Search,
   Building2,
@@ -76,6 +83,12 @@ interface Cliente {
   _optimistic?: boolean;
 }
 
+interface Seller {
+  id: string;
+  name: string;
+  email: string;
+}
+
 interface ClientesDialogProps {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -104,10 +117,13 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [isLoadingSellers, setIsLoadingSellers] = useState(false);
   const isMobile = useIsMobile();
 
   const userRole = session?.user?.role || "";
   const userName = session?.user?.name || "";
+  const isAdmin = userRole === "admin" || userRole === "major_admin";
 
   const getVendedorForUser = (name: string, role: string): string => {
     if (role !== "seller") {
@@ -116,12 +132,34 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
     return name || "TTL";
   };
 
+  const loadSellers = useCallback(async () => {
+    if (!isAdmin) return;
+
+    setIsLoadingSellers(true);
+    try {
+      const response = await fetch("/api/users/sellers");
+      if (!response.ok) {
+        throw new Error("Error al cargar vendedores");
+      }
+      const data = await response.json();
+      setSellers(data.sellers || []);
+    } catch (error) {
+      console.error("Error loading sellers:", error);
+      toast.error("Error al cargar la lista de vendedores");
+    } finally {
+      setIsLoadingSellers(false);
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     if (open) {
       loadClientes();
+      if (isAdmin) {
+        loadSellers();
+      }
       setView("list");
     }
-  }, [open]);
+  }, [open, isAdmin, loadSellers]);
 
   const loadClientes = async () => {
     setIsLoading(true);
@@ -1043,6 +1081,39 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                     )}
                   </div>
 
+                  {isAdmin && (
+                    <div>
+                      <Label
+                        htmlFor="vendedor"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Vendedor asignado *
+                      </Label>
+                      <Select
+                        value={clienteForm.vendedor}
+                        onValueChange={(value) => handleInputChange("vendedor", value)}
+                        disabled={isLoadingSellers}
+                      >
+                        <SelectTrigger className={`mt-1.5 h-11 ${formErrors.vendedor ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}>
+                          <SelectValue placeholder={isLoadingSellers ? "Cargando vendedores..." : "Selecciona un vendedor"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TTL">TTL (Administrador)</SelectItem>
+                          {sellers.map((seller) => (
+                            <SelectItem key={seller.id} value={seller.name}>
+                              {seller.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {formErrors.vendedor && (
+                        <p className="text-red-500 text-xs mt-1.5">
+                          {formErrors.vendedor}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div>
                     <Label
                       htmlFor="comentarios"
@@ -1398,6 +1469,39 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         </p>
                       )}
                     </div>
+
+                    {isAdmin && (
+                      <div>
+                        <Label
+                          htmlFor="vendedor-desktop"
+                          className="text-sm font-medium text-gray-700"
+                        >
+                          Vendedor asignado *
+                        </Label>
+                        <Select
+                          value={clienteForm.vendedor}
+                          onValueChange={(value) => handleInputChange("vendedor", value)}
+                          disabled={isLoadingSellers}
+                        >
+                          <SelectTrigger className={`mt-1.5 ${formErrors.vendedor ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}>
+                            <SelectValue placeholder={isLoadingSellers ? "Cargando vendedores..." : "Selecciona un vendedor"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="TTL">TTL (Administrador)</SelectItem>
+                            {sellers.map((seller) => (
+                              <SelectItem key={seller.id} value={seller.name}>
+                                {seller.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {formErrors.vendedor && (
+                          <p className="text-red-500 text-xs mt-1.5">
+                            {formErrors.vendedor}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div>

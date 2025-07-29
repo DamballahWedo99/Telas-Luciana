@@ -688,16 +688,18 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
 
             <div className={`${showAdminControls ? "flex space-x-2" : "flex flex-col space-y-2"}`}>
               <div className={`${showAdminControls ? "flex space-x-2 flex-1" : "flex space-x-2"}`}>
-                <Button
-                  onClick={() => handlePreview(ficha)}
-                  disabled={isOptimistic}
-                  className={`${
-                    showAdminControls ? "flex-1" : "flex-1"
-                  } bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl h-10 text-sm font-medium shadow-sm`}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  Vista previa
-                </Button>
+                {!isMobile && (
+                  <Button
+                    onClick={() => handlePreview(ficha)}
+                    disabled={isOptimistic}
+                    className={`${
+                      showAdminControls ? "flex-1" : "flex-1"
+                    } bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl h-10 text-sm font-medium shadow-sm`}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Vista previa
+                  </Button>
+                )}
                 <Button
                   onClick={() => handleDownload(ficha.key)}
                   disabled={downloadingId === ficha.key || isOptimistic}
