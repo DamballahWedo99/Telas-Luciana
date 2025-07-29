@@ -102,6 +102,11 @@ interface PriceComparisonDataItem {
   unidad: string;
 }
 
+interface NestedPedidoData {
+  orden_de_compra: string;
+  items: PedidoData[];
+}
+
 declare global {
   interface Window {
     fs?: {
@@ -491,14 +496,36 @@ const PedidosDashboard: React.FC = () => {
         }
 
         if (result.data && Array.isArray(result.data)) {
-          const processedData: PedidoData[] = result.data.map(
+          const flattenedData: PedidoData[] = [];
+          
+          result.data.forEach((item: NestedPedidoData | PedidoData) => {
+            if ('items' in item && item.orden_de_compra && Array.isArray(item.items)) {
+              item.items.forEach((subItem: PedidoData) => {
+                flattenedData.push({
+                  ...subItem,
+                  orden_de_compra: item.orden_de_compra,
+                });
+              });
+            } else {
+              flattenedData.push(item as PedidoData);
+            }
+          });
+
+          const processedData: PedidoData[] = flattenedData.map(
             (row: PedidoData) => {
               const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
               const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
 
+              // Migrar campos antiguos al nuevo campo llega_a_mexico si no existe
+              let llegaAMexico = row.llega_a_mexico;
+              if (!llegaAMexico) {
+                llegaAMexico = row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
+              }
+
               return {
                 ...row,
                 total_mxp: totalMxp,
+                llega_a_mexico: llegaAMexico,
               };
             }
           );
@@ -719,10 +746,36 @@ const PedidosDashboard: React.FC = () => {
       const result = await response.json();
       
       if (result.data && Array.isArray(result.data)) {
-        const processedData = result.data.map((row: PedidoData) => {
+        const flattenedData: PedidoData[] = [];
+        
+        result.data.forEach((item: NestedPedidoData | PedidoData) => {
+          if ('items' in item && item.orden_de_compra && Array.isArray(item.items)) {
+            item.items.forEach((subItem: PedidoData) => {
+              flattenedData.push({
+                ...subItem,
+                orden_de_compra: item.orden_de_compra,
+              });
+            });
+          } else {
+            flattenedData.push(item as PedidoData);
+          }
+        });
+
+        const processedData = flattenedData.map((row: PedidoData) => {
           const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
           const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
-          return { ...row, total_mxp: totalMxp };
+          
+          // Migrar campos antiguos al nuevo campo llega_a_mexico si no existe
+          let llegaAMexico = row.llega_a_mexico;
+          if (!llegaAMexico) {
+            llegaAMexico = row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
+          }
+
+          return { 
+            ...row, 
+            total_mxp: totalMxp,
+            llega_a_mexico: llegaAMexico,
+          };
         });
 
         // Calcular campos DDP igual que en el useEffect original

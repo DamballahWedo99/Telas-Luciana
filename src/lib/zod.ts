@@ -242,18 +242,7 @@ export const editOrderSchema = z.object({
     }, { message: "No se permiten fechas futuras" })
     .optional()
     .or(z.literal("")),
-  llega_a_Lazaro: z
-    .string()
-    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
-    .refine((val) => {
-      if (!val) return true;
-      const year = parseInt(val.split('-')[0]);
-      const currentYear = new Date().getFullYear();
-      return year <= currentYear;
-    }, { message: "No se permiten fechas futuras" })
-    .optional()
-    .or(z.literal("")),
-  llega_a_Manzanillo: z
+  llega_a_mexico: z
     .string()
     .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
     .refine((val) => {
@@ -307,10 +296,6 @@ export const editOrderSchema = z.object({
     .number({ message: "El tipo de cambio debe ser un número" })
     .min(0.0001, { message: "El tipo de cambio debe ser mayor a 0" })
     .max(99.9999, { message: "El tipo de cambio no puede ser mayor a 99.9999" }),
-  venta: z
-    .number({ message: "El precio de venta debe ser un número" })
-    .min(0.01, { message: "El precio de venta debe ser mayor a 0" })
-    .max(999999.99, { message: "El precio de venta no puede ser mayor a 999,999.99" }),
 });
 
 export const editTelaSchema = z.object({

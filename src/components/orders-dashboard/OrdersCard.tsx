@@ -72,6 +72,7 @@ interface PedidoData {
   pago_credito?: string | null;
   llega_a_Lazaro?: string;
   llega_a_Manzanillo?: string;
+  llega_a_mexico?: string;
   llega_almacen_proveedor?: string;
   factura_proveedor?: string;
   orden_de_compra?: string;
@@ -464,7 +465,7 @@ const OrdersTable: React.FC<{
     <div className="bg-white rounded shadow-sm mb-6">
       <div className="border rounded-md overflow-hidden">
         <div className="h-[500px] overflow-auto relative">
-          <table className="w-full text-sm border-collapse min-w-[4000px]">
+          <table className="w-full text-sm border-collapse min-w-[3600px]">
             <thead className="bg-white sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[180px]">
@@ -472,12 +473,6 @@ const OrdersTable: React.FC<{
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[150px]">
                   Proveedor
-                </th>
-                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
-                  Contacto
-                </th>
-                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[150px]">
-                  Email
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
                   Origen
@@ -493,6 +488,9 @@ const OrdersTable: React.FC<{
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
                   Pedimento
+                </th>
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
+                  Pago Crédito
                 </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[180px]">
                   Tipo de Tela
@@ -545,9 +543,6 @@ const OrdersTable: React.FC<{
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
                   Factura Proveedor
                 </th>
-                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[100px]">
-                  Fracción
-                </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[80px]">
                   Año
                 </th>
@@ -560,14 +555,11 @@ const OrdersTable: React.FC<{
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
                   Sale Origen
                 </th>
-                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[120px]">
-                  Llega a Lázaro
-                </th>
                 <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
-                  Llega a Manzanillo
+                  Llega a México
                 </th>
-                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[140px]">
-                  Llega Almacén
+                <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground border-b w-[160px]">
+                  Llega Almacén Proveedor
                 </th>
               </tr>
             </thead>
@@ -575,7 +567,7 @@ const OrdersTable: React.FC<{
               {!hasData ? (
                 <tr>
                   <td
-                    colSpan={33}
+                    colSpan={30}
                     className="p-2 align-middle text-center h-24"
                   >
                     No se encontraron resultados para los filtros seleccionados
@@ -599,12 +591,6 @@ const OrdersTable: React.FC<{
                         {row.proveedor || "-"}
                       </td>
                       <td className="p-2 align-middle">
-                        {row.contacto || "-"}
-                      </td>
-                      <td className="p-2 align-middle">
-                        {row.email || "-"}
-                      </td>
-                      <td className="p-2 align-middle">
                         {row.origen || "-"}
                       </td>
                       <td className="p-2 align-middle">
@@ -618,6 +604,9 @@ const OrdersTable: React.FC<{
                       </td>
                       <td className="p-2 align-middle">
                         {row.pedimento || "-"}
+                      </td>
+                      <td className="p-2 align-middle">
+                        {row.pago_credito || "-"}
                       </td>
                       <td className="p-2 align-middle">
                         {row["pedido_cliente.tipo_tela"] || "-"}
@@ -671,9 +660,6 @@ const OrdersTable: React.FC<{
                         {row.factura_proveedor || "-"}
                       </td>
                       <td className="p-2 align-middle">
-                        {row.fraccion || "-"}
-                      </td>
-                      <td className="p-2 align-middle">
                         {row.Year || "-"}
                       </td>
                       <td className="p-2 align-middle">
@@ -686,10 +672,7 @@ const OrdersTable: React.FC<{
                         {formatDate(row.sale_origen)}
                       </td>
                       <td className="p-2 align-middle">
-                        {formatDate(row.llega_a_Lazaro)}
-                      </td>
-                      <td className="p-2 align-middle">
-                        {formatDate(row.llega_a_Manzanillo)}
+                        {formatDate(row.llega_a_mexico)}
                       </td>
                       <td className="p-2 align-middle">
                         {formatDate(row.llega_almacen_proveedor)}
@@ -763,6 +746,9 @@ interface OrdersCardProps {
   data: PedidoData[];
   filteredData: PedidoData[];
   paginatedData: PedidoData[];
+  currentPage: number;
+  totalPages: number;
+  goToPage: (page: number) => void;
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
   ordenDeCompraFilter: string;
@@ -776,9 +762,6 @@ interface OrdersCardProps {
   resetFilters: () => void;
   formatDate: (dateString?: string) => string;
   formatCurrency: (value: number, decimals?: number) => string;
-  currentPage: number;
-  totalPages: number;
-  goToPage: (page: number) => void;
   ordersCollapsed: boolean;
   setOrdersCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   onDataUpdate?: () => void;
@@ -789,6 +772,9 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   data,
   filteredData,
   paginatedData,
+  currentPage,
+  totalPages,
+  goToPage,
   searchQuery,
   setSearchQuery,
   ordenDeCompraFilter,
@@ -802,9 +788,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   resetFilters,
   formatDate,
   formatCurrency,
-  currentPage,
-  totalPages,
-  goToPage,
   ordersCollapsed,
   setOrdersCollapsed,
   onDataUpdate,
@@ -813,46 +796,44 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+
   const handleSaveOrder = async (updatedOrders: PedidoData[]) => {
+    const loadingToast = toast.loading(`Guardando ${updatedOrders.length} tela${updatedOrders.length > 1 ? 's' : ''}...`);
+
     try {
-      let totalFilesUpdated = 0;
-      
-      // Procesar cada orden individualmente
-      for (const updatedOrder of updatedOrders) {
-        const response = await fetch("/api/s3/pedidos", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ updatedOrder }),
-        });
+      const response = await fetch("/api/s3/pedidos", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ updatedOrders }),
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Error al guardar el pedido");
-        }
-
-        const result = await response.json();
-        totalFilesUpdated += result.filesUpdated || 0;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al guardar el pedido");
       }
 
-      // Mostrar toast de éxito
+      const result = await response.json();
+
       toast.success(`Pedidos actualizados exitosamente`, {
-        description: `${updatedOrders.length} telas actualizadas en ${totalFilesUpdated} archivo(s)`,
+        id: loadingToast,
+        description: `${result.updatedCount || updatedOrders.length} telas actualizadas en ${result.filesUpdated || 0} archivo(s)`,
         duration: 3000,
       });
       
-      // Actualizar datos sin refrescar la página
+      setIsEditModalOpen(false);
+      
       if (onDataUpdate) {
-        onDataUpdate();
+        await onDataUpdate();
       }
       
-      console.log(`✅ ${updatedOrders.length} telas guardadas en ${totalFilesUpdated} archivos`);
+      console.log(`✅ ${result.updatedCount || updatedOrders.length} telas guardadas en ${result.filesUpdated || 0} archivos`);
     } catch (error) {
       console.error("❌ Error guardando pedidos:", error);
       
-      // Mostrar toast de error
       toast.error("Error al guardar los pedidos", {
+        id: loadingToast,
         description: error instanceof Error ? error.message : "Error desconocido",
         duration: 5000,
       });
@@ -1019,13 +1000,12 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         return {
           "Orden de Compra": row.orden_de_compra || "-",
           "Proveedor": row.proveedor || "-",
-          "Contacto": row.contacto || "-",
-          "Email": row.email || "-",
           "Origen": row.origen || "-",
           "Incoterm": row.incoterm || "-",
           "Transportista": row.transportista || "-",
           "Agente Aduanal": row.agente_aduanal || "-",
           "Pedimento": row.pedimento || "-",
+          "Pago Crédito": row.pago_credito || "-",
           "Tipo de Tela": row["pedido_cliente.tipo_tela"] || "-",
           "Color": row["pedido_cliente.color"] || "-",
           "M Pedidos": formatCurrency(row["pedido_cliente.total_m_pedidos"] || 0),
@@ -1043,14 +1023,12 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           "DDP USD/Unidad": `$${formatCurrency(calculatedData.ddpUsdUnidad)}`,
           "DDP USD/Unidad S/IVA": `$${formatCurrency(calculatedData.ddpUsdUnidadSIva)}`,
           "Factura Proveedor": row.factura_proveedor || "-",
-          "Fracción": row.fraccion || "-",
           "Año": row.Year || "-",
           "Venta": `$${formatCurrency(row.venta || 0)}`,
           "Fecha Pedido": formatDate(row.fecha_pedido),
           "Sale Origen": formatDate(row.sale_origen),
-          "Llega a Lázaro": formatDate(row.llega_a_Lazaro),
-          "Llega a Manzanillo": formatDate(row.llega_a_Manzanillo),
-          "Llega Almacén": formatDate(row.llega_almacen_proveedor),
+          "Llega a México": formatDate(row.llega_a_mexico),
+          "Llega Almacén Proveedor": formatDate(row.llega_almacen_proveedor),
         };
       });
 
@@ -1094,6 +1072,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         return [
           row.orden_de_compra || "-",
           row.proveedor || "-",
+          row.pago_credito || "-",
           row["pedido_cliente.tipo_tela"] || "-",
           row["pedido_cliente.color"] || "-",
           formatCurrency(row["pedido_cliente.total_m_pedidos"] || 0),
@@ -1104,6 +1083,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           `$MXN ${formatCurrency(calculatedData.totalMxp)}`,
           `$MXN ${formatCurrency(calculatedData.ddpTotalMxp)}`,
           formatDate(row.fecha_pedido),
+          formatDate(row.llega_a_mexico),
           formatDate(row.llega_almacen_proveedor),
         ];
       });
@@ -1112,6 +1092,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         head: [[
           "OC",
           "Proveedor",
+          "Pago Crédito",
           "Tipo Tela",
           "Color",
           "M Pedidos",
@@ -1122,7 +1103,8 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           "Total MXP",
           "DDP Total MXP",
           "Fecha Pedido",
-          "Llega Almacén",
+          "Llega a México",
+          "Llega Almacén Proveedor",
         ]],
         body: tableData,
         startY: 35,

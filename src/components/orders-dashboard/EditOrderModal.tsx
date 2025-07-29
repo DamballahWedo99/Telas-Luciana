@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { editOrderSchema, editTelaSchema } from "@/lib/zod";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ interface PedidoData {
   pago_credito?: string | null;
   llega_a_Lazaro?: string;
   llega_a_Manzanillo?: string;
+  llega_a_mexico?: string;
   llega_almacen_proveedor?: string;
   factura_proveedor?: string;
   orden_de_compra?: string;
@@ -90,31 +92,37 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [telaValidationErrors, setTelaValidationErrors] = useState<Record<number, Record<string, string>>>({});
+  const [allowTelaEditing, setAllowTelaEditing] = useState<boolean>(false);
+  const [allowProveedorEditing, setAllowProveedorEditing] = useState<boolean>(false);
+  const [allowLogisticaEditing, setAllowLogisticaEditing] = useState<boolean>(false);
+  const [allowFechasEditing, setAllowFechasEditing] = useState<boolean>(false);
+  const [allowDocumentacionEditing, setAllowDocumentacionEditing] = useState<boolean>(false);
+  const [allowFinancieraEditing, setAllowFinancieraEditing] = useState<boolean>(false);
 
-  // Opciones hardcodeadas para los selects
-  const proveedorOptions = [
-    "HYWELL / GALAXY",
-    "SUNSHINE TEXTILE",
-    "DRAGON TEXTILES",
-    "GOLDEN FABRIC",
-    "OCEAN MILLS",
-  ];
+  // Generar opciones de proveedores dinámicamente desde los datos
+  const proveedorOptions = useMemo(() => {
+    const uniqueProveedores = Array.from(
+      new Set(data.map((item) => item.proveedor))
+    ).filter((value): value is string => typeof value === "string" && value !== "");
+    
+    return uniqueProveedores.sort();
+  }, [data]);
 
-  const incotermOptions = [
-    "FOB SHANGHAI",
-    "FOB NINGBO",
-    "FOB QINGDAO", 
-    "CIF MANZANILLO",
-    "EXW",
-  ];
+  const incotermOptions = useMemo(() => {
+    const uniqueIncoterms = Array.from(
+      new Set(data.map((item) => item.incoterm))
+    ).filter((value): value is string => typeof value === "string" && value !== "");
+    
+    return uniqueIncoterms.sort();
+  }, [data]);
 
-  const transportistaOptions = [
-    "DICUPA",
-    "MAERSK",
-    "COSCO",
-    "EVERGREEN",
-    "MSC",
-  ];
+  const transportistaOptions = useMemo(() => {
+    const uniqueTransportistas = Array.from(
+      new Set(data.map((item) => item.transportista))
+    ).filter((value): value is string => typeof value === "string" && value !== "");
+    
+    return uniqueTransportistas.sort();
+  }, [data]);
 
   // Obtener órdenes únicas
   const uniqueOrders = Array.from(
@@ -188,8 +196,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     'fecha_pedido',
     'sale_origen',
     'pago_credito',
-    'llega_a_Lazaro',
-    'llega_a_Manzanillo',
+    'llega_a_mexico',
     'llega_almacen_proveedor',
     'factura_proveedor',
     'orden_de_compra',
@@ -207,8 +214,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     'supplier_percent_diff or upon negotiation',
     'Year',
     'total_gastos',
-    'tipo_de_cambio',
-    'venta'
+    'tipo_de_cambio'
   ];
 
   // Función para limpiar campos calculados y reordenar según estructura original
@@ -254,112 +260,224 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
 
     setValidationErrors({});
     setTelaValidationErrors({});
-    
-    // Validar los datos con Zod
-    const validationData = {
-      proveedor: editingOrder.proveedor || "",
-      incoterm: editingOrder.incoterm || "",
-      transportista: editingOrder.transportista || "",
-      agente_aduanal: editingOrder.agente_aduanal || "",
-      fecha_pedido: editingOrder.fecha_pedido || "",
-      sale_origen: editingOrder.sale_origen || "",
-      pago_credito: editingOrder.pago_credito || "",
-      llega_a_Lazaro: editingOrder.llega_a_Lazaro || "",
-      llega_a_Manzanillo: editingOrder.llega_a_Manzanillo || "",
-      llega_almacen_proveedor: editingOrder.llega_almacen_proveedor || "",
-      pedimento: editingOrder.pedimento || "",
-      factura_proveedor: editingOrder.factura_proveedor || "",
-      reporte_inspeccion: editingOrder.reporte_inspeccion || "",
-      pedimento_tránsito: editingOrder.pedimento_tránsito || "",
-      precio_m_fob_usd: editingOrder.precio_m_fob_usd || 0,
-      tipo_de_cambio: editingOrder.tipo_de_cambio || 0,
-      venta: editingOrder.venta || 0,
-    };
 
-    const validation = editOrderSchema.safeParse(validationData);
+    // Validar cada sección habilitada por separado
+    const errors: Record<string, string> = {};
     
-    if (!validation.success) {
-      const errors: Record<string, string> = {};
-      validation.error.errors.forEach((error) => {
-        if (error.path.length > 0) {
-          errors[error.path[0].toString()] = error.message;
-        }
+    if (allowProveedorEditing) {
+      const proveedorValidation = editOrderSchema.pick({
+        proveedor: true,
+        incoterm: true,
+      }).safeParse({
+        proveedor: editingOrder.proveedor || "",
+        incoterm: editingOrder.incoterm || "",
       });
-      setValidationErrors(errors);
-      return;
-    }
-
-    // Validar las telas individuales
-    const telaErrors: Record<number, Record<string, string>> = {};
-    let hasTelaErrors = false;
-
-    orderTelas.forEach((tela, index) => {
-      const telaData = {
-        venta: tela.venta || 0,
-        m_factura: tela.m_factura || 0,
-        total_factura: tela.total_factura || 0,
-      };
-
-      const telaValidation = editTelaSchema.safeParse(telaData);
       
-      if (!telaValidation.success) {
-        const errors: Record<string, string> = {};
-        telaValidation.error.errors.forEach((error) => {
+      if (!proveedorValidation.success) {
+        proveedorValidation.error.errors.forEach((error) => {
           if (error.path.length > 0) {
             errors[error.path[0].toString()] = error.message;
           }
         });
-        if (Object.keys(errors).length > 0) {
-          telaErrors[index] = errors;
-          hasTelaErrors = true;
-        }
       }
-    });
-
-    if (hasTelaErrors) {
-      setTelaValidationErrors(telaErrors);
+    }
+    
+    if (allowLogisticaEditing) {
+      const logisticaValidation = editOrderSchema.pick({
+        transportista: true,
+        agente_aduanal: true,
+      }).safeParse({
+        transportista: editingOrder.transportista || "",
+        agente_aduanal: editingOrder.agente_aduanal || "",
+      });
+      
+      if (!logisticaValidation.success) {
+        logisticaValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+    
+    if (allowFechasEditing) {
+      const fechasValidation = editOrderSchema.pick({
+        fecha_pedido: true,
+        sale_origen: true,
+        pago_credito: true,
+        llega_a_mexico: true,
+        llega_almacen_proveedor: true,
+      }).safeParse({
+        fecha_pedido: editingOrder.fecha_pedido || "",
+        sale_origen: editingOrder.sale_origen || "",
+        pago_credito: editingOrder.pago_credito || "",
+        llega_a_mexico: editingOrder.llega_a_mexico || "",
+        llega_almacen_proveedor: editingOrder.llega_almacen_proveedor || "",
+      });
+      
+      if (!fechasValidation.success) {
+        fechasValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+    
+    if (allowDocumentacionEditing) {
+      const documentacionValidation = editOrderSchema.pick({
+        pedimento: true,
+        factura_proveedor: true,
+        reporte_inspeccion: true,
+        pedimento_tránsito: true,
+      }).safeParse({
+        pedimento: editingOrder.pedimento || "",
+        factura_proveedor: editingOrder.factura_proveedor || "",
+        reporte_inspeccion: editingOrder.reporte_inspeccion || "",
+        pedimento_tránsito: editingOrder.pedimento_tránsito || "",
+      });
+      
+      if (!documentacionValidation.success) {
+        documentacionValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+    
+    if (allowFinancieraEditing) {
+      const financieraValidation = editOrderSchema.pick({
+        precio_m_fob_usd: true,
+        tipo_de_cambio: true,
+      }).safeParse({
+        precio_m_fob_usd: editingOrder.precio_m_fob_usd || 0,
+        tipo_de_cambio: editingOrder.tipo_de_cambio || 0,
+      });
+      
+      if (!financieraValidation.success) {
+        financieraValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+    
+    // Si hay errores de validación, mostrarlos y salir
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
+    }
+
+    // Validar las telas individuales solo si la edición está habilitada
+    const telaErrors: Record<number, Record<string, string>> = {};
+    let hasTelaErrors = false;
+
+    if (allowTelaEditing) {
+      orderTelas.forEach((tela, index) => {
+        const telaData = {
+          venta: tela.venta || 0,
+          m_factura: tela.m_factura || 0,
+          total_factura: tela.total_factura || 0,
+        };
+
+        const telaValidation = editTelaSchema.safeParse(telaData);
+        
+        if (!telaValidation.success) {
+          const errors: Record<string, string> = {};
+          telaValidation.error.errors.forEach((error) => {
+            if (error.path.length > 0) {
+              errors[error.path[0].toString()] = error.message;
+            }
+          });
+          if (Object.keys(errors).length > 0) {
+            telaErrors[index] = errors;
+            hasTelaErrors = true;
+          }
+        }
+      });
+
+      if (hasTelaErrors) {
+        setTelaValidationErrors(telaErrors);
+        return;
+      }
     }
 
     setIsSaving(true);
     try {
       // Aplicar cambios generales a todas las telas de la orden y limpiar campos calculados
       const updatedTelas = orderTelas.map(tela => {
-        const updatedTela = {
-          ...tela,
-          // Campos generales que se aplican a toda la orden
-          proveedor: editingOrder.proveedor,
-          incoterm: editingOrder.incoterm,
-          transportista: editingOrder.transportista,
-          agente_aduanal: editingOrder.agente_aduanal,
-          fecha_pedido: editingOrder.fecha_pedido,
-          sale_origen: editingOrder.sale_origen,
-          pago_credito: editingOrder.pago_credito,
-          llega_a_Lazaro: editingOrder.llega_a_Lazaro,
-          llega_a_Manzanillo: editingOrder.llega_a_Manzanillo,
-          llega_almacen_proveedor: editingOrder.llega_almacen_proveedor,
-          pedimento: editingOrder.pedimento,
-          factura_proveedor: editingOrder.factura_proveedor,
-          reporte_inspeccion: editingOrder.reporte_inspeccion,
-          pedimento_tránsito: editingOrder.pedimento_tránsito,
-          precio_m_fob_usd: editingOrder.precio_m_fob_usd,
-          tipo_de_cambio: editingOrder.tipo_de_cambio,
-        };
+        const updatedTela = { ...tela };
+        
+        // Solo aplicar cambios de las secciones habilitadas
+        if (allowProveedorEditing) {
+          updatedTela.proveedor = editingOrder.proveedor;
+          updatedTela.incoterm = editingOrder.incoterm;
+        }
+        
+        if (allowLogisticaEditing) {
+          updatedTela.transportista = editingOrder.transportista;
+          updatedTela.agente_aduanal = editingOrder.agente_aduanal;
+        }
+        
+        if (allowFechasEditing) {
+          updatedTela.fecha_pedido = editingOrder.fecha_pedido;
+          updatedTela.sale_origen = editingOrder.sale_origen;
+          updatedTela.pago_credito = editingOrder.pago_credito;
+          updatedTela.llega_a_mexico = editingOrder.llega_a_mexico;
+          updatedTela.llega_almacen_proveedor = editingOrder.llega_almacen_proveedor;
+        }
+        
+        if (allowDocumentacionEditing) {
+          updatedTela.pedimento = editingOrder.pedimento;
+          updatedTela.factura_proveedor = editingOrder.factura_proveedor;
+          updatedTela.reporte_inspeccion = editingOrder.reporte_inspeccion;
+          updatedTela.pedimento_tránsito = editingOrder.pedimento_tránsito;
+        }
+        
+        if (allowFinancieraEditing) {
+          updatedTela.precio_m_fob_usd = editingOrder.precio_m_fob_usd;
+          updatedTela.tipo_de_cambio = editingOrder.tipo_de_cambio;
+        }
+
+        // Si la edición de telas no está permitida, mantener los valores originales de venta, m_factura y total_factura
+        if (!allowTelaEditing) {
+          const originalTela = data.find(originalItem => 
+            originalItem.orden_de_compra === tela.orden_de_compra &&
+            originalItem["pedido_cliente.tipo_tela"] === tela["pedido_cliente.tipo_tela"] &&
+            originalItem["pedido_cliente.color"] === tela["pedido_cliente.color"]
+          );
+          
+          if (originalTela) {
+            updatedTela.venta = originalTela.venta;
+            updatedTela.m_factura = originalTela.m_factura;
+            updatedTela.total_factura = originalTela.total_factura;
+          }
+        }
         
         // Limpiar campos calculados y reordenar antes de enviar
         return cleanAndReorderData(updatedTela);
       });
 
-      // Guardar todas las telas actualizadas de una vez
-      await onSave(updatedTelas);
-
-      onClose();
+      // Guardar todas las telas actualizadas de una vez (no async para UX fluida)
+      onSave(updatedTelas);
+      
+      // Limpiar estado del modal
       setSelectedOrderId("");
       setEditingOrder(null);
       setOrderTelas([]);
       setSearchQuery("");
       setValidationErrors({});
       setTelaValidationErrors({});
+      setAllowTelaEditing(false);
+      setAllowProveedorEditing(false);
+      setAllowLogisticaEditing(false);
+      setAllowFechasEditing(false);
+      setAllowDocumentacionEditing(false);
+      setAllowFinancieraEditing(false);
+      
+      // El modal se cerrará desde el parent component (OrdersCard)
     } catch (error) {
       console.error("Error saving order:", error);
     } finally {
@@ -391,6 +509,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     setSearchQuery("");
     setValidationErrors({});
     setTelaValidationErrors({});
+    setAllowTelaEditing(false);
+    setAllowProveedorEditing(false);
+    setAllowLogisticaEditing(false);
+    setAllowFechasEditing(false);
+    setAllowDocumentacionEditing(false);
+    setAllowFinancieraEditing(false);
   };
 
   return (
@@ -473,17 +597,30 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
               {/* 1. Información del Proveedor y Términos Comerciales */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">
-                    Información del Proveedor y Términos Comerciales
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">
+                      Información del Proveedor y Términos Comerciales
+                    </CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="proveedor-editing-checkbox" className="text-sm font-medium">
+                        Permitir edición
+                      </Label>
+                      <Checkbox
+                        id="proveedor-editing-checkbox"
+                        checked={allowProveedorEditing}
+                        onCheckedChange={(checked) => setAllowProveedorEditing(checked === true)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={`space-y-4 ${!allowProveedorEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="proveedor">Proveedor</Label>
                       <Select
                         value={editingOrder.proveedor || ""}
                         onValueChange={(value) => handleInputChange("proveedor", value)}
+                        disabled={!allowProveedorEditing}
                       >
                         <SelectTrigger className={validationErrors.proveedor ? "border-red-500" : ""}>
                           <SelectValue placeholder="Seleccionar proveedor" />
@@ -505,6 +642,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                       <Select
                         value={editingOrder.incoterm || ""}
                         onValueChange={(value) => handleInputChange("incoterm", value)}
+                        disabled={!allowProveedorEditing}
                       >
                         <SelectTrigger className={validationErrors.incoterm ? "border-red-500" : ""}>
                           <SelectValue placeholder="Seleccionar incoterm" />
@@ -528,15 +666,28 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
               {/* 2. Logística y Transporte */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Logística y Transporte</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Logística y Transporte</CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="logistica-editing-checkbox" className="text-sm font-medium">
+                        Permitir edición
+                      </Label>
+                      <Checkbox
+                        id="logistica-editing-checkbox"
+                        checked={allowLogisticaEditing}
+                        onCheckedChange={(checked) => setAllowLogisticaEditing(checked === true)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={`space-y-4 ${!allowLogisticaEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="transportista">Transportista</Label>
                       <Select
                         value={editingOrder.transportista || ""}
                         onValueChange={(value) => handleInputChange("transportista", value)}
+                        disabled={!allowLogisticaEditing}
                       >
                         <SelectTrigger className={validationErrors.transportista ? "border-red-500" : ""}>
                           <SelectValue placeholder="Seleccionar transportista" />
@@ -560,6 +711,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         value={editingOrder.agente_aduanal || ""}
                         onChange={(e) => handleInputChange("agente_aduanal", e.target.value)}
                         placeholder="Nombre del agente aduanal"
+                        disabled={!allowLogisticaEditing}
                         className={validationErrors.agente_aduanal ? "border-red-500" : ""}
                       />
                       {validationErrors.agente_aduanal && (
@@ -573,9 +725,21 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
               {/* 3. Cronograma y Fechas */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Cronograma y Fechas</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Cronograma y Fechas</CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="fechas-editing-checkbox" className="text-sm font-medium">
+                        Permitir edición
+                      </Label>
+                      <Checkbox
+                        id="fechas-editing-checkbox"
+                        checked={allowFechasEditing}
+                        onCheckedChange={(checked) => setAllowFechasEditing(checked === true)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={`space-y-4 ${!allowFechasEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="fecha_pedido">Fecha de Pedido</Label>
@@ -584,6 +748,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         type="date"
                         value={editingOrder.fecha_pedido || ""}
                         onChange={(e) => handleInputChange("fecha_pedido", e.target.value)}
+                        disabled={!allowFechasEditing}
                         className={validationErrors.fecha_pedido ? "border-red-500" : ""}
                       />
                       {validationErrors.fecha_pedido && (
@@ -597,6 +762,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         type="date"
                         value={editingOrder.sale_origen || ""}
                         onChange={(e) => handleInputChange("sale_origen", e.target.value)}
+                        disabled={!allowFechasEditing}
                         className={validationErrors.sale_origen ? "border-red-500" : ""}
                       />
                       {validationErrors.sale_origen && (
@@ -610,6 +776,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         type="date"
                         value={editingOrder.pago_credito || ""}
                         onChange={(e) => handleInputChange("pago_credito", e.target.value)}
+                        disabled={!allowFechasEditing}
                         className={validationErrors.pago_credito ? "border-red-500" : ""}
                       />
                       {validationErrors.pago_credito && (
@@ -617,29 +784,17 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="llega_a_Lazaro">Llega a Lázaro</Label>
+                      <Label htmlFor="llega_a_mexico">Llega a México</Label>
                       <Input
-                        id="llega_a_Lazaro"
+                        id="llega_a_mexico"
                         type="date"
-                        value={editingOrder.llega_a_Lazaro || ""}
-                        onChange={(e) => handleInputChange("llega_a_Lazaro", e.target.value)}
-                        className={validationErrors.llega_a_Lazaro ? "border-red-500" : ""}
+                        value={editingOrder.llega_a_mexico || ""}
+                        onChange={(e) => handleInputChange("llega_a_mexico", e.target.value)}
+                        disabled={!allowFechasEditing}
+                        className={validationErrors.llega_a_mexico ? "border-red-500" : ""}
                       />
-                      {validationErrors.llega_a_Lazaro && (
-                        <p className="text-sm text-red-500">{validationErrors.llega_a_Lazaro}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="llega_a_Manzanillo">Llega a Manzanillo</Label>
-                      <Input
-                        id="llega_a_Manzanillo"
-                        type="date"
-                        value={editingOrder.llega_a_Manzanillo || ""}
-                        onChange={(e) => handleInputChange("llega_a_Manzanillo", e.target.value)}
-                        className={validationErrors.llega_a_Manzanillo ? "border-red-500" : ""}
-                      />
-                      {validationErrors.llega_a_Manzanillo && (
-                        <p className="text-sm text-red-500">{validationErrors.llega_a_Manzanillo}</p>
+                      {validationErrors.llega_a_mexico && (
+                        <p className="text-sm text-red-500">{validationErrors.llega_a_mexico}</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -649,6 +804,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         type="date"
                         value={editingOrder.llega_almacen_proveedor || ""}
                         onChange={(e) => handleInputChange("llega_almacen_proveedor", e.target.value)}
+                        disabled={!allowFechasEditing}
                         className={validationErrors.llega_almacen_proveedor ? "border-red-500" : ""}
                       />
                       {validationErrors.llega_almacen_proveedor && (
@@ -662,9 +818,21 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
               {/* 4. Documentación */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Documentación</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Documentación</CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="documentacion-editing-checkbox" className="text-sm font-medium">
+                        Permitir edición
+                      </Label>
+                      <Checkbox
+                        id="documentacion-editing-checkbox"
+                        checked={allowDocumentacionEditing}
+                        onCheckedChange={(checked) => setAllowDocumentacionEditing(checked === true)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={`space-y-4 ${!allowDocumentacionEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="pedimento">Pedimento</Label>
@@ -673,6 +841,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         value={editingOrder.pedimento || ""}
                         onChange={(e) => handleInputChange("pedimento", e.target.value)}
                         placeholder="Número de pedimento"
+                        disabled={!allowDocumentacionEditing}
                       />
                     </div>
                     <div className="space-y-2">
@@ -682,6 +851,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         value={editingOrder.factura_proveedor || ""}
                         onChange={(e) => handleInputChange("factura_proveedor", e.target.value)}
                         placeholder="Número de factura"
+                        disabled={!allowDocumentacionEditing}
                       />
                     </div>
                     <div className="space-y-2">
@@ -691,6 +861,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         value={editingOrder.reporte_inspeccion || ""}
                         onChange={(e) => handleInputChange("reporte_inspeccion", e.target.value)}
                         placeholder="Reporte de inspección"
+                        disabled={!allowDocumentacionEditing}
                       />
                     </div>
                     <div className="space-y-2">
@@ -700,6 +871,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         value={editingOrder.pedimento_tránsito || ""}
                         onChange={(e) => handleInputChange("pedimento_tránsito", e.target.value)}
                         placeholder="Pedimento de tránsito"
+                        disabled={!allowDocumentacionEditing}
                       />
                     </div>
                   </div>
@@ -709,10 +881,22 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
               {/* 5. Información Financiera */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Información Financiera</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Información Financiera</CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="financiera-editing-checkbox" className="text-sm font-medium">
+                        Permitir edición
+                      </Label>
+                      <Checkbox
+                        id="financiera-editing-checkbox"
+                        checked={allowFinancieraEditing}
+                        onCheckedChange={(checked) => setAllowFinancieraEditing(checked === true)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <CardContent className={`space-y-4 ${!allowFinancieraEditing ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="precio_m_fob_usd">FOB (USD)</Label>
                       <Input
@@ -722,6 +906,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         value={editingOrder.precio_m_fob_usd || ""}
                         onChange={(e) => handleInputChange("precio_m_fob_usd", parseFloat(e.target.value) || 0)}
                         placeholder="Precio FOB en USD"
+                        disabled={!allowFinancieraEditing}
                         className={validationErrors.precio_m_fob_usd ? "border-red-500" : ""}
                       />
                       {validationErrors.precio_m_fob_usd && (
@@ -737,25 +922,11 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         value={editingOrder.tipo_de_cambio || ""}
                         onChange={(e) => handleInputChange("tipo_de_cambio", parseFloat(e.target.value) || 0)}
                         placeholder="Tipo de cambio"
+                        disabled={!allowFinancieraEditing}
                         className={validationErrors.tipo_de_cambio ? "border-red-500" : ""}
                       />
                       {validationErrors.tipo_de_cambio && (
                         <p className="text-sm text-red-500">{validationErrors.tipo_de_cambio}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="venta">Venta</Label>
-                      <Input
-                        id="venta"
-                        type="number"
-                        step="0.01"
-                        value={editingOrder.venta || ""}
-                        onChange={(e) => handleInputChange("venta", parseFloat(e.target.value) || 0)}
-                        placeholder="Precio de venta"
-                        className={validationErrors.venta ? "border-red-500" : ""}
-                      />
-                      {validationErrors.venta && (
-                        <p className="text-sm text-red-500">{validationErrors.venta}</p>
                       )}
                     </div>
                   </div>
@@ -765,11 +936,23 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
               {/* 6. Telas y Precios de Venta Individuales */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">
-                    Telas y Precios de Venta ({orderTelas.length} telas)
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">
+                      Telas y Precios de Venta ({orderTelas.length} telas)
+                    </CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="tela-editing-checkbox" className="text-sm font-medium">
+                        Permitir edición
+                      </Label>
+                      <Checkbox
+                        id="tela-editing-checkbox"
+                        checked={allowTelaEditing}
+                        onCheckedChange={(checked) => setAllowTelaEditing(checked === true)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={`space-y-4 ${!allowTelaEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                   {orderTelas.map((tela, index) => (
                     <div key={index} className="border rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
@@ -791,6 +974,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                             value={tela.venta || ""}
                             onChange={(e) => handleTelaChange(index, "venta", parseFloat(e.target.value) || 0)}
                             placeholder="Precio de venta"
+                            disabled={!allowTelaEditing}
                             className={telaValidationErrors[index]?.venta ? "border-red-500" : ""}
                           />
                           {telaValidationErrors[index]?.venta && (
@@ -806,6 +990,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                             value={tela.m_factura || ""}
                             onChange={(e) => handleTelaChange(index, "m_factura", parseFloat(e.target.value) || 0)}
                             placeholder="Metros en factura"
+                            disabled={!allowTelaEditing}
                             className={telaValidationErrors[index]?.m_factura ? "border-red-500" : ""}
                           />
                           {telaValidationErrors[index]?.m_factura && (
@@ -821,6 +1006,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                             value={tela.total_factura || ""}
                             onChange={(e) => handleTelaChange(index, "total_factura", parseFloat(e.target.value) || 0)}
                             placeholder="Total factura USD"
+                            disabled={!allowTelaEditing}
                             className={telaValidationErrors[index]?.total_factura ? "border-red-500" : ""}
                           />
                           {telaValidationErrors[index]?.total_factura && (

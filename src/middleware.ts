@@ -84,6 +84,8 @@ const internalAccessRoutes = [
   "/api/users",
   "/api/s3/clientes",
   "/api/s3/fichas-tecnicas",
+  "/api/s3/proveedores",
+  "/api/s3/pedidos",
   "/api/cron/weekly-inventory",
   "/api/cron/scheduler",
 ];
@@ -106,6 +108,8 @@ const protectedApiRoutes = [
   "/api/s3/fichas-tecnicas",
   "/api/s3/fichas-tecnicas/download",
   "/api/s3/clientes",
+  "/api/s3/proveedores",
+  "/api/s3/pedidos",
 ];
 
 const mixedAccessApiRoutes = ["/api/s3/inventario"];
@@ -153,6 +157,16 @@ const rateLimitConfig: Record<
     message:
       "Demasiadas solicitudes de scheduler. Espera antes de intentar nuevamente.",
   },
+  "/api/s3/proveedores": {
+    type: "api",
+    message:
+      "Demasiadas solicitudes a proveedores. Por favor, inténtalo de nuevo más tarde.",
+  },
+  "/api/s3/pedidos": {
+    type: "api",
+    message:
+      "Demasiadas solicitudes a pedidos. Por favor, inténtalo de nuevo más tarde.",
+  },
 };
 
 const roleBasedAccess: Record<string, string[]> = {
@@ -175,6 +189,8 @@ const roleBasedAccess: Record<string, string[]> = {
     "/api/s3/fichas-tecnicas/download",
     "/api/users/verify",
     "/api/s3/clientes",
+    "/api/s3/proveedores",
+    "/api/s3/pedidos",
     "/dashboard",
   ],
 };
