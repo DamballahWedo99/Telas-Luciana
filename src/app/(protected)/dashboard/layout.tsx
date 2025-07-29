@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { AuthProvider } from "@/components/providers/SessionProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,12 +15,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AuthProvider>
-      <main
-        className={`${inter.className} min-h-[100dvh] sm:min-h-screen flex-grow`}
-      >
-        {children}
-      </main>
-    </AuthProvider>
+    <main
+      className={`${inter.className} min-h-[100dvh] sm:min-h-screen flex-grow`}
+    >
+      {children}
+    </main>
   );
 }
