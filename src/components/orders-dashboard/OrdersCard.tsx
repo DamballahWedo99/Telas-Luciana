@@ -16,6 +16,7 @@ import {
   ChevronRightIcon,
   EditIcon,
   DownloadIcon,
+  TruckIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ import {
   PaginationLink,
 } from "@/components/ui/pagination";
 import { EditOrderModal } from "./EditOrderModal";
+import { LogisticsModal } from "./LogisticsModal";
 
 interface PedidoData {
   num_archivo?: number;
@@ -794,6 +796,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   loading = false,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isLogisticsModalOpen, setIsLogisticsModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
 
@@ -1215,6 +1218,27 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
                 </TooltipContent>
               </Tooltip>
             </EditOrderModal>
+
+            <LogisticsModal
+              isOpen={isLogisticsModalOpen}
+              onClose={() => setIsLogisticsModalOpen(false)}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsLogisticsModalOpen(true)}
+                  >
+                    <TruckIcon className="h-4 w-4 mr-2" />
+                    Logística
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Logística</p>
+                </TooltipContent>
+              </Tooltip>
+            </LogisticsModal>
 
             <Tooltip>
               <TooltipTrigger asChild>

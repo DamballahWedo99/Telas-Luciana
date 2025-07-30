@@ -368,5 +368,53 @@ export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 export type CreateClienteFormValues = z.infer<typeof createClienteSchema>;
 export type CreateProveedorFormValues = z.infer<typeof createProveedorSchema>;
+export const logisticsSchema = z.object({
+  orden_de_compra: z
+    .string()
+    .min(1, { message: "La orden de compra es obligatoria" })
+    .max(50, { message: "La orden de compra no puede tener más de 50 caracteres" })
+    .regex(/^[^<>'";;&|`$(){}[\]\\]*$/, { message: "La orden de compra contiene caracteres no permitidos" }),
+  tela: z
+    .array(
+      z.object({
+        tipo_tela: z
+          .string()
+          .min(1, { message: "El tipo de tela es obligatorio" })
+          .max(100, { message: "El tipo de tela no puede tener más de 100 caracteres" })
+          .regex(/^[^<>]*$/, { message: "El tipo de tela no puede contener los caracteres < o >" }),
+      })
+    )
+    .optional(),
+  contenedor: z
+    .string()
+    .max(50, { message: "El contenedor no puede tener más de 50 caracteres" })
+    .regex(/^[^<>]*$/, { message: "El contenedor no puede contener los caracteres < o >" })
+    .optional()
+    .or(z.literal("")),
+  etd: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .optional()
+    .or(z.literal("")),
+  eta: z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2}|)$/, { message: "Formato de fecha inválido" })
+    .optional()
+    .or(z.literal("")),
+  importador: z
+    .string()
+    .max(100, { message: "El importador no puede tener más de 100 caracteres" })
+    .regex(/^[^<>]*$/, { message: "El importador no puede contener los caracteres < o >" })
+    .optional()
+    .or(z.literal("")),
+  notas: z
+    .string()
+    .max(500, { message: "Las notas no pueden tener más de 500 caracteres" })
+    .regex(/^[^<>]*$/, { message: "Las notas no pueden contener los caracteres < o >" })
+    .optional()
+    .or(z.literal("")),
+});
+
 export type EditOrderFormValues = z.infer<typeof editOrderSchema>;
 export type EditTelaFormValues = z.infer<typeof editTelaSchema>;
+export type LogisticsFormValues = z.infer<typeof logisticsSchema>;
