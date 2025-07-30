@@ -851,6 +851,16 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     const getFilteredOrdenDeCompraOptions = (): string[] => {
       let filtered = [...data];
 
+      // Aplicar filtro de búsqueda primero
+      if (searchQuery) {
+        filtered = filtered.filter(
+          (item) =>
+            item.orden_de_compra?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.tipo_tela"]?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.color"]?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+
       if (tipoTelaFilter && tipoTelaFilter !== "all") {
         filtered = filtered.filter(
           (item) => item["pedido_cliente.tipo_tela"] === tipoTelaFilter
@@ -881,6 +891,16 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
 
     const getFilteredTipoTelaOptions = (): string[] => {
       let filtered = [...data];
+
+      // Aplicar filtro de búsqueda primero
+      if (searchQuery) {
+        filtered = filtered.filter(
+          (item) =>
+            item.orden_de_compra?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.tipo_tela"]?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.color"]?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
 
       if (ordenDeCompraFilter && ordenDeCompraFilter !== "all") {
         filtered = filtered.filter(
@@ -914,6 +934,16 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
 
     const getFilteredColorOptions = (): string[] => {
       let filtered = [...data];
+
+      // Aplicar filtro de búsqueda primero
+      if (searchQuery) {
+        filtered = filtered.filter(
+          (item) =>
+            item.orden_de_compra?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.tipo_tela"]?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.color"]?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
 
       if (ordenDeCompraFilter && ordenDeCompraFilter !== "all") {
         filtered = filtered.filter(
@@ -950,7 +980,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       tipoTelaOptions: getFilteredTipoTelaOptions(),
       colorOptions: getFilteredColorOptions(),
     };
-  }, [data, ordenDeCompraFilter, tipoTelaFilter, colorFilter, ubicacionFilter]);
+  }, [data, searchQuery, ordenDeCompraFilter, tipoTelaFilter, colorFilter, ubicacionFilter]);
 
   const calculateRowData = (row: PedidoData) => {
     const ordenDeCompra = row.orden_de_compra || "";
