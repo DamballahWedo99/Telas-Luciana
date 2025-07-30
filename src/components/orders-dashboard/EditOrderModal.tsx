@@ -348,10 +348,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     
     if (allowFinancieraEditing) {
       const financieraValidation = editOrderSchema.pick({
-        precio_m_fob_usd: true,
         tipo_de_cambio: true,
       }).safeParse({
-        precio_m_fob_usd: editingOrder.precio_m_fob_usd || 0,
         tipo_de_cambio: editingOrder.tipo_de_cambio || 0,
       });
       
@@ -377,6 +375,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     if (allowTelaEditing) {
       orderTelas.forEach((tela, index) => {
         const telaData = {
+          precio_m_fob_usd: tela.precio_m_fob_usd || 0,
           venta: tela.venta || 0,
           m_factura: tela.m_factura || 0,
           total_factura: tela.total_factura || 0,
@@ -437,11 +436,10 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
         }
         
         if (allowFinancieraEditing) {
-          updatedTela.precio_m_fob_usd = editingOrder.precio_m_fob_usd;
           updatedTela.tipo_de_cambio = editingOrder.tipo_de_cambio;
         }
 
-        // Si la edición de telas no está permitida, mantener los valores originales de venta, m_factura y total_factura
+        // Si la edición de telas no está permitida, mantener los valores originales de FOB, venta, m_factura y total_factura
         if (!allowTelaEditing) {
           const originalTela = data.find(originalItem => 
             originalItem.orden_de_compra === tela.orden_de_compra &&
@@ -450,6 +448,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
           );
           
           if (originalTela) {
+            updatedTela.precio_m_fob_usd = originalTela.precio_m_fob_usd;
             updatedTela.venta = originalTela.venta;
             updatedTela.m_factura = originalTela.m_factura;
             updatedTela.total_factura = originalTela.total_factura;
@@ -896,23 +895,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                   </div>
                 </CardHeader>
                 <CardContent className={`space-y-4 ${!allowFinancieraEditing ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="precio_m_fob_usd">FOB (USD)</Label>
-                      <Input
-                        id="precio_m_fob_usd"
-                        type="number"
-                        step="0.01"
-                        value={editingOrder.precio_m_fob_usd || ""}
-                        onChange={(e) => handleInputChange("precio_m_fob_usd", parseFloat(e.target.value) || 0)}
-                        placeholder="Precio FOB en USD"
-                        disabled={!allowFinancieraEditing}
-                        className={validationErrors.precio_m_fob_usd ? "border-red-500" : ""}
-                      />
-                      {validationErrors.precio_m_fob_usd && (
-                        <p className="text-sm text-red-500">{validationErrors.precio_m_fob_usd}</p>
-                      )}
-                    </div>
+                  <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="tipo_de_cambio">Tipo de Cambio</Label>
                       <Input
@@ -964,7 +947,24 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                         </span>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor={`tela-${index}-precio-fob`}>Precio FOB (USD)</Label>
+                          <Input
+                            id={`tela-${index}-precio-fob`}
+                            type="number"
+                            step="0.01"
+                            value={tela.precio_m_fob_usd || ""}
+                            onChange={(e) => handleTelaChange(index, "precio_m_fob_usd", parseFloat(e.target.value) || 0)}
+                            placeholder="Precio FOB en USD"
+                            disabled={!allowTelaEditing}
+                            className={telaValidationErrors[index]?.precio_m_fob_usd ? "border-red-500" : ""}
+                          />
+                          {telaValidationErrors[index]?.precio_m_fob_usd && (
+                            <p className="text-sm text-red-500">{telaValidationErrors[index].precio_m_fob_usd}</p>
+                          )}
+                        </div>
+
                         <div className="space-y-2">
                           <Label htmlFor={`tela-${index}-precio-venta`}>Precio de Venta</Label>
                           <Input

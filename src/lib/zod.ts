@@ -299,6 +299,10 @@ export const editOrderSchema = z.object({
 });
 
 export const editTelaSchema = z.object({
+  precio_m_fob_usd: z
+    .number({ message: "El precio FOB debe ser un número" })
+    .min(0.01, { message: "El precio FOB debe ser mayor a 0" })
+    .max(999999.99, { message: "El precio FOB no puede ser mayor a 999,999.99" }),
   venta: z
     .number({ message: "El precio de venta debe ser un número" })
     .min(0.01, { message: "El precio de venta debe ser mayor a 0" })
