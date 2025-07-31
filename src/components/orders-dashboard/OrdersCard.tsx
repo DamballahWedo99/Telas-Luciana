@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import Papa from "papaparse";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { OrdersCardMobile } from "./OrdersCardMobile";
 import {
   ChevronUpIcon,
   ChevronDownIcon,
@@ -16,7 +17,6 @@ import {
   ChevronRightIcon,
   EditIcon,
   DownloadIcon,
-  TruckIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,25 @@ import {
   PaginationLink,
 } from "@/components/ui/pagination";
 import { EditOrderModal } from "./EditOrderModal";
-import { LogisticsModal } from "./LogisticsModal";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkIsMobile = () => {
+      const mobileQuery = window.matchMedia("(max-width: 768px)");
+      setIsMobile(mobileQuery.matches);
+    };
+
+    if (typeof window !== "undefined") {
+      checkIsMobile();
+      window.addEventListener("resize", checkIsMobile);
+      return () => window.removeEventListener("resize", checkIsMobile);
+    }
+  }, []);
+
+  return isMobile;
+}
 
 interface PedidoData {
   num_archivo?: number;
@@ -796,11 +814,16 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   loading = false,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isLogisticsModalOpen, setIsLogisticsModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<PedidoData[]>([]);
 
+  const isMobile = useIsMobile();
 
   const handleSaveOrder = async (updatedOrders: PedidoData[]) => {
+    // Cerrar modal inmediatamente al comenzar el guardado
+    setIsEditModalOpen(false);
+    setSelectedOrderDetails([]);
+    
     const loadingToast = toast.loading(`Guardando ${updatedOrders.length} tela${updatedOrders.length > 1 ? 's' : ''}...`);
 
     try {
@@ -824,8 +847,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         description: `${result.updatedCount || updatedOrders.length} telas actualizadas en ${result.filesUpdated || 0} archivo(s)`,
         duration: 3000,
       });
-      
-      setIsEditModalOpen(false);
       
       if (onDataUpdate) {
         await onDataUpdate();
@@ -1167,6 +1188,61 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     }
   };
 
+  // Renderizar versión móvil si es dispositivo móvil
+  if (isMobile) {
+    return (
+      <>
+        <OrdersCardMobile
+          paginatedData={paginatedData}
+          filteredData={filteredData}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          goToPage={goToPage}
+          formatDate={formatDate}
+          formatCurrency={formatCurrency}
+          calculateRowData={calculateRowData}
+          loading={loading}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          ordenDeCompraFilter={ordenDeCompraFilter}
+          setOrdenDeCompraFilter={setOrdenDeCompraFilter}
+          tipoTelaFilter={tipoTelaFilter}
+          setTipoTelaFilter={setTipoTelaFilter}
+          colorFilter={colorFilter}
+          setColorFilter={setColorFilter}
+          ubicacionFilter={ubicacionFilter}
+          setUbicacionFilter={setUbicacionFilter}
+          ordenDeCompraOptions={filteredOptions.ordenDeCompraOptions}
+          tipoTelaOptions={filteredOptions.tipoTelaOptions}
+          colorOptions={filteredOptions.colorOptions}
+          resetFilters={resetFilters}
+          handleExportPDF={handleExportPDF}
+          isExporting={isExporting}
+          onEditOrder={(orders) => {
+            if (orders && orders.length > 0) {
+              setSelectedOrderDetails(orders);
+              setIsEditModalOpen(true);
+            }
+          }}
+        />
+
+        {/* Modales para móvil */}
+        <EditOrderModal
+          data={data}
+          isOpen={isEditModalOpen && selectedOrderDetails.length > 0}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedOrderDetails([]);
+          }}
+          onSave={handleSaveOrder}
+          preselectedOrders={selectedOrderDetails.length > 0 ? selectedOrderDetails : undefined}
+        >
+          {null}
+        </EditOrderModal>
+      </>
+    );
+  }
+
   return (
     <Card className="mb-6 shadow">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -1198,9 +1274,13 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
 
             <EditOrderModal
               data={data}
-              isOpen={isEditModalOpen}
-              onClose={() => setIsEditModalOpen(false)}
+              isOpen={isEditModalOpen && selectedOrderDetails.length > 0}
+              onClose={() => {
+                setIsEditModalOpen(false);
+                setSelectedOrderDetails([]);
+              }}
               onSave={handleSaveOrder}
+              preselectedOrders={selectedOrderDetails.length > 0 ? selectedOrderDetails : undefined}
             >
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1218,27 +1298,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
                 </TooltipContent>
               </Tooltip>
             </EditOrderModal>
-
-            <LogisticsModal
-              isOpen={isLogisticsModalOpen}
-              onClose={() => setIsLogisticsModalOpen(false)}
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setIsLogisticsModalOpen(true)}
-                  >
-                    <TruckIcon className="h-4 w-4 mr-2" />
-                    Logística
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Logística</p>
-                </TooltipContent>
-              </Tooltip>
-            </LogisticsModal>
 
             <Tooltip>
               <TooltipTrigger asChild>

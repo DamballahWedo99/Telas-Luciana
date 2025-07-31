@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SaveIcon, XIcon } from "lucide-react";
+import { SaveIcon, XIcon, Loader2 } from "lucide-react";
 
 interface PedidoData {
   num_archivo?: number;
@@ -76,6 +76,7 @@ interface EditOrderModalProps {
   onClose: () => void;
   onSave: (updatedOrders: PedidoData[]) => void;
   children: React.ReactNode;
+  preselectedOrders?: PedidoData[];
 }
 
 export const EditOrderModal: React.FC<EditOrderModalProps> = ({
@@ -84,6 +85,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
   onClose,
   onSave,
   children,
+  preselectedOrders,
 }) => {
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
   const [editingOrder, setEditingOrder] = useState<PedidoData | null>(null);
@@ -98,6 +100,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
   const [allowFechasEditing, setAllowFechasEditing] = useState<boolean>(false);
   const [allowDocumentacionEditing, setAllowDocumentacionEditing] = useState<boolean>(false);
   const [allowFinancieraEditing, setAllowFinancieraEditing] = useState<boolean>(false);
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState<boolean>(false);
 
   // Generar opciones de proveedores dinámicamente desde los datos
   const proveedorOptions = useMemo(() => {
@@ -134,8 +137,22 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     order.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Efecto para manejar órdenes preseleccionadas
   useEffect(() => {
-    if (selectedOrderId) {
+    if (preselectedOrders && preselectedOrders.length > 0 && isOpen) {
+      setIsLoadingInitialData(true);
+      // Simular carga de datos (en caso real, aquí podrías cargar datos adicionales)
+      setTimeout(() => {
+        setOrderTelas([...preselectedOrders]);
+        setEditingOrder({ ...preselectedOrders[0] });
+        setSelectedOrderId(preselectedOrders[0].orden_de_compra || "");
+        setIsLoadingInitialData(false);
+      }, 500); // Pequeño delay para mostrar el loader
+    }
+  }, [preselectedOrders, isOpen]);
+
+  useEffect(() => {
+    if (selectedOrderId && !preselectedOrders) {
       // Obtener todas las telas asociadas a esta orden de compra
       const relatedTelas = data.filter((item) => item.orden_de_compra === selectedOrderId);
       setOrderTelas(relatedTelas);
@@ -144,11 +161,11 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
       if (relatedTelas.length > 0) {
         setEditingOrder({ ...relatedTelas[0] });
       }
-    } else {
+    } else if (!selectedOrderId && !preselectedOrders) {
       setEditingOrder(null);
       setOrderTelas([]);
     }
-  }, [selectedOrderId, data]);
+  }, [selectedOrderId, data, preselectedOrders]);
 
 
   const handleInputChange = (field: keyof PedidoData, value: string | number) => {
@@ -519,7 +536,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Editar Orden de Compra
@@ -527,71 +544,100 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Selector de Orden de Compra */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Seleccionar Orden</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Campo de búsqueda */}
-              <div className="space-y-2">
-                <Label htmlFor="order-search">Buscar Orden de Compra</Label>
-                <Input
-                  id="order-search"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder="Escribe para buscar una orden de compra..."
-                  className="w-full"
-                />
-              </div>
-              
-              {/* Separador */}
-              <Separator />
-              
-              {/* Lista de órdenes */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  Órdenes Disponibles ({filteredOrders.length})
-                </Label>
-                <ScrollArea className="h-32 w-full rounded-md border">
-                  <div className="p-2 space-y-1">
-                    {filteredOrders.length > 0 ? (
-                      filteredOrders.map((orden) => (
-                        <div
-                          key={orden}
-                          className={`relative flex cursor-pointer select-none items-center rounded-sm px-3 py-2 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground ${
-                            selectedOrderId === orden
-                              ? 'bg-accent text-accent-foreground font-medium'
-                              : ''
-                          }`}
-                          onClick={() => handleOrderSelect(orden)}
-                        >
-                          {orden}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-sm text-muted-foreground text-center">
-                        {searchQuery.length > 0 
-                          ? "No se encontraron órdenes de compra"
-                          : "Escribe para buscar órdenes de compra"
-                        }
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-              
-              {/* Orden seleccionada */}
-              {selectedOrderId && (
-                <div className="rounded-md bg-muted p-3">
-                  <div className="text-sm font-medium text-muted-foreground">Orden seleccionada:</div>
-                  <div className="text-base font-semibold">{selectedOrderId}</div>
+          {/* Selector de Orden de Compra - Solo mostrar si no hay órdenes preseleccionadas */}
+          {!preselectedOrders && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Seleccionar Orden</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Campo de búsqueda */}
+                <div className="space-y-2">
+                  <Label htmlFor="order-search">Buscar Orden de Compra</Label>
+                  <Input
+                    id="order-search"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder="Escribe para buscar una orden de compra..."
+                    className="w-full"
+                  />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                
+                {/* Separador */}
+                <Separator />
+                
+                {/* Lista de órdenes */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    Órdenes Disponibles ({filteredOrders.length})
+                  </Label>
+                  <ScrollArea className="h-32 w-full rounded-md border">
+                    <div className="p-2 space-y-1">
+                      {filteredOrders.length > 0 ? (
+                        filteredOrders.map((orden) => (
+                          <div
+                            key={orden}
+                            className={`relative flex cursor-pointer select-none items-center rounded-sm px-3 py-2 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground ${
+                              selectedOrderId === orden
+                                ? 'bg-accent text-accent-foreground font-medium'
+                                : ''
+                            }`}
+                            onClick={() => handleOrderSelect(orden)}
+                          >
+                            {orden}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground text-center">
+                          {searchQuery.length > 0 
+                            ? "No se encontraron órdenes de compra"
+                            : "Escribe para buscar órdenes de compra"
+                          }
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+                
+                {/* Orden seleccionada */}
+                {selectedOrderId && (
+                  <div className="rounded-md bg-muted p-3">
+                    <div className="text-sm font-medium text-muted-foreground">Orden seleccionada:</div>
+                    <div className="text-base font-semibold">{selectedOrderId}</div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          {editingOrder && (
+          {/* Mostrar información de orden preseleccionada */}
+          {preselectedOrders && selectedOrderId && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Editando Orden de Compra</CardTitle>  
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md bg-muted p-3">
+                  <div className="text-sm font-medium text-muted-foreground">Orden:</div>
+                  <div className="text-base font-semibold">{selectedOrderId}</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {orderTelas.length} tela{orderTelas.length > 1 ? 's' : ''} en esta orden
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {isLoadingInitialData ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="p-4 bg-blue-50 rounded-full">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>
+              <p className="text-gray-600 font-medium">
+                Cargando datos de la orden...
+              </p>
+            </div>
+          ) : editingOrder && (
             <>
               {/* 1. Información del Proveedor y Términos Comerciales */}
               <Card>

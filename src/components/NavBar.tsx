@@ -23,6 +23,7 @@ import {
   NotebookTabs,
   Menu,
   Building2,
+  TruckIcon,
 } from "lucide-react";
 
 type ViewType = "inventory" | "orders";
@@ -36,6 +37,7 @@ interface NavbarProps {
   onOpenFichasTecnicas: () => void;
   onOpenClientes: () => void;
   onOpenProveedores: () => void;
+  onOpenLogistics: () => void;
   onLogout: () => void;
 }
 
@@ -67,6 +69,7 @@ export default function Navbar({
   onOpenFichasTecnicas,
   onOpenClientes,
   onOpenProveedores,
+  onOpenLogistics,
   onLogout,
 }: NavbarProps) {
   const isMobile = useIsMobile();
@@ -131,6 +134,17 @@ export default function Navbar({
                     >
                       <Building2 className="mr-3 h-5 w-5" />
                       Proveedores
+                    </Button>
+                  )}
+
+                  {canAccessProveedores && (
+                    <Button
+                      variant="ghost"
+                      className="justify-start h-12 text-base"
+                      onClick={() => handleMenuAction(onOpenLogistics)}
+                    >
+                      <TruckIcon className="mr-3 h-5 w-5" />
+                      Información Logística
                     </Button>
                   )}
 
@@ -224,6 +238,21 @@ export default function Navbar({
               </TooltipTrigger>
               <TooltipContent>
                 <p>Proveedores</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
+        {canAccessProveedores && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={onOpenLogistics}>
+                  <TruckIcon className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Información Logística</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

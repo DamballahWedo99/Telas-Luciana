@@ -124,7 +124,7 @@ const PedidosDashboard: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [chartsCollapsed, setChartsCollapsed] = useState<boolean>(false);
+  const [chartsCollapsed, setChartsCollapsed] = useState<boolean>(true);
   const [ordersCollapsed, setOrdersCollapsed] = useState<boolean>(false);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -856,7 +856,7 @@ const PedidosDashboard: React.FC = () => {
 
 
   return (
-    <div className="max-w-7xl">
+    <div>
       {error ? (
         <div className="flex flex-col gap-6">
           <Alert variant="destructive" className="mb-2">
@@ -866,28 +866,12 @@ const PedidosDashboard: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          <OrdersMetricsSection
-            totals={totals}
-            filteredDataLength={filteredData.length}
-          />
-
-          <OrdersChartsCard
-            pieChartData={pieChartData}
-            barChartData={barChartData}
-            timelineData={timelineData}
-            deliveryData={deliveryData}
-            yearlyOrdersData={yearlyOrdersData}
-            telaVolumeData={telaVolumeData}
-            priceComparisonData={priceComparisonData}
-            chartsCollapsed={chartsCollapsed}
-            setChartsCollapsed={setChartsCollapsed}
-            dataLength={data.length}
-            searchQuery={searchQuery}
-            ordenDeCompraFilter={ordenDeCompraFilter}
-            tipoTelaFilter={tipoTelaFilter}
-            colorFilter={colorFilter}
-            ubicacionFilter={ubicacionFilter}
-          />
+          <div className="hidden md:block">
+            <OrdersMetricsSection
+              totals={totals}
+              filteredDataLength={filteredData.length}
+            />
+          </div>
 
           <OrdersCard
             data={data}
@@ -914,6 +898,26 @@ const PedidosDashboard: React.FC = () => {
             onDataUpdate={handleDataUpdate}
             loading={loading}
           />
+
+          <div className="hidden md:block">
+            <OrdersChartsCard
+            pieChartData={pieChartData}
+            barChartData={barChartData}
+            timelineData={timelineData}
+            deliveryData={deliveryData}
+            yearlyOrdersData={yearlyOrdersData}
+            telaVolumeData={telaVolumeData}
+            priceComparisonData={priceComparisonData}
+            chartsCollapsed={chartsCollapsed}
+            setChartsCollapsed={setChartsCollapsed}
+            dataLength={data.length}
+            searchQuery={searchQuery}
+            ordenDeCompraFilter={ordenDeCompraFilter}
+            tipoTelaFilter={tipoTelaFilter}
+            colorFilter={colorFilter}
+            ubicacionFilter={ubicacionFilter}
+          />
+          </div>
         </div>
       )}
     </div>
