@@ -309,17 +309,8 @@ export async function POST(request: NextRequest) {
 
     let { vendedor } = body;
 
-    if (!empresa || !email) {
-      return NextResponse.json(
-        {
-          error: "Faltan campos requeridos: empresa y email son obligatorios",
-        },
-        { status: 400 }
-      );
-    }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (email && !emailRegex.test(email)) {
       return NextResponse.json(
         {
           error: "El formato del email no es válido",
@@ -338,11 +329,11 @@ export async function POST(request: NextRequest) {
     }
 
     const newCliente: NormalizedClienteItem = {
-      empresa: empresa.trim(),
+      empresa: empresa?.trim() || "",
       contacto: contacto?.trim() || "",
       direccion: direccion?.trim() || "",
       telefono: telefono?.trim() || "",
-      email: email.trim(),
+      email: email?.trim() || "",
       vendedor: vendedor?.trim() || "",
       ubicacion: ubicacion?.trim() || "",
       comentarios: comentarios?.trim() || "",
@@ -354,7 +345,7 @@ export async function POST(request: NextRequest) {
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const empresaSlug = empresa
+    const empresaSlug = (empresa || "sin_empresa")
       .replace(/\s+/g, "_")
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, "");
@@ -443,18 +434,17 @@ export async function PUT(request: NextRequest) {
       fileKey,
     } = body;
 
-    if (!empresa || !email || !fileKey) {
+    if (!fileKey) {
       return NextResponse.json(
         {
-          error:
-            "Faltan campos requeridos: empresa, email y fileKey son obligatorios",
+          error: "fileKey es obligatorio para actualizar el cliente",
         },
         { status: 400 }
       );
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (email && !emailRegex.test(email)) {
       return NextResponse.json(
         {
           error: "El formato del email no es válido",
@@ -464,11 +454,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const updatedCliente: NormalizedClienteItem = {
-      empresa: empresa.trim(),
+      empresa: empresa?.trim() || "",
       contacto: contacto?.trim() || "",
       direccion: direccion?.trim() || "",
       telefono: telefono?.trim() || "",
-      email: email.trim(),
+      email: email?.trim() || "",
       vendedor: vendedor?.trim() || "",
       ubicacion: ubicacion?.trim() || "",
       comentarios: comentarios?.trim() || "",
@@ -480,7 +470,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const empresaSlug = empresa
+    const empresaSlug = (empresa || "sin_empresa")
       .replace(/\s+/g, "_")
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, "");

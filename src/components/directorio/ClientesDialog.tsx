@@ -970,7 +970,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="contacto"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Nombre de la persona *
+                      Nombre de la persona
                     </Label>
                     <Input
                       id="contacto"
@@ -1016,7 +1016,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="telefono"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Teléfono *
+                      Teléfono
                     </Label>
                     <Input
                       id="telefono"
@@ -1087,7 +1087,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="vendedor"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Vendedor asignado *
+                        Vendedor asignado
                       </Label>
                       <Select
                         value={clienteForm.vendedor}
@@ -1359,7 +1359,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="contacto"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Nombre de la persona *
+                        Nombre de la persona
                       </Label>
                       <Input
                         id="contacto"
@@ -1405,7 +1405,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="telefono"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Teléfono *
+                        Teléfono
                       </Label>
                       <Input
                         id="telefono"
@@ -1476,7 +1476,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                           htmlFor="vendedor-desktop"
                           className="text-sm font-medium text-gray-700"
                         >
-                          Vendedor asignado *
+                          Vendedor asignado
                         </Label>
                         <Select
                           value={clienteForm.vendedor}
