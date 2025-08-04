@@ -207,14 +207,14 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
   ): Cliente => {
     const optimisticCliente: Cliente = {
       empresa: clienteData.empresa || "",
-      contacto: clienteData.contacto,
+      contacto: clienteData.contacto || "",
       direccion: clienteData.direccion || "",
-      telefono: clienteData.telefono,
+      telefono: clienteData.telefono || "",
       email: clienteData.email || "",
       vendedor: clienteData.vendedor || "",
       ubicacion: clienteData.ubicacion || "",
       comentarios: clienteData.comentarios || "",
-      fileKey: generateOptimisticFileKey(clienteData.contacto),
+      fileKey: generateOptimisticFileKey(clienteData.contacto || "cliente"),
       _optimistic: true,
     };
 
@@ -231,9 +231,9 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
         cliente.fileKey === oldCliente.fileKey
           ? {
               empresa: newData.empresa || "",
-              contacto: newData.contacto,
+              contacto: newData.contacto || "",
               direccion: newData.direccion || "",
-              telefono: newData.telefono,
+              telefono: newData.telefono || "",
               email: newData.email || "",
               vendedor: newData.vendedor || "",
               ubicacion: newData.ubicacion || "",
@@ -970,7 +970,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="contacto"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Nombre de la persona *
+                      Nombre de la persona
                     </Label>
                     <Input
                       id="contacto"
@@ -1016,7 +1016,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                       htmlFor="telefono"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Teléfono *
+                      Teléfono
                     </Label>
                     <Input
                       id="telefono"
@@ -1087,7 +1087,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="vendedor"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Vendedor asignado *
+                        Vendedor asignado
                       </Label>
                       <Select
                         value={clienteForm.vendedor}
@@ -1359,7 +1359,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="contacto"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Nombre de la persona *
+                        Nombre de la persona
                       </Label>
                       <Input
                         id="contacto"
@@ -1405,7 +1405,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                         htmlFor="telefono"
                         className="text-sm font-medium text-gray-700"
                       >
-                        Teléfono *
+                        Teléfono
                       </Label>
                       <Input
                         id="telefono"
@@ -1476,7 +1476,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
                           htmlFor="vendedor-desktop"
                           className="text-sm font-medium text-gray-700"
                         >
-                          Vendedor asignado *
+                          Vendedor asignado
                         </Label>
                         <Select
                           value={clienteForm.vendedor}
