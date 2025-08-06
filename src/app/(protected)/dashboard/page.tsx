@@ -7,15 +7,15 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
+import LogisticsDashboard from "@/components/logistics-dashboard/LogisticsDashboard";
 import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
 import ClientesDialog from "@/components/directorio/ClientesDialog";
 import ProveedoresDialog from "@/components/proveedores/ProveedoresDialog";
-import { LogisticsModal } from "@/components/orders-dashboard/LogisticsModal";
 import Navbar from "@/components/NavBar";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useUserVerification } from "@/hooks/useUserVerification";
 
-type ViewType = "inventory" | "orders";
+type ViewType = "inventory" | "orders" | "logistics";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -25,7 +25,6 @@ export default function DashboardPage() {
   const [openFichasTecnicas, setOpenFichasTecnicas] = useState(false);
   const [openClientes, setOpenClientes] = useState(false);
   const [openProveedores, setOpenProveedores] = useState(false);
-  const [openLogistics, setOpenLogistics] = useState(false);
 
   useUserVerification();
 
@@ -92,9 +91,6 @@ export default function DashboardPage() {
     setOpenProveedores(true);
   };
 
-  const handleOpenLogistics = () => {
-    setOpenLogistics(true);
-  };
 
   if (status === "loading") {
     return <LoadingScreen />;
@@ -117,7 +113,6 @@ export default function DashboardPage() {
             onOpenFichasTecnicas={handleOpenFichasTecnicas}
             onOpenClientes={handleOpenClientes}
             onOpenProveedores={handleOpenProveedores}
-            onOpenLogistics={handleOpenLogistics}
             onLogout={handleLogout}
           />
         </div>
@@ -125,6 +120,8 @@ export default function DashboardPage() {
         {currentView === "inventory" && <Dashboard />}
 
         {currentView === "orders" && <PedidosDashboard />}
+
+        {currentView === "logistics" && <LogisticsDashboard />}
 
         <FichasTecnicasDialog
           open={openFichasTecnicas}
@@ -138,10 +135,6 @@ export default function DashboardPage() {
           setOpen={setOpenProveedores}
         />
 
-        <LogisticsModal
-          isOpen={openLogistics}
-          onClose={() => setOpenLogistics(false)}
-        />
       </div>
     </div>
   );

@@ -26,7 +26,7 @@ import {
   TruckIcon,
 } from "lucide-react";
 
-type ViewType = "inventory" | "orders";
+type ViewType = "inventory" | "orders" | "logistics";
 
 interface NavbarProps {
   currentView: ViewType;
@@ -37,7 +37,6 @@ interface NavbarProps {
   onOpenFichasTecnicas: () => void;
   onOpenClientes: () => void;
   onOpenProveedores: () => void;
-  onOpenLogistics: () => void;
   onLogout: () => void;
 }
 
@@ -69,7 +68,6 @@ export default function Navbar({
   onOpenFichasTecnicas,
   onOpenClientes,
   onOpenProveedores,
-  onOpenLogistics,
   onLogout,
 }: NavbarProps) {
   const isMobile = useIsMobile();
@@ -81,6 +79,8 @@ export default function Navbar({
         return "Inventario";
       case "orders":
         return "Pedidos Históricos";
+      case "logistics":
+        return "Logística";
       default:
         return "Panel de Control";
     }
@@ -137,16 +137,6 @@ export default function Navbar({
                     </Button>
                   )}
 
-                  {canAccessProveedores && (
-                    <Button
-                      variant="ghost"
-                      className="justify-start h-12 text-base"
-                      onClick={() => handleMenuAction(onOpenLogistics)}
-                    >
-                      <TruckIcon className="mr-3 h-5 w-5" />
-                      Información Logística
-                    </Button>
-                  )}
 
                   {isMajorAdmin && (
                     <>
@@ -171,6 +161,17 @@ export default function Navbar({
                       >
                         <BarChart className="mr-3 h-5 w-5" />
                         Pedidos Históricos
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        className="justify-start h-12 text-base"
+                        onClick={() =>
+                          handleMenuAction(() => onViewChange("logistics"))
+                        }
+                      >
+                        <TruckIcon className="mr-3 h-5 w-5" />
+                        Logística
                       </Button>
                     </>
                   )}
@@ -243,20 +244,6 @@ export default function Navbar({
           </TooltipProvider>
         )}
 
-        {canAccessProveedores && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={onOpenLogistics}>
-                  <TruckIcon className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Información Logística</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
 
         {isMajorAdmin && (
           <Sheet>
@@ -294,6 +281,14 @@ export default function Navbar({
                 >
                   <BarChart className="mr-3 h-5 w-5" />
                   Dashboard de Pedidos
+                </Button>
+                <Button
+                  variant={currentView === "logistics" ? "default" : "ghost"}
+                  className="justify-start h-12 text-base"
+                  onClick={() => onViewChange("logistics")}
+                >
+                  <TruckIcon className="mr-3 h-5 w-5" />
+                  Dashboard de Logística
                 </Button>
               </div>
             </SheetContent>

@@ -504,7 +504,7 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <DialogTitle className="text-lg font-semibold">
-                        Información Logística
+                        Logística
                       </DialogTitle>
                       <DialogDescription className="text-sm text-gray-600">
                         Órdenes de logística registradas
@@ -604,10 +604,6 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
                 </div>
 
                 <div className="p-4 border-t bg-gray-50/80 backdrop-blur-sm rounded-b-3xl">
-                  <div className="text-center text-xs text-gray-500 mb-3">
-                    {filteredLogisticsOrders.length} de {logisticsOrders.length}{" "}
-                    órdenes
-                  </div>
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
@@ -619,9 +615,7 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
                     <Button
                       onClick={handleShowForm}
                       className="flex-1 h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-sm"
-                    >
-                      Agregar
-                    </Button>
+                    ></Button>
                   </div>
                 </div>
               </>
