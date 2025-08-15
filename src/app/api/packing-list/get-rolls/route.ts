@@ -36,6 +36,10 @@ interface Roll {
   almacen: string;
   meters?: number;
   weight?: number;
+  OC?: string;
+  unidad?: string;
+  fecha_ingreso?: string;
+  status?: string;
   [key: string]: unknown;
 }
 
@@ -232,6 +236,7 @@ async function getRollsData(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const tela = searchParams.get("tela");
     const color = searchParams.get("color");
+    const oc = searchParams.get("oc");
 
     if (!tela || !color) {
       return NextResponse.json(
@@ -240,7 +245,7 @@ async function getRollsData(request: NextRequest) {
       );
     }
 
-    console.log(`🔍 Buscando tela: "${tela}", color: "${color}"`);
+    console.log(`🔍 Buscando tela: "${tela}", color: "${color}", OC: "${oc || 'todas'}"`);
 
     const allFiles = await getAllPackingListFiles();
     console.log(`📁 Archivos encontrados: ${allFiles.length}`);
@@ -277,7 +282,24 @@ async function getRollsData(request: NextRequest) {
       const matchesFabric =
         entry.fabric_type?.toLowerCase() === tela.toLowerCase();
       const matchesColor = entry.color?.toLowerCase() === color.toLowerCase();
-      return matchesFabric && matchesColor;
+      
+      if (!matchesFabric || !matchesColor) {
+        return false;
+      }
+      
+      if (oc) {
+        const filteredRolls = entry.rolls.filter((roll: Roll) => 
+          roll.OC && typeof roll.OC === 'string' && roll.OC.toLowerCase() === oc.toLowerCase()
+        );
+        
+        if (filteredRolls.length > 0) {
+          entry.rolls = filteredRolls;
+          return true;
+        }
+        return false;
+      }
+      
+      return true;
     });
 
     console.log(

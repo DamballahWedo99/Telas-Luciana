@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
-import { withCache, invalidateCachePattern } from "@/lib/cache-middleware";
-import { CACHE_TTL } from "@/lib/redis";
+import { withCache, invalidateCachePattern, USER_CACHE_TTL } from "@/lib/cache-middleware";
 
 interface UserFilters {
   role?: string;
@@ -72,11 +71,13 @@ async function getUsersData(request: NextRequest) {
 
 const getCachedUsers = withCache(getUsersData, {
   keyPrefix: "api:users",
-  ttl: CACHE_TTL.USER_DATA,
+  ttl: USER_CACHE_TTL.COMBINED_DATA,
   skipCache: (req) => {
     const url = new URL(req.url);
-    return url.searchParams.get("refresh") === "true";
+    return url.searchParams.get("refresh") === "true" || 
+           url.searchParams.get("includeActivity") === "true";
   },
+  skipCacheForLastLogin: true,
   onCacheHit: (key) => console.log(`📦 Cache HIT - Usuarios: ${key}`),
   onCacheMiss: (key) => console.log(`💾 Cache MISS - Usuarios: ${key}`),
 });

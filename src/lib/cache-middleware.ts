@@ -29,6 +29,7 @@ export function withCache(
     skipCache?: (req: NextRequest) => boolean;
     onCacheHit?: (key: string) => void;
     onCacheMiss?: (key: string) => void;
+    skipCacheForLastLogin?: boolean;
   }
 ) {
   return async (req: NextRequest) => {
@@ -38,6 +39,7 @@ export function withCache(
       skipCache,
       onCacheHit,
       onCacheMiss,
+      skipCacheForLastLogin = false,
     } = options;
 
     if (req.method !== "GET") {
@@ -46,6 +48,14 @@ export function withCache(
 
     if (skipCache && skipCache(req)) {
       return handler(req);
+    }
+
+    if (skipCacheForLastLogin) {
+      const url = new URL(req.url);
+      if (url.searchParams.get("includeActivity") === "true") {
+        console.log("🚫 Skipping cache for lastLogin activity data");
+        return handler(req);
+      }
     }
 
     const url = new URL(req.url);
@@ -335,5 +345,83 @@ export async function freezeHistoricalData(): Promise<void> {
     }
   } catch (error) {
     console.error("Error in freeze historical data process:", error);
+  }
+}
+
+// ===== USER ACTIVITY CACHE FUNCTIONS =====
+
+export const USER_CACHE_TTL = {
+  STATIC_DATA: 60 * 60,        // 1 hora (datos estáticos del perfil)
+  ACTIVITY_DATA: 5 * 60,       // 5 minutos (lastLogin y actividad)
+  COMBINED_DATA: 5 * 60        // 5 minutos (vista combinada)
+};
+
+export async function invalidateUserActivityCache(userId?: string): Promise<number> {
+  try {
+    let totalInvalidated = 0;
+    
+    if (userId) {
+      const userPatterns = [
+        `cache:api:users:*:*userId=${userId}*`,
+        `cache:api:users:activity:${userId}*`,
+        `cache:dashboard:users:*`
+      ];
+      
+      for (const pattern of userPatterns) {
+        totalInvalidated += await invalidateCachePattern(pattern);
+      }
+      
+      console.log(`🎯 Cache de actividad invalidado para usuario ${userId} (${totalInvalidated} entradas)`);
+    } else {
+      const patterns = [
+        "cache:api:users:activity:*",
+        "cache:api:users:*",
+        "cache:dashboard:users:*"
+      ];
+      
+      for (const pattern of patterns) {
+        totalInvalidated += await invalidateCachePattern(pattern);
+      }
+      
+      console.log(`🎯 Cache de actividad invalidado para todos los usuarios (${totalInvalidated} entradas)`);
+    }
+    
+    return totalInvalidated;
+  } catch (error) {
+    console.error("Error invalidating user activity cache:", error);
+    return 0;
+  }
+}
+
+export async function setUserActivityCache(
+  userId: string, 
+  activityData: { lastLogin: Date | null }, 
+  ttl: number = USER_CACHE_TTL.ACTIVITY_DATA
+): Promise<boolean> {
+  try {
+    const cacheKey = `cache:api:users:activity:${userId}`;
+    await cacheRedis.setex(cacheKey, ttl, JSON.stringify(activityData));
+    console.log(`⚡ Actividad de usuario ${userId} almacenada en cache (TTL: ${ttl}s)`);
+    return true;
+  } catch (error) {
+    console.error("Error setting user activity cache:", error);
+    return false;
+  }
+}
+
+export async function getUserActivityCache(userId: string): Promise<{ lastLogin: Date | null } | null> {
+  try {
+    const cacheKey = `cache:api:users:activity:${userId}`;
+    const cached = await cacheRedis.get(cacheKey);
+    
+    if (cached) {
+      console.log(`⚡ Actividad de usuario ${userId} servida desde cache`);
+      return typeof cached === 'string' ? JSON.parse(cached) : cached;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error getting user activity cache:", error);
+    return null;
   }
 }

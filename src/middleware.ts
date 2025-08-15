@@ -82,6 +82,7 @@ const cronApiRoutes = ["/api/cron/weekly-inventory", "/api/cron/scheduler"];
 const internalAccessRoutes = [
   "/api/s3/inventario",
   "/api/users",
+  "/api/users/update-activity",
   "/api/s3/clientes",
   "/api/s3/fichas-tecnicas",
   "/api/s3/proveedores",
@@ -333,6 +334,34 @@ function hasRoleAccess(pathname: string, userRole: string): boolean {
   return false;
 }
 
+async function updateUserActivity(userId: string, baseUrl: string): Promise<void> {
+  try {
+    const response = await fetch(`${baseUrl}/api/users/update-activity`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Request": "true",
+        "Authorization": `Bearer ${process.env.CRON_SECRET}`,
+      },
+      body: JSON.stringify({ userId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      if (!errorData.throttled) {
+        console.error("❌ Error updating user activity:", errorData);
+      }
+    } else {
+      const data = await response.json();
+      if (data.success) {
+        console.log(`✅ Activity updated for user ${userId}`);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Failed to update user activity:", error);
+  }
+}
+
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const baseUrl = getBaseUrl(req);
@@ -513,6 +542,12 @@ export default async function middleware(req: NextRequest) {
       !hasRoleAccess(pathname, userRole)
     ) {
       return NextResponse.redirect(new URL("/dashboard", baseUrl));
+    }
+
+    if (token.sub && !pathname.startsWith("/api/users/update-activity")) {
+      updateUserActivity(token.sub, baseUrl).catch((error) => {
+        console.error("Activity tracking error:", error);
+      });
     }
 
     return NextResponse.next();

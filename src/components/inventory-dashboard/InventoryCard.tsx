@@ -1338,7 +1338,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const loadPackingListData = async (
     tela: string,
     color: string,
-    ubicacion: string
+    ubicacion: string,
+    oc?: string
   ) => {
     setIsLoadingPackingList(true);
     try {
@@ -1346,12 +1347,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         tela,
         color,
         ubicacion,
+        oc,
       });
 
       const response = await fetch(
         `/api/packing-list/get-rolls?tela=${encodeURIComponent(
           tela
-        )}&color=${encodeURIComponent(color)}`
+        )}&color=${encodeURIComponent(color)}${oc ? `&oc=${encodeURIComponent(oc)}` : ''}`
       );
 
       if (!response.ok) {
@@ -1480,7 +1482,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
-  const loadTransferPackingListData = async (tela: string, color: string) => {
+  const loadTransferPackingListData = async (tela: string, color: string, oc?: string) => {
     setIsLoadingTransferList(true);
     try {
       console.log(
@@ -1488,13 +1490,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         {
           tela,
           color,
+          oc,
         }
       );
 
       const response = await fetch(
         `/api/packing-list/get-rolls?tela=${encodeURIComponent(
           tela
-        )}&color=${encodeURIComponent(color)}`
+        )}&color=${encodeURIComponent(color)}${oc ? `&oc=${encodeURIComponent(oc)}` : ''}`
       );
 
       if (!response.ok) {
@@ -1651,7 +1654,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setIsProcessingSell(false);
     setOpenSellDialog(true);
 
-    loadPackingListData(item.Tela, item.Color, item.Ubicacion || "CDMX");
+    loadPackingListData(item.Tela, item.Color, item.Ubicacion || "CDMX", item.OC);
   };
 
   const handleOpenTransferDialog = (item: InventoryItem) => {
@@ -1678,7 +1681,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setSelectedLot(null);
     setOpenTransferDialog(true);
 
-    loadTransferPackingListData(item.Tela, item.Color);
+    loadTransferPackingListData(item.Tela, item.Color, item.OC);
   };
 
   const handleSellItem = async () => {
@@ -1872,7 +1875,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               throw new Error("Error al actualizar el packing list");
             }
 
-            await loadPackingListData(item.Tela, item.Color, item.Ubicacion);
+            await loadPackingListData(item.Tela, item.Color, item.Ubicacion, item.OC);
 
             toast.success("Venta completada con éxito");
           } else {
@@ -2220,7 +2223,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               }
             }
 
-            await loadTransferPackingListData(item.Tela, item.Color);
+            await loadTransferPackingListData(item.Tela, item.Color, item.OC);
             packingListUpdateSuccess = true;
           } catch (error) {
             console.error("❌ ERROR AL ACTUALIZAR PACKING LIST:", error);

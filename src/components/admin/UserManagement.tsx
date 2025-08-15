@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,6 +13,8 @@ import {
   UserPlusIcon,
   CheckIcon,
   XIcon,
+  RefreshCwIcon,
+  ClockIcon,
 } from "lucide-react";
 import { createUserAction } from "@/actions/auth";
 import { useSession } from "next-auth/react";
@@ -80,10 +82,13 @@ export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const { data: session } = useSession();
 
@@ -103,29 +108,48 @@ export default function UserManagement() {
     },
   });
 
-  useEffect(() => {
-    async function loadUsers() {
-      try {
+  const loadUsers = useCallback(async (showLoading = true) => {
+    try {
+      if (showLoading) {
         setIsLoadingUsers(true);
-        const response = await fetch("/api/users");
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Error al cargar usuarios");
-        }
-
-        const data = await response.json();
-        setUsers(data.users);
-      } catch (error) {
-        console.error("Error cargando usuarios:", error);
-        toast.error("No se pudieron cargar los usuarios");
-      } finally {
-        setIsLoadingUsers(false);
+      } else {
+        setIsRefreshing(true);
       }
-    }
+      
+      const response = await fetch("/api/users?includeActivity=true");
 
-    loadUsers();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al cargar usuarios");
+      }
+
+      const data = await response.json();
+      setUsers(data.users);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error("Error cargando usuarios:", error);
+      if (showLoading) {
+        toast.error("No se pudieron cargar los usuarios");
+      }
+    } finally {
+      setIsLoadingUsers(false);
+      setIsRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      loadUsers(false);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, loadUsers]);
 
   const onSubmit = async (values: CreateUserFormValues) => {
     try {
@@ -230,22 +254,85 @@ export default function UserManagement() {
     }
   };
 
+  const isRecentActivity = (lastLogin?: string) => {
+    if (!lastLogin) return false;
+    const loginDate = new Date(lastLogin);
+    const now = new Date();
+    const diffMinutes = (now.getTime() - loginDate.getTime()) / (1000 * 60);
+    return diffMinutes <= 15;
+  };
+
+  const getActivityStatus = (lastLogin?: string) => {
+    if (!lastLogin) return { text: "Nunca", color: "text-gray-500" };
+    
+    const loginDate = new Date(lastLogin);
+    const now = new Date();
+    const diffMinutes = (now.getTime() - loginDate.getTime()) / (1000 * 60);
+    
+    if (diffMinutes <= 15) {
+      return { text: "Activo ahora", color: "text-green-600 font-medium" };
+    } else if (diffMinutes <= 60) {
+      return { text: "Hace menos de 1h", color: "text-blue-600" };
+    } else if (diffMinutes <= 1440) { // 24 horas
+      const hours = Math.floor(diffMinutes / 60);
+      return { text: `Hace ${hours}h`, color: "text-yellow-600" };
+    } else {
+      return { 
+        text: loginDate.toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }), 
+        color: "text-gray-500" 
+      };
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Gestión de Usuarios</h1>
           <p className="text-gray-500">Administra los usuarios del sistema</p>
+          <div className="flex items-center gap-2 mt-2 text-sm text-gray-400">
+            <ClockIcon className="h-4 w-4" />
+            <span>Última actualización: {lastUpdate.toLocaleTimeString()}</span>
+            {isRefreshing && (
+              <RefreshCwIcon className="h-4 w-4 animate-spin ml-2" />
+            )}
+          </div>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Nuevo Usuario
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Auto-refresh</label>
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadUsers(false)}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <RefreshCwIcon className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCwIcon className="h-4 w-4" />
+            )}
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Nuevo Usuario
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
             <DialogHeader>
               <DialogTitle>Crear Nuevo Usuario</DialogTitle>
               <DialogDescription>
@@ -371,8 +458,9 @@ export default function UserManagement() {
                 </Button>
               </DialogFooter>
             </form>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {success && (
@@ -455,15 +543,25 @@ export default function UserManagement() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {user.lastLogin
-                          ? new Date(user.lastLogin).toLocaleString("es-ES", {
+                        <div className="flex items-center gap-2">
+                          {isRecentActivity(user.lastLogin) && (
+                            <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                          )}
+                          <span className={getActivityStatus(user.lastLogin).color}>
+                            {getActivityStatus(user.lastLogin).text}
+                          </span>
+                        </div>
+                        {user.lastLogin && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            {new Date(user.lastLogin).toLocaleString("es-ES", {
                               day: "2-digit",
                               month: "2-digit",
                               year: "numeric",
                               hour: "2-digit",
                               minute: "2-digit",
-                            })
-                          : "Nunca"}
+                            })}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
