@@ -99,7 +99,14 @@ export function withCache(
       if (response.status === 200) {
         const responseData = await response.json();
 
-        await cacheRedis.setex(cacheKey, ttl, JSON.stringify(responseData));
+        // Solo guardar en caché si hay datos (no es un array vacío o un objeto vacío)
+        const hasData = Array.isArray(responseData) 
+          ? responseData.length > 0 
+          : Object.keys(responseData).length > 0;
+        
+        if (hasData) {
+          await cacheRedis.setex(cacheKey, ttl, JSON.stringify(responseData));
+        }
 
         return new NextResponse(
           JSON.stringify({

@@ -108,6 +108,16 @@ export default function UserManagement() {
     },
   });
 
+  const sortUsersByLastLogin = (users: User[]): User[] => {
+    return [...users].sort((a, b) => {
+      if (!a.lastLogin && !b.lastLogin) return 0;
+      if (!a.lastLogin) return 1;
+      if (!b.lastLogin) return -1;
+      
+      return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
+    });
+  };
+
   const loadUsers = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) {
@@ -124,7 +134,8 @@ export default function UserManagement() {
       }
 
       const data = await response.json();
-      setUsers(data.users);
+      const sortedUsers = sortUsersByLastLogin(data.users);
+      setUsers(sortedUsers);
       setLastUpdate(new Date());
     } catch (error) {
       console.error("Error cargando usuarios:", error);
@@ -179,7 +190,8 @@ export default function UserManagement() {
           createdAt: new Date().toISOString(),
         };
 
-        setUsers([newUser, ...users]);
+        const updatedUsers = sortUsersByLastLogin([newUser, ...users]);
+        setUsers(updatedUsers);
         setSuccess("Usuario creado correctamente");
         toast.success("Usuario creado exitosamente");
         reset();
@@ -237,11 +249,11 @@ export default function UserManagement() {
         throw new Error("Error al actualizar el estado del usuario");
       }
 
-      setUsers(
-        users.map((user) =>
-          user.id === userId ? { ...user, isActive: !isCurrentlyActive } : user
-        )
+      const updatedUsers = users.map((user) =>
+        user.id === userId ? { ...user, isActive: !isCurrentlyActive } : user
       );
+      const sortedUsers = sortUsersByLastLogin(updatedUsers);
+      setUsers(sortedUsers);
 
       toast.success(
         `Usuario ${

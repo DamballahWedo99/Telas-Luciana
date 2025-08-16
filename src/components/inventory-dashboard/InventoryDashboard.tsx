@@ -798,6 +798,16 @@ const Dashboard = () => {
     }
   };
 
+  const sortUsersByLastLogin = (users: User[]): User[] => {
+    return [...users].sort((a, b) => {
+      if (!a.lastLogin && !b.lastLogin) return 0;
+      if (!a.lastLogin) return 1;
+      if (!b.lastLogin) return -1;
+      
+      return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
+    });
+  };
+
   useEffect(() => {
     async function loadUsers() {
       if (!isAdmin) {
@@ -815,7 +825,8 @@ const Dashboard = () => {
         }
 
         const data = await response.json();
-        setUsers(data.users);
+        const sortedUsers = sortUsersByLastLogin(data.users);
+        setUsers(sortedUsers);
       } catch (error) {
         console.error("Error cargando usuarios:", error);
         toast.error("No se pudieron cargar los usuarios");

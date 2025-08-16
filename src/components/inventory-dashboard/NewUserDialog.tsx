@@ -51,6 +51,16 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
 
   const isSubmittingRef = useRef(false);
 
+  const sortUsersByLastLogin = (users: User[]): User[] => {
+    return [...users].sort((a, b) => {
+      if (!a.lastLogin && !b.lastLogin) return 0;
+      if (!a.lastLogin) return 1;
+      if (!b.lastLogin) return -1;
+      
+      return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
+    });
+  };
+
   const {
     register,
     handleSubmit,
@@ -101,7 +111,8 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
           createdAt: new Date().toISOString(),
         };
 
-        setUsers([newUser, ...users]);
+        const updatedUsers = sortUsersByLastLogin([newUser, ...users]);
+        setUsers(updatedUsers);
         reset();
         setOpen(false);
 

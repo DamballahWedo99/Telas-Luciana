@@ -68,15 +68,13 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
 
   const pendingActions = useRef<Record<string, boolean>>({});
 
-  const sortUsersByHierarchy = (users: User[]): User[] => {
-    const roleOrder: Record<string, number> = {
-      major_admin: 1,
-      admin: 2,
-      seller: 3,
-    };
-
+  const sortUsersByLastLogin = (users: User[]): User[] => {
     return [...users].sort((a, b) => {
-      return roleOrder[a.role] - roleOrder[b.role];
+      if (!a.lastLogin && !b.lastLogin) return 0;
+      if (!a.lastLogin) return 1;
+      if (!b.lastLogin) return -1;
+      
+      return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
     });
   };
 
@@ -142,7 +140,9 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
       }
 
       toast.success(`Usuario eliminado correctamente`);
-      setUsers(users.filter((user) => user.id !== userToDelete.id));
+      const updatedUsers = users.filter((user) => user.id !== userToDelete.id);
+      const sortedUsers = sortUsersByLastLogin(updatedUsers);
+      setUsers(sortedUsers);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -157,7 +157,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
     }
   };
 
-  const sortedUsers = sortUsersByHierarchy(users);
+  const sortedUsers = sortUsersByLastLogin(users);
 
   return (
     <Card className="mb-6">
