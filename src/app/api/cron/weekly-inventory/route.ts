@@ -303,7 +303,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("🕐 Iniciando generación de reporte de inventario semanal...");
 
     const now = new Date();
     const mexicoTime = new Date(
@@ -314,17 +313,10 @@ export async function POST(request: NextRequest) {
       .toString()
       .padStart(2, "0");
 
-    console.log(`📅 Obteniendo inventario para ${currentMonth}/${currentYear}`);
 
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const inventoryUrl = `${baseUrl}/api/s3/inventario?year=${currentYear}&month=${currentMonth}`;
 
-    console.log("🔗 URL de inventario:", inventoryUrl);
-    console.log("🔑 Headers que se enviarán:", {
-      "x-internal-request": "true",
-      Authorization: `Bearer ${process.env.CRON_SECRET ? "[PRESENTE]" : "[FALTANTE]"}`,
-      "Content-Type": "application/json",
-    });
 
     const inventoryResponse = await fetch(inventoryUrl, {
       headers: {
@@ -334,11 +326,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log("📋 Respuesta del inventario:", {
-      status: inventoryResponse.status,
-      statusText: inventoryResponse.statusText,
-      headers: Object.fromEntries(inventoryResponse.headers.entries()),
-    });
 
     if (!inventoryResponse.ok) {
       const errorText = await inventoryResponse.text();
@@ -355,9 +342,6 @@ export async function POST(request: NextRequest) {
     }
 
     const processedInventory = processInventoryData(inventoryData.data);
-    console.log(
-      `📊 Procesados ${processedInventory.length} items de inventario`
-    );
 
     if (processedInventory.length === 0) {
       throw new Error("No hay datos de inventario para procesar");
@@ -365,13 +349,10 @@ export async function POST(request: NextRequest) {
 
     const fileName = generateFileName();
 
-    console.log("📄 Generando archivo CSV...");
     const csvData = Papa.unparse(processedInventory);
 
-    console.log("📑 Generando archivo PDF...");
     const pdfBuffer = await generatePDF(processedInventory);
 
-    console.log("📧 Enviando correo con archivos adjuntos...");
     const emailResult = await sendInventoryEmail(
       "fer.flores@telasytejidosluciana.com",
       csvData,
@@ -383,7 +364,6 @@ export async function POST(request: NextRequest) {
       throw new Error(emailResult.error);
     }
 
-    console.log("✅ Reporte de inventario semanal enviado exitosamente");
 
     return NextResponse.json({
       success: true,

@@ -80,7 +80,6 @@ export async function POST(request: NextRequest) {
 
     await invalidateUserActivityCache(userId);
 
-    console.log(`🔄 Actividad actualizada para usuario ${userId}: ${now.toISOString()}`);
 
     return NextResponse.json({
       success: true,

@@ -1049,19 +1049,11 @@ export async function POST(request: NextRequest) {
           invalidateCachePattern("cache:api:s3:get-rolls*"),
         ]);
 
-        console.log("🗑️ Cache invalidado después de procesar devolución");
       } catch (historyError) {
         console.error("Error actualizando historial:", historyError);
       }
     }
 
-    console.log(`[RETURNS] User ${session.user.email} processed return:`, {
-      totalRequested: returnData.rolls.length,
-      successful: results.successful.length,
-      failed: results.failed.length,
-      manualSales: manualSalesCount,
-      rollSales: rollSalesCount,
-    });
 
     const response = {
       success: results.successful.length > 0,

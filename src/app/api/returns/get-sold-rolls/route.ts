@@ -247,13 +247,6 @@ async function getSoldRollsData(request: NextRequest) {
       filesProcessed: salesFiles.length,
     };
 
-    console.log(
-      `[GET-SOLD-ROLLS] User ${session.user.email} queried sold rolls:`,
-      {
-        filters: { oc, tela, color, limit, days, onlyReturnable },
-        resultsCount: filteredRolls.length,
-      }
-    );
 
     return NextResponse.json({
       success: true,
@@ -283,8 +276,8 @@ const getCachedSoldRolls = withCache(getSoldRollsData, {
     const url = new URL(req.url);
     return url.searchParams.get("refresh") === "true";
   },
-  onCacheHit: (key) => console.log(`📦 Cache HIT - Sold Rolls: ${key}`),
-  onCacheMiss: (key) => console.log(`💾 Cache MISS - Sold Rolls: ${key}`),
+  onCacheHit: (key) => {},
+  onCacheMiss: (key) => {},
 });
 
 export { getCachedSoldRolls as GET };

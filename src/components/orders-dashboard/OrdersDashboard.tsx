@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { OrdersMetricsSection } from "./OrdersMetricsSection";
 import { OrdersChartsCard } from "./OrdersChartsCard";
 import { OrdersCard } from "./OrdersCard";
+import { PriceHistoryCard } from "./PriceHistoryCard";
 
 interface PedidoData {
   num_archivo?: number;
@@ -146,15 +147,17 @@ const PedidosDashboard: React.FC = () => {
   const [barChartData, setBarChartData] = useState<BarChartDataItem[]>([]);
   const [timelineData, setTimelineData] = useState<TimelineDataItem[]>([]);
   const [deliveryData, setDeliveryData] = useState<DeliveryDataItem[]>([]);
-  const [yearlyOrdersData, setYearlyOrdersData] = useState<YearlyOrdersDataItem[]>([]);
-  const [telaVolumeData, setTelaVolumeData] = useState<TelaVolumeDataItem[]>([]);
-  const [priceComparisonData, setPriceComparisonData] = useState<PriceComparisonDataItem[]>([]);
+  const [yearlyOrdersData, setYearlyOrdersData] = useState<
+    YearlyOrdersDataItem[]
+  >([]);
+  const [telaVolumeData, setTelaVolumeData] = useState<TelaVolumeDataItem[]>(
+    []
+  );
+  const [priceComparisonData, setPriceComparisonData] = useState<
+    PriceComparisonDataItem[]
+  >([]);
 
   const prepareChartData = useCallback((filteredRows: PedidoData[]) => {
-    console.log(
-      `🔍 Preparando datos de gráficos para ${filteredRows.length} filas`
-    );
-
     const colorGroups: Record<string, number> = {};
     const telaGroups: Record<string, number> = {};
 
@@ -187,23 +190,12 @@ const PedidosDashboard: React.FC = () => {
       telaGroups[telaKey] += facturaValue;
     });
 
-    console.log(
-      `📊 Colores encontrados (${Object.keys(colorGroups).length}):`,
-      Object.keys(colorGroups)
-    );
-    console.log(
-      `📊 Telas encontradas (${Object.keys(telaGroups).length}):`,
-      Object.keys(telaGroups)
-    );
-
     const pieData: ChartDataItem[] = Object.keys(colorGroups)
       .map((color) => ({
         name: color,
         value: colorGroups[color],
       }))
       .sort((a, b) => b.value - a.value);
-
-    console.log(`✅ Datos de colores preparados: ${pieData.length} elementos`);
 
     const ordenGroups: Record<string, number> = {};
     filteredRows.forEach((row) => {
@@ -256,31 +248,16 @@ const PedidosDashboard: React.FC = () => {
 
     const deliveryData: DeliveryDataItem[] = [];
     filteredRows.forEach((row) => {
-      // Debug específico para las órdenes mencionadas
       const ordenCompra = String(row.orden_de_compra || "");
-      const targetOrders = ["C01-DEPOR-RHM1-01-01-16", "C01-DEPOR-POL1-POLMO1-01-06-20", "C01-DEPOR-FEL01-01-01-22"];
-      
-      if (targetOrders.includes(ordenCompra)) {
-        console.log(`🔍 Debug orden ${ordenCompra}:`, {
-          fecha_pedido: row.fecha_pedido,
-          llega_almacen_proveedor: row.llega_almacen_proveedor,
-          llega_a_Lazaro: row.llega_a_Lazaro,
-          llega_a_Manzanillo: row.llega_a_Manzanillo,
-          sale_origen: row.sale_origen
-        });
-      }
 
-      // Intentar múltiples campos para fecha de entrega (en orden de preferencia)
-      const fechaEntrega = row.llega_almacen_proveedor || 
-                          row.llega_a_Manzanillo || 
-                          row.llega_a_Lazaro || 
-                          row["llega_a_Lazaro?"] || 
-                          row.sale_origen;
-      
+      const fechaEntrega =
+        row.llega_almacen_proveedor ||
+        row.llega_a_Manzanillo ||
+        row.llega_a_Lazaro ||
+        row["llega_a_Lazaro?"] ||
+        row.sale_origen;
+
       if (!row.fecha_pedido || !fechaEntrega) {
-        if (targetOrders.includes(ordenCompra)) {
-          console.log(`❌ Orden ${ordenCompra} descartada: fecha_pedido=${row.fecha_pedido}, fechaEntrega=${fechaEntrega}`);
-        }
         return;
       }
 
@@ -289,12 +266,6 @@ const PedidosDashboard: React.FC = () => {
         const deliveryDate = new Date(String(fechaEntrega));
 
         if (isNaN(orderDate.getTime()) || isNaN(deliveryDate.getTime())) {
-          if (targetOrders.includes(ordenCompra)) {
-            console.log(`❌ Orden ${ordenCompra} descartada: fechas inválidas`, {
-              orderDate: orderDate.toString(),
-              deliveryDate: deliveryDate.toString()
-            });
-          }
           return;
         }
 
@@ -307,45 +278,19 @@ const PedidosDashboard: React.FC = () => {
             days: diffDays,
             total: Number(row.total_factura) || 0,
           });
-          
-          if (targetOrders.includes(ordenCompra)) {
-            console.log(`✅ Orden ${ordenCompra} agregada: ${diffDays} días, $${Number(row.total_factura) || 0}`);
-          }
-        } else {
-          if (targetOrders.includes(ordenCompra)) {
-            console.log(`❌ Orden ${ordenCompra} descartada: días fuera de rango (${diffDays})`);
-          }
         }
       } catch (error) {
-        if (targetOrders.includes(ordenCompra)) {
-          console.log(`❌ Error procesando orden ${ordenCompra}:`, error);
-        }
+        // Silently handle invalid dates
       }
     });
 
     deliveryData.sort((a, b) => a.days - b.days);
 
-    console.log(`📊 Datos de entrega procesados: ${deliveryData.length} órdenes con tiempos de entrega`);
-    console.log(`📋 Total órdenes procesadas: ${filteredRows.length}`);
-    
-    // Debug adicional: contar órdenes por estado de fechas
-    let conFechaPedido = 0;
-    let conFechaEntrega = 0;
-    let conAmbasFechas = 0;
-    
-    filteredRows.forEach((row) => {
-      if (row.fecha_pedido) conFechaPedido++;
-      const fechaEntrega = row.llega_almacen_proveedor || row.llega_a_Manzanillo || row.llega_a_Lazaro || row["llega_a_Lazaro?"] || row.sale_origen;
-      if (fechaEntrega) conFechaEntrega++;
-      if (row.fecha_pedido && fechaEntrega) conAmbasFechas++;
-    });
-    
-    console.log(`📅 Órdenes con fecha_pedido: ${conFechaPedido}`);
-    console.log(`🚚 Órdenes con fecha_entrega: ${conFechaEntrega}`);
-    console.log(`✅ Órdenes con ambas fechas: ${conAmbasFechas}`);
-
     // 1. Preparar datos para gráfica de órdenes por año
-    const yearGroups: Record<number, { totalFactura: number; orderCount: number }> = {};
+    const yearGroups: Record<
+      number,
+      { totalFactura: number; orderCount: number }
+    > = {};
     filteredRows.forEach((row) => {
       const year = row.Year || new Date(row.fecha_pedido || "").getFullYear();
       if (year && !isNaN(year)) {
@@ -366,14 +311,21 @@ const PedidosDashboard: React.FC = () => {
       .sort((a, b) => a.year - b.year);
 
     // 2. Preparar datos para volumen por tipo de tela
-    const telaVolumeGroups: Record<string, { totalMetros: number; totalValor: number; orderCount: number }> = {};
+    const telaVolumeGroups: Record<
+      string,
+      { totalMetros: number; totalValor: number; orderCount: number }
+    > = {};
     filteredRows.forEach((row) => {
       const tela = row["pedido_cliente.tipo_tela"] || "Sin Especificar";
       const metros = Number(row["pedido_cliente.total_m_pedidos"]) || 0;
       const valor = Number(row.total_factura) || 0;
-      
+
       if (!telaVolumeGroups[tela]) {
-        telaVolumeGroups[tela] = { totalMetros: 0, totalValor: 0, orderCount: 0 };
+        telaVolumeGroups[tela] = {
+          totalMetros: 0,
+          totalValor: 0,
+          orderCount: 0,
+        };
       }
       telaVolumeGroups[tela].totalMetros += metros;
       telaVolumeGroups[tela].totalValor += valor;
@@ -391,17 +343,32 @@ const PedidosDashboard: React.FC = () => {
       .slice(0, 15); // Top 15 telas
 
     // 3. Preparar datos para comparación FOB vs DDP
-    const priceGroups: Record<string, { fobSum: number; ddpSum: number; metrosSum: number; count: number; unidad: string }> = {};
+    const priceGroups: Record<
+      string,
+      {
+        fobSum: number;
+        ddpSum: number;
+        metrosSum: number;
+        count: number;
+        unidad: string;
+      }
+    > = {};
     filteredRows.forEach((row) => {
       const tela = row["pedido_cliente.tipo_tela"] || "Sin Especificar";
       const fob = Number(row.precio_m_fob_usd) || 0;
       const ddp = Number(row.ddp_usd_unidad) || 0;
       const metros = Number(row["pedido_cliente.total_m_pedidos"]) || 0;
       const unidad = row["pedido_cliente.unidad"] || "m";
-      
+
       if (fob > 0 && ddp > 0) {
         if (!priceGroups[tela]) {
-          priceGroups[tela] = { fobSum: 0, ddpSum: 0, metrosSum: 0, count: 0, unidad };
+          priceGroups[tela] = {
+            fobSum: 0,
+            ddpSum: 0,
+            metrosSum: 0,
+            count: 0,
+            unidad,
+          };
         }
         priceGroups[tela].fobSum += fob;
         priceGroups[tela].ddpSum += ddp;
@@ -410,7 +377,9 @@ const PedidosDashboard: React.FC = () => {
       }
     });
 
-    const priceComparisonData: PriceComparisonDataItem[] = Object.keys(priceGroups)
+    const priceComparisonData: PriceComparisonDataItem[] = Object.keys(
+      priceGroups
+    )
       .filter((tela) => priceGroups[tela].count > 0)
       .map((tela) => ({
         tipoTela: tela,
@@ -422,15 +391,6 @@ const PedidosDashboard: React.FC = () => {
       .sort((a, b) => b.ddpUsd - a.ddpUsd)
       .slice(0, 10); // Top 10 telas por precio DDP
 
-    console.log(`✅ Datos de gráficos preparados:`, {
-      colores: pieData.length,
-      ordenes: barData.length,
-      timeline: timelineData.length,
-      delivery: deliveryData.length,
-      yearlyOrders: yearlyOrdersData.length,
-      telaVolume: telaVolumeData.length,
-      priceComparison: priceComparisonData.length,
-    });
 
     return {
       pieData,
@@ -475,7 +435,6 @@ const PedidosDashboard: React.FC = () => {
     [prepareChartData]
   );
 
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -496,9 +455,13 @@ const PedidosDashboard: React.FC = () => {
 
         if (result.data && Array.isArray(result.data)) {
           const flattenedData: PedidoData[] = [];
-          
+
           result.data.forEach((item: NestedPedidoData | PedidoData) => {
-            if ('items' in item && item.orden_de_compra && Array.isArray(item.items)) {
+            if (
+              "items" in item &&
+              item.orden_de_compra &&
+              Array.isArray(item.items)
+            ) {
               item.items.forEach((subItem: PedidoData) => {
                 flattenedData.push({
                   ...subItem,
@@ -518,7 +481,8 @@ const PedidosDashboard: React.FC = () => {
               // Migrar campos antiguos al nuevo campo llega_a_mexico si no existe
               let llegaAMexico = row.llega_a_mexico;
               if (!llegaAMexico) {
-                llegaAMexico = row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
+                llegaAMexico =
+                  row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
               }
 
               return {
@@ -591,22 +555,15 @@ const PedidosDashboard: React.FC = () => {
   const applyFilters = useCallback(() => {
     if (!data.length) return;
 
-    console.log(`🔍 Aplicando filtros a ${data.length} registros`);
-
     let filtered = [...data];
 
     if (ordenDeCompraFilter && ordenDeCompraFilter !== "all") {
-      const beforeCount = filtered.length;
       filtered = filtered.filter(
         (row) => row.orden_de_compra === ordenDeCompraFilter
-      );
-      console.log(
-        `🔍 Filtro de orden '${ordenDeCompraFilter}': ${beforeCount} → ${filtered.length}`
       );
     }
 
     if (tipoTelaFilter && tipoTelaFilter !== "all") {
-      const beforeCount = filtered.length;
       filtered = filtered.filter((row) => {
         const tela =
           row["pedido_cliente.tipo_tela"] ||
@@ -616,13 +573,9 @@ const PedidosDashboard: React.FC = () => {
           "Sin Especificar";
         return String(tela).trim() === tipoTelaFilter;
       });
-      console.log(
-        `🔍 Filtro de tela '${tipoTelaFilter}': ${beforeCount} → ${filtered.length}`
-      );
     }
 
     if (colorFilter && colorFilter !== "all") {
-      const beforeCount = filtered.length;
       filtered = filtered.filter((row) => {
         const color =
           row["pedido_cliente.color"] ||
@@ -631,13 +584,9 @@ const PedidosDashboard: React.FC = () => {
           "Sin Especificar";
         return String(color).trim() === colorFilter;
       });
-      console.log(
-        `🔍 Filtro de color '${colorFilter}': ${beforeCount} → ${filtered.length}`
-      );
     }
 
     if (ubicacionFilter && ubicacionFilter !== "all") {
-      const beforeCount = filtered.length;
       filtered = filtered.filter((row) => {
         if (ubicacionFilter === "almacen") {
           return (
@@ -658,13 +607,9 @@ const PedidosDashboard: React.FC = () => {
         }
         return true;
       });
-      console.log(
-        `🔍 Filtro de ubicación '${ubicacionFilter}': ${beforeCount} → ${filtered.length}`
-      );
     }
 
     if (searchQuery) {
-      const beforeCount = filtered.length;
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((row) => {
         const ordenDeCompra = String(row.orden_de_compra || "").toLowerCase();
@@ -688,9 +633,6 @@ const PedidosDashboard: React.FC = () => {
           color.includes(query)
         );
       });
-      console.log(
-        `🔍 Filtro de búsqueda '${searchQuery}': ${beforeCount} → ${filtered.length}`
-      );
     }
 
     filtered.sort((a, b) => {
@@ -702,10 +644,6 @@ const PedidosDashboard: React.FC = () => {
 
       return dateB.getTime() - dateA.getTime();
     });
-
-    console.log(
-      `✅ Filtros aplicados: ${data.length} → ${filtered.length} registros`
-    );
 
     setFilteredData(filtered);
     calculateTotals(filtered);
@@ -737,18 +675,22 @@ const PedidosDashboard: React.FC = () => {
     try {
       setLoading(true);
       const response = await fetch("/api/s3/pedidos?refresh=true");
-      
+
       if (!response.ok) {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
-      
+
       if (result.data && Array.isArray(result.data)) {
         const flattenedData: PedidoData[] = [];
-        
+
         result.data.forEach((item: NestedPedidoData | PedidoData) => {
-          if ('items' in item && item.orden_de_compra && Array.isArray(item.items)) {
+          if (
+            "items" in item &&
+            item.orden_de_compra &&
+            Array.isArray(item.items)
+          ) {
             item.items.forEach((subItem: PedidoData) => {
               flattenedData.push({
                 ...subItem,
@@ -763,15 +705,15 @@ const PedidosDashboard: React.FC = () => {
         const processedData = flattenedData.map((row: PedidoData) => {
           const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
           const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
-          
+
           // Migrar campos antiguos al nuevo campo llega_a_mexico si no existe
           let llegaAMexico = row.llega_a_mexico;
           if (!llegaAMexico) {
             llegaAMexico = row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
           }
 
-          return { 
-            ...row, 
+          return {
+            ...row,
             total_mxp: totalMxp,
             llega_a_mexico: llegaAMexico,
           };
@@ -798,7 +740,8 @@ const PedidosDashboard: React.FC = () => {
           const gastosMxp = tCambio * totalGastos;
           const ddpTotalMxp = gastosMxp + totalMxp;
           const ddpMxpUnidad = mFactura > 0 ? ddpTotalMxp / mFactura : 0;
-          const ddpUsdUnidad = tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
+          const ddpUsdUnidad =
+            tipoDeCambio > 0 ? ddpMxpUnidad / tipoDeCambio : 0;
           const ddpUsdUnidadSIva = ddpUsdUnidad / 1.16;
 
           return {
@@ -817,7 +760,7 @@ const PedidosDashboard: React.FC = () => {
         calculateTotals(finalData);
       }
     } catch (error) {
-      console.error("❌ Error refrescando datos:", error);
+      setError("Error al refrescar los datos");
     } finally {
       setLoading(false);
     }
@@ -853,7 +796,6 @@ const PedidosDashboard: React.FC = () => {
       return dateString;
     }
   };
-
 
   return (
     <div>
@@ -901,22 +843,26 @@ const PedidosDashboard: React.FC = () => {
 
           <div className="hidden md:block">
             <OrdersChartsCard
-            pieChartData={pieChartData}
-            barChartData={barChartData}
-            timelineData={timelineData}
-            deliveryData={deliveryData}
-            yearlyOrdersData={yearlyOrdersData}
-            telaVolumeData={telaVolumeData}
-            priceComparisonData={priceComparisonData}
-            chartsCollapsed={chartsCollapsed}
-            setChartsCollapsed={setChartsCollapsed}
-            dataLength={data.length}
-            searchQuery={searchQuery}
-            ordenDeCompraFilter={ordenDeCompraFilter}
-            tipoTelaFilter={tipoTelaFilter}
-            colorFilter={colorFilter}
-            ubicacionFilter={ubicacionFilter}
-          />
+              pieChartData={pieChartData}
+              barChartData={barChartData}
+              timelineData={timelineData}
+              deliveryData={deliveryData}
+              yearlyOrdersData={yearlyOrdersData}
+              telaVolumeData={telaVolumeData}
+              priceComparisonData={priceComparisonData}
+              chartsCollapsed={chartsCollapsed}
+              setChartsCollapsed={setChartsCollapsed}
+              dataLength={data.length}
+              searchQuery={searchQuery}
+              ordenDeCompraFilter={ordenDeCompraFilter}
+              tipoTelaFilter={tipoTelaFilter}
+              colorFilter={colorFilter}
+              ubicacionFilter={ubicacionFilter}
+            />
+
+            <div className="hidden md:block">
+              <PriceHistoryCard />
+            </div>
           </div>
         </div>
       )}

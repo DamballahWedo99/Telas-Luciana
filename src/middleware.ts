@@ -111,6 +111,7 @@ const protectedApiRoutes = [
   "/api/s3/clientes",
   "/api/s3/proveedores",
   "/api/s3/pedidos",
+  "/api/s3/historial-precios",
 ];
 
 const mixedAccessApiRoutes = ["/api/s3/inventario"];
@@ -192,6 +193,7 @@ const roleBasedAccess: Record<string, string[]> = {
     "/api/s3/clientes",
     "/api/s3/proveedores",
     "/api/s3/pedidos",
+    "/api/s3/historial-precios",
     "/dashboard",
   ],
 };
