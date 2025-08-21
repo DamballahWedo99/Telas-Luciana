@@ -153,7 +153,7 @@ export function getTrendColor(trend: 'up' | 'down' | 'stable'): string {
 
 // Process raw price history data into multi-provider table format
 export function processMultiProviderData(data: PriceHistoryResponse): MultiProviderTableData {
-  const KNOWN_PROVIDERS = ['AD', 'RBK', 'LZ', 'CHANGXING', 'EM'];
+  const KNOWN_PROVIDERS = ['AD', 'RBK', 'LZ', 'CHANGXING', 'EM', 'ASM', 'MH'];
   
   // Get all unique providers from the data
   const allProviders = new Set<string>();
@@ -264,6 +264,13 @@ export function processMultiProviderData(data: PriceHistoryResponse): MultiProvi
       }
     });
 
+    // Add empty entries for known providers that don't have data for this fabric
+    KNOWN_PROVIDERS.forEach(provider => {
+      if (!providers[provider]) {
+        providers[provider] = null;
+      }
+    });
+
     return {
       fabricId: fabric.fabricId,
       fabricName: fabric.fabricName,
@@ -274,20 +281,19 @@ export function processMultiProviderData(data: PriceHistoryResponse): MultiProvi
 
   // Create provider columns with aggregated stats
   const providerColumns: ProviderColumn[] = orderedProviders
-    .filter(provider => allProviders.has(provider)) // Only include providers that have data
     .map(provider => {
-      const stats = providerStats.get(provider)!;
-      const prices = stats.prices.filter(p => p > 0);
+      const stats = providerStats.get(provider);
+      const prices = stats ? stats.prices.filter(p => p > 0) : [];
 
       return {
         id: provider,
         name: provider,
         hasData: prices.length > 0,
-        totalFabrics: stats.fabrics.size,
+        totalFabrics: stats ? stats.fabrics.size : 0,
         avgPrice: prices.length > 0 ? prices.reduce((sum, p) => sum + p, 0) / prices.length : 0,
         minPrice: prices.length > 0 ? Math.min(...prices) : 0,
         maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
-        lastUpdate: stats.lastUpdate
+        lastUpdate: stats ? stats.lastUpdate || '' : ''
       };
     });
 

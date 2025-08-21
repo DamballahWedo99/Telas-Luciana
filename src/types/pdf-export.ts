@@ -4,8 +4,8 @@ export interface LayoutStrategy {
   formatPage(pdf: jsPDF): void;
   calculateColumnWidths(providerCount: number, maxContentWidth: number): number[];
   configureFont(pdf: jsPDF): void;
-  getTableOptions(pageSize: string): Record<string, unknown>;
-  shouldSegmentTable(providerCount: number): boolean;
+  getTableOptions(): Record<string, unknown>;
+  shouldSegmentTable(providerCount?: number): boolean;
   getSegmentSize(): number;
   addHeader(pdf: jsPDF, title: string, subtitle?: string, segmentInfo?: Record<string, unknown>): void;
   addFooter(pdf: jsPDF, pageNumber: number, totalPages: number, segmentInfo?: Record<string, unknown>): void;

@@ -35,7 +35,7 @@ export class CompactLayoutStrategy implements LayoutStrategy {
     pdf.setFont('helvetica', 'normal');
   }
 
-  getTableOptions(_pageSize: string): Record<string, unknown> {
+  getTableOptions(): Record<string, unknown> {
     return {
       startY: 30,
       theme: 'grid',
@@ -72,7 +72,8 @@ export class CompactLayoutStrategy implements LayoutStrategy {
     };
   }
 
-  shouldSegmentTable(_providerCount: number): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  shouldSegmentTable(providerCount?: number): boolean {
     return false; // CompactLayout nunca segmenta
   }
 

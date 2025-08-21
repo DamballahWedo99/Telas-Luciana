@@ -50,7 +50,7 @@ interface PriceEditModalProps {
   onDataUpdated: () => void;
 }
 
-const KNOWN_PROVIDERS = ['AD', 'RBK', 'LZ', 'CHANGXING', 'EM'];
+const KNOWN_PROVIDERS = ['AD', 'RBK', 'LZ', 'CHANGXING', 'EM', 'ASM', 'MH'];
 
 export const PriceEditModal: React.FC<PriceEditModalProps> = ({
   data,
@@ -263,8 +263,8 @@ export const PriceEditModal: React.FC<PriceEditModalProps> = ({
         <div className="flex-1 overflow-hidden">
           {availableProviders.length > 0 && selectedFabric ? (
             <Tabs value={activeProvider} onValueChange={setActiveProvider} className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-5 flex-shrink-0">
-                {availableProviders.slice(0, 5).map((provider) => {
+              <TabsList className="grid w-full grid-cols-7 flex-shrink-0">
+                {availableProviders.map((provider) => {
                   const stats = getProviderStats(provider);
                   return (
                     <TabsTrigger 
@@ -289,7 +289,7 @@ export const PriceEditModal: React.FC<PriceEditModalProps> = ({
               </TabsList>
 
               <div className="flex-1 overflow-hidden">
-                {availableProviders.slice(0, 5).map((provider) => (
+                {availableProviders.map((provider) => (
                   <TabsContent 
                     key={provider} 
                     value={provider}

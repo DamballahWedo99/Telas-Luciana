@@ -279,7 +279,7 @@ const PedidosDashboard: React.FC = () => {
             total: Number(row.total_factura) || 0,
           });
         }
-      } catch (error) {
+      } catch {
         // Silently handle invalid dates
       }
     });
@@ -759,7 +759,7 @@ const PedidosDashboard: React.FC = () => {
         setFilteredData(finalData);
         calculateTotals(finalData);
       }
-    } catch (error) {
+    } catch {
       setError("Error al refrescar los datos");
     } finally {
       setLoading(false);

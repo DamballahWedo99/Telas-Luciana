@@ -385,7 +385,7 @@ async function updateFabricPriceHistory(
     
     // Delete entries first
     if (deleted.length > 0) {
-      const beforeDelete = workingHistory.length;
+      // const beforeDelete = workingHistory.length;
       
       // deleted array contains identifiers that match the pattern used in the frontend
       deleted.forEach(deleteId => {
@@ -401,7 +401,7 @@ async function updateFabricPriceHistory(
     
     // Update existing entries
     if (updated.length > 0) {
-      updated.forEach((updatedEntry, updateIndex) => {
+      updated.forEach((updatedEntry) => {
         const typedEntry = updatedEntry as PriceHistoryEntry & { _originalData?: PriceHistoryEntry };
         
         let index = -1;
@@ -502,7 +502,7 @@ async function updateFabricPriceHistory(
       ContentType: 'application/json',
     });
     
-    const s3Response = await s3Client.send(putCommand);
+    await s3Client.send(putCommand);
     
     const result = {
       success: true,

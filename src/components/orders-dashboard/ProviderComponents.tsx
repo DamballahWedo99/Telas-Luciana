@@ -185,7 +185,7 @@ export const ProviderHeader: React.FC<ProviderHeaderProps> = ({
   onSort,
 }) => {
   return (
-    <th className="min-w-[120px] border-r border-gray-200 dark:border-gray-700 last:border-r-0">
+    <th className="min-w-[120px] border-r border-gray-200 dark:border-gray-700 last:border-r-0 bg-gray-50 dark:bg-gray-800">
       <div className="px-3 py-2">
         <button
           onClick={() => onSort?.(provider.id)}

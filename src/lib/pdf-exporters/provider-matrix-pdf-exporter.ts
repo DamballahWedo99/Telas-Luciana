@@ -282,7 +282,7 @@ export class ProviderMatrixPDFExporter {
     ];
 
     // Configurar estilos de columna
-    const columnStyles: Record<string, unknown> = {
+    const columnStyles: Record<string, { cellWidth?: number; halign?: 'left' | 'center' | 'right' }> = {
       nombre: { cellWidth: columnWidths[0], halign: 'left' },
       fecha: { cellWidth: columnWidths[1], halign: 'center' },
     };
@@ -295,14 +295,14 @@ export class ProviderMatrixPDFExporter {
     });
 
     // Obtener opciones de tabla de la estrategia
-    const tableOptions = this.strategy.getTableOptions(pageConfig.format);
+    const tableOptions = this.strategy.getTableOptions();
 
     // Aplicar configuración personalizada
     autoTable(doc, {
       ...tableOptions,
       columns,
-      body: data as any[],
-      columnStyles: columnStyles as any,
+      body: data as unknown as (string | number)[][],
+      columnStyles,
       didDrawPage: (pageData) => {
         if (this.config.showFooters) {
           this.strategy.addFooter(doc, pageData.pageNumber, doc.getNumberOfPages());
@@ -378,7 +378,7 @@ export class ProviderMatrixPDFExporter {
       ];
 
       // Configurar estilos de columna
-      const columnStyles: Record<string, unknown> = {
+      const columnStyles: Record<string, { cellWidth?: number; halign?: 'left' | 'center' | 'right' }> = {
         nombre: { cellWidth: columnWidths[0], halign: 'left' },
         fecha: { cellWidth: columnWidths[1], halign: 'center' },
       };
@@ -391,14 +391,14 @@ export class ProviderMatrixPDFExporter {
       });
 
       // Obtener opciones de tabla
-      const tableOptions = this.strategy.getTableOptions(pageConfig.format);
+      const tableOptions = this.strategy.getTableOptions();
 
       // Aplicar configuración personalizada para este segmento
       autoTable(doc, {
         ...tableOptions,
         columns,
-        body: segmentData as any[],
-        columnStyles: columnStyles as any,
+        body: segmentData as unknown as (string | number)[][],
+        columnStyles,
         didDrawPage: (pageData) => {
           if (this.config.showFooters) {
             this.strategy.addFooter(

@@ -35,7 +35,7 @@ export class StandardLayoutStrategy implements LayoutStrategy {
     pdf.setFont('helvetica', 'normal');
   }
 
-  getTableOptions(_pageSize: string): Record<string, unknown> {
+  getTableOptions(): Record<string, unknown> {
     return {
       startY: 35,
       theme: 'grid',
@@ -73,7 +73,8 @@ export class StandardLayoutStrategy implements LayoutStrategy {
     };
   }
 
-  shouldSegmentTable(_providerCount: number): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  shouldSegmentTable(providerCount?: number): boolean {
     return false; // StandardLayout maneja hasta 8 proveedores sin segmentar
   }
 

@@ -162,12 +162,7 @@ export function FabricCombobox({
                         value === fabric.fabricId ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{fabric.fabricName}</span>
-                      <span className="text-xs text-muted-foreground">
-                        ID: {fabric.fabricId}
-                      </span>
-                    </div>
+                    <span className="font-medium">{fabric.fabricName}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>

@@ -38,7 +38,7 @@ export class MultiTableLayoutStrategy implements LayoutStrategy {
     pdf.setFont('helvetica', 'normal');
   }
 
-  getTableOptions(_pageSize: string): Record<string, unknown> {
+  getTableOptions(): Record<string, unknown> {
     return {
       startY: 40,
       theme: 'grid',
@@ -76,8 +76,8 @@ export class MultiTableLayoutStrategy implements LayoutStrategy {
     };
   }
 
-  shouldSegmentTable(providerCount: number): boolean {
-    return providerCount > 8; // MultiTableLayout siempre segmenta para 9+
+  shouldSegmentTable(providerCount?: number): boolean {
+    return (providerCount || 0) > 8; // MultiTableLayout siempre segmenta para 9+
   }
 
   getSegmentSize(): number {
@@ -211,7 +211,7 @@ export class MultiTableLayoutStrategy implements LayoutStrategy {
     
     // Opcional: agregar una línea separadora visual si están en la misma página
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const currentY = (pdf as any).lastAutoTable?.finalY || 40;
+    const currentY = (pdf as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 40;
     
     if (currentY + 100 < pdf.internal.pageSize.getHeight()) {
       // Hay espacio para otra tabla en la misma página

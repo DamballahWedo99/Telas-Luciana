@@ -1,22 +1,13 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+// Removed Table components - using native HTML for better sticky header support
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   ChevronUp,
   ChevronDown,
   Search,
-  Filter,
-  RotateCcw,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -24,6 +15,7 @@ import {
   List,
   Expand,
   Minimize,
+  Layers,
 } from "lucide-react";
 import type {
   FabricPriceHistory,
@@ -31,7 +23,7 @@ import type {
   MultiProviderTableData,
   FabricProviderMatrix,
 } from "@/types/price-history";
-import { ProviderCell, ProviderHeader } from "./ProviderComponents";
+import { ProviderCell } from "./ProviderComponents";
 import {
   getTrendColor,
   formatCurrency,
@@ -74,8 +66,6 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
   const [providerSortField, setProviderSortField] =
     useState<ProviderSortField>("fabric");
   const [providerSortOrder, setProviderSortOrder] = useState<SortOrder>("asc");
-  const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
-  const [showOnlyWithData, setShowOnlyWithData] = useState(false);
   const [expandAll, setExpandAll] = useState(false);
 
   // Traditional table data
@@ -152,7 +142,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
     if (!multiProviderData) return { fabrics: [], providers: [] };
 
     let filteredFabrics = multiProviderData.fabrics;
-    let availableProviders = multiProviderData.providers;
+    const availableProviders = multiProviderData.providers;
 
     // Filter by search term
     if (searchTerm.trim()) {
@@ -164,17 +154,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
       );
     }
 
-    // Filter by selected providers
-    if (selectedProviders.length > 0) {
-      availableProviders = availableProviders.filter((p) =>
-        selectedProviders.includes(p.id)
-      );
-    }
 
-    // Filter to show only fabrics with data
-    if (showOnlyWithData) {
-      filteredFabrics = filteredFabrics.filter((fabric) => fabric.hasAnyData);
-    }
 
     // Sort fabrics
     const sortedFabrics = [...filteredFabrics].sort((a, b) => {
@@ -206,8 +186,6 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
   }, [
     multiProviderData,
     searchTerm,
-    selectedProviders,
-    showOnlyWithData,
     providerSortField,
     providerSortOrder,
   ]);
@@ -236,7 +214,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
   // Reset pagination when search changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, viewMode, selectedProviders, showOnlyWithData]);
+  }, [searchTerm, viewMode]);
 
   const sortedData = useMemo(() => {
     if (viewMode === "provider-matrix") {
@@ -276,7 +254,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
       }
       return {
         searchTerm,
-        filteredFabricIds: filteredData.map((item: any) => item.id)
+        filteredFabricIds: (filteredData as typeof tableData).map((item) => item.id)
       };
     }
   }), [searchTerm, filteredProviderData, filteredData, viewMode]);
@@ -322,13 +300,6 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
     );
   };
 
-  const resetFilters = () => {
-    setSearchTerm("");
-    setSelectedProviders([]);
-    setShowOnlyWithData(false);
-    setExpandAll(false);
-    setCurrentPage(1);
-  };
 
   return (
     <div className="space-y-6">
@@ -349,81 +320,53 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
 
           {/* View Mode Toggle */}
           {multiProviderData && onViewModeChange && (
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-              <Button
-                variant={viewMode === "traditional" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => onViewModeChange("traditional")}
-                className="h-8"
-              >
-                <List className="h-4 w-4 mr-2" />
-                Tradicional
-              </Button>
-              <Button
-                variant={viewMode === "provider-matrix" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => onViewModeChange("provider-matrix")}
-                className="h-8"
-              >
-                <Grid className="h-4 w-4 mr-2" />
-                Por Proveedor
-              </Button>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <Button
+                  variant={viewMode === "traditional" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => onViewModeChange("traditional")}
+                  className="h-8"
+                >
+                  <List className="h-4 w-4 mr-2" />
+                  Tradicional
+                </Button>
+                <Button
+                  variant={viewMode === "provider-matrix" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => onViewModeChange("provider-matrix")}
+                  className="h-8"
+                >
+                  <Grid className="h-4 w-4 mr-2" />
+                  Por Proveedor
+                </Button>
+              </div>
+
+              {/* Expand/Collapse All Button - Only show in provider-matrix mode */}
+              {viewMode === "provider-matrix" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExpandAll(!expandAll)}
+                  className="flex items-center gap-2 h-8"
+                >
+                  {expandAll ? (
+                    <>
+                      <Minimize className="h-4 w-4" />
+                      Contraer Todo
+                    </>
+                  ) : (
+                    <>
+                      <Expand className="h-4 w-4" />
+                      Expandir Todo
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Provider matrix filters */}
-        {viewMode === "provider-matrix" && multiProviderData && (
-          <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium">Filtros:</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="showOnlyWithData"
-                type="checkbox"
-                checked={showOnlyWithData}
-                onChange={(e) => setShowOnlyWithData(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600"
-              />
-              <label htmlFor="showOnlyWithData" className="text-sm">
-                Solo con datos
-              </label>
-            </div>
-
-            {/* Expand/Collapse All Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setExpandAll(!expandAll)}
-              className="flex items-center gap-2"
-            >
-              {expandAll ? (
-                <>
-                  <Minimize className="h-4 w-4" />
-                  Contraer Todo
-                </>
-              ) : (
-                <>
-                  <Expand className="h-4 w-4" />
-                  Expandir Todo
-                </>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={resetFilters}
-              className="ml-auto"
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Limpiar
-            </Button>
-          </div>
-        )}
 
         {/* Results info */}
         {searchTerm && (
@@ -438,13 +381,22 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="max-h-[600px] overflow-y-auto">
-          <Table>
-            <TableHeader className="sticky top-0 z-10">
+      <div className="border rounded-lg">
+        <div className="relative max-h-[600px] overflow-y-auto">
+          <table className="w-full caption-bottom text-sm">
+            <thead 
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 30,
+                backgroundColor: 'white',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+              }}
+              className="dark:bg-gray-900"
+            >
               {viewMode === "provider-matrix" && multiProviderData ? (
-                <TableRow className="bg-gray-50 dark:bg-gray-800 border-b">
-                  <TableHead className="min-w-[200px] border-r border-gray-200 dark:border-gray-700">
+                <tr className="bg-gray-50 dark:bg-gray-800 border-b">
+                  <th className="min-w-[200px] border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 h-10 px-2 text-left align-middle font-medium text-muted-foreground">
                     <button
                       onClick={() => handleProviderSort("fabric")}
                       className="flex items-center gap-1 font-semibold hover:text-gray-900 dark:hover:text-gray-100"
@@ -457,20 +409,29 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                           <ChevronDown className="h-4 w-4" />
                         ))}
                     </button>
-                  </TableHead>
+                  </th>
                   {filteredProviderData.providers.map((provider) => (
-                    <ProviderHeader
-                      key={provider.id}
-                      provider={provider}
-                      onSort={handleProviderSort}
-                      sortedBy={providerSortField}
-                      sortOrder={providerSortOrder}
-                    />
+                    <th key={provider.id} className="min-w-[120px] border-r border-gray-200 dark:border-gray-700 last:border-r-0 bg-gray-50 dark:bg-gray-800">
+                      <div className="px-3 py-2">
+                        <button
+                          onClick={() => handleProviderSort(provider.id)}
+                          className="flex flex-col items-center gap-1 w-full hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                        >
+                          <div className="font-semibold text-sm">{provider.name}</div>
+                          {provider.hasData && (
+                            <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                              <Layers className="h-3 w-3" />
+                              <span>{provider.totalFabrics} telas</span>
+                            </div>
+                          )}
+                        </button>
+                      </div>
+                    </th>
                   ))}
-                </TableRow>
+                </tr>
               ) : (
-                <TableRow className="bg-gray-50 dark:bg-gray-800 border-b">
-                  <TableHead className="font-semibold">
+                <tr className="bg-gray-50 dark:bg-gray-800 border-b">
+                  <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     <button
                       onClick={() => handleSort("fabric")}
                       className="flex items-center gap-1 font-semibold hover:text-gray-900 dark:hover:text-gray-100"
@@ -483,8 +444,8 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                           <ChevronDown className="h-4 w-4" />
                         ))}
                     </button>
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
+                  </th>
+                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     <button
                       onClick={() => handleSort("minPrice")}
                       className="flex items-center gap-1 font-semibold hover:text-gray-900 dark:hover:text-gray-100"
@@ -497,14 +458,14 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                           <ChevronDown className="h-4 w-4" />
                         ))}
                     </button>
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
+                  </th>
+                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Proveedor
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
+                  </th>
+                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Fecha
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
+                  </th>
+                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     <button
                       onClick={() => handleSort("maxPrice")}
                       className="flex items-center gap-1 font-semibold hover:text-gray-900 dark:hover:text-gray-100"
@@ -517,74 +478,74 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                           <ChevronDown className="h-4 w-4" />
                         ))}
                     </button>
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
+                  </th>
+                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Proveedor
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
+                  </th>
+                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Fecha
-                  </TableHead>
-                  <TableHead className="font-semibold text-center">
+                  </th>
+                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Tendencia
-                  </TableHead>
-                </TableRow>
+                  </th>
+                </tr>
               )}
-            </TableHeader>
-            <TableBody>
+            </thead>
+            <tbody className="[&_tr:last-child]:border-0">
               {paginatedData.length > 0 ? (
                 viewMode === "provider-matrix" && multiProviderData ? (
                   (paginatedData as FabricProviderMatrix[]).map(
                     (fabric, index) => (
-                      <TableRow
+                      <tr
                         key={fabric.fabricId}
-                        className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+                        className={`border-b transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
                           index % 2 === 0
                             ? "bg-white dark:bg-gray-900"
                             : "bg-gray-25 dark:bg-gray-900/50"
                         } ${!fabric.hasAnyData ? "opacity-60" : ""}`}
                       >
-                        <TableCell className="font-medium py-4 border-r border-gray-200 dark:border-gray-700">
+                        <td className="p-2 align-middle font-medium py-4 border-r border-gray-200 dark:border-gray-700">
                           {fabric.fabricName}
                           {!fabric.hasAnyData && (
                             <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                               (Sin datos)
                             </span>
                           )}
-                        </TableCell>
+                        </td>
                         {filteredProviderData.providers.map((provider) => (
-                          <TableCell
+                          <td
                             key={provider.id}
-                            className="py-0 border-r border-gray-200 dark:border-gray-700 last:border-r-0"
+                            className="p-2 align-middle py-0 border-r border-gray-200 dark:border-gray-700 last:border-r-0"
                           >
                             <ProviderCell
                               data={fabric.providers[provider.id]}
                               fabricId={fabric.fabricId}
                               forceExpanded={expandAll}
                             />
-                          </TableCell>
+                          </td>
                         ))}
-                      </TableRow>
+                      </tr>
                     )
                   )
                 ) : (
                   (paginatedData as typeof tableData).map((row, index) => (
-                    <TableRow
+                    <tr
                       key={row.id}
-                      className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+                      className={`border-b transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
                         index % 2 === 0
                           ? "bg-white dark:bg-gray-900"
                           : "bg-gray-25 dark:bg-gray-900/50"
                       } ${!row.hasData ? "opacity-60" : ""}`}
                     >
-                      <TableCell className="font-medium py-4">
+                      <td className="p-2 align-middle font-medium py-4">
                         {row.fabric}
                         {!row.hasData && (
                           <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                             (Sin datos)
                           </span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-center py-4 text-green-600 dark:text-green-400">
+                      </td>
+                      <td className="p-2 align-middle text-center py-4 text-green-600 dark:text-green-400">
                         {row.hasData ? (
                           <span className="font-semibold">
                             {formatCurrency(row.minPrice)}
@@ -592,8 +553,8 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ) : (
                           "—"
                         )}
-                      </TableCell>
-                      <TableCell className="text-center py-4">
+                      </td>
+                      <td className="p-2 align-middle text-center py-4">
                         {row.hasData ? (
                           <span className="text-sm text-gray-600 dark:text-gray-400">
                             {row.minPriceProvider}
@@ -601,8 +562,8 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ) : (
                           "—"
                         )}
-                      </TableCell>
-                      <TableCell className="text-center py-4">
+                      </td>
+                      <td className="p-2 align-middle text-center py-4">
                         {row.hasData ? (
                           <span className="text-sm text-gray-600 dark:text-gray-400">
                             {formatMinMaxDate(row.minPriceDate)}
@@ -610,8 +571,8 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ) : (
                           "—"
                         )}
-                      </TableCell>
-                      <TableCell className="text-center py-4 text-red-600 dark:text-red-400">
+                      </td>
+                      <td className="p-2 align-middle text-center py-4 text-red-600 dark:text-red-400">
                         {row.hasData ? (
                           <span className="font-semibold">
                             {formatCurrency(row.maxPrice)}
@@ -619,8 +580,8 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ) : (
                           "—"
                         )}
-                      </TableCell>
-                      <TableCell className="text-center py-4">
+                      </td>
+                      <td className="p-2 align-middle text-center py-4">
                         {row.hasData ? (
                           <span className="text-sm text-gray-600 dark:text-gray-400">
                             {row.maxPriceProvider}
@@ -628,8 +589,8 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ) : (
                           "—"
                         )}
-                      </TableCell>
-                      <TableCell className="text-center py-4">
+                      </td>
+                      <td className="p-2 align-middle text-center py-4">
                         {row.hasData ? (
                           <span className="text-sm text-gray-600 dark:text-gray-400">
                             {formatMinMaxDate(row.maxPriceDate)}
@@ -637,31 +598,31 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ) : (
                           "—"
                         )}
-                      </TableCell>
-                      <TableCell className="text-center py-4">
+                      </td>
+                      <td className="p-2 align-middle text-center py-4">
                         {row.hasData
                           ? getTrendDisplay(row.trend, row.changePercent)
                           : "—"}
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ))
                 )
               ) : (
-                <TableRow>
-                  <TableCell
+                <tr>
+                  <td
                     colSpan={
                       viewMode === "provider-matrix"
                         ? filteredProviderData.providers.length + 1
                         : 8
                     }
-                    className="text-center py-12 text-gray-500"
+                    className="p-2 align-middle text-center py-12 text-gray-500"
                   >
                     No se encontraron registros de telas
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               )}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
       </div>
 

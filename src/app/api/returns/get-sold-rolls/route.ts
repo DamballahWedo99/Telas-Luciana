@@ -276,8 +276,8 @@ const getCachedSoldRolls = withCache(getSoldRollsData, {
     const url = new URL(req.url);
     return url.searchParams.get("refresh") === "true";
   },
-  onCacheHit: (key) => {},
-  onCacheMiss: (key) => {},
+  onCacheHit: () => {},
+  onCacheMiss: () => {},
 });
 
 export { getCachedSoldRolls as GET };
