@@ -1,0 +1,43 @@
+{
+  "mcpServers": {
+    "postman-api": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.postman.com/mcp",
+        "--header",
+        "Authorization: Bearer YOUR_POSTMAN_API_KEY"
+      ]
+    },
+    "postgres": {
+      "type": "stdio",
+      "command": "/Users/damballah/.local/bin/postgres-mcp",
+      "args": ["--access-mode=unrestricted"],
+      "env": {
+        "DATABASE_URI": "postgresql://damballah@localhost:5432/pinnacle_data_hub"
+      }
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "YOUR_GITHUB_TOKEN"
+      }
+    },
+    "shadcn-ui-server": {
+      "type": "stdio",
+      "command": "/Users/damballah/.nvm/versions/node/v20.17.0/bin/shadcn-mcp",
+      "args": [
+        "--github-api-key",
+        "YOUR_GITHUB_API_KEY"
+      ]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--browser", "chrome"]
+    }
+  }
+}
