@@ -12,7 +12,7 @@ const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = "telas-luciana";
-const PACKING_LIST_PATH = "Inventario/Packing_Lists.xlsx/";
+const ORDERS_PATH = "Pedidos/pedido-excel/";
 
 
 export async function POST(request: NextRequest) {
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       session.user.role === "admin" || session.user.role === "major_admin";
     if (!isAdmin) {
       return NextResponse.json(
-        { error: "No autorizado para subir archivos Packing List" },
+        { error: "No autorizado para subir archivos de Órdenes de Compra" },
         { status: 403 }
       );
     }
@@ -86,17 +86,17 @@ export async function POST(request: NextRequest) {
     const month = (now.getMonth() + 1).toString().padStart(2, "0");
     const day = now.getDate().toString().padStart(2, "0");
 
-    const fileName = `packing_lists_con_unidades_${year}_${month}_${day}.xlsx`;
+    const fileName = `orden_compra_${year}_${month}_${day}.xlsx`;
 
-    const s3Key = `${PACKING_LIST_PATH}${fileName}`;
+    const s3Key = `${ORDERS_PATH}${fileName}`;
 
-    console.log("=== UPLOAD INFO ===");
+    console.log("=== ORDERS UPLOAD INFO ===");
     console.log("Archivo original:", file.name);
     console.log("Nombre en S3:", fileName);
     console.log("Tamaño:", file.size, "bytes");
     console.log("Tipo:", file.type);
     console.log("S3 Key:", s3Key);
-    console.log("==================");
+    console.log("=======================================");
 
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -116,13 +116,13 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      console.log("Subiendo archivo Excel a S3...");
+      console.log("Subiendo archivo Excel de Órdenes de Compra a S3...");
       await s3Client.send(uploadCommand);
       console.log("✅ Archivo subido a S3. Lambda extraerá los datos en segundo plano");
 
       return NextResponse.json({
         success: true,
-        message: "Archivo Packing List subido correctamente",
+        message: "Archivo de Órdenes de Compra subido correctamente",
         uploadId,
         fileName: s3Key,
         fileNameInS3: fileName,
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         fileUrl: `https://${BUCKET_NAME}.s3.us-west-2.amazonaws.com/${s3Key}`,
       });
     } catch (s3Error: unknown) {
-      console.error("Error subiendo archivo a S3:", s3Error);
+      console.error("Error subiendo archivo de Órdenes de Compra a S3:", s3Error);
       return NextResponse.json(
         {
           error: "Error al subir el archivo al servidor",
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error("Error en upload de Packing List:", error);
+    console.error("Error en upload de Órdenes de Compra:", error);
     return NextResponse.json(
       {
         error: "Error interno del servidor",
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   return NextResponse.json({
-    message: "Endpoint para subir archivos Packing List",
+    message: "Endpoint para subir archivos de Órdenes de Compra",
     methods: ["POST"],
     maxFileSize: "10MB",
     allowedTypes: [".xlsx", ".xls"],

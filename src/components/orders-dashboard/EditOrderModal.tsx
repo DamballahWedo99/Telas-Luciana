@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { editOrderSchema, editTelaSchema } from "@/lib/zod";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -7,13 +8,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SaveIcon, XIcon, Loader2 } from "lucide-react";
+import { SaveIcon, XIcon, Loader2, Check } from "lucide-react";
 
 interface PedidoData {
   num_archivo?: number;
@@ -77,6 +71,8 @@ interface EditOrderModalProps {
   onSave: (updatedOrders: PedidoData[]) => void;
   children: React.ReactNode;
   preselectedOrders?: PedidoData[];
+  isPendingOrder?: boolean;
+  onDataRefresh?: () => void;
 }
 
 export const EditOrderModal: React.FC<EditOrderModalProps> = ({
@@ -86,6 +82,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
   onSave,
   children,
   preselectedOrders,
+  isPendingOrder = false,
+  onDataRefresh,
 }) => {
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
   const [editingOrder, setEditingOrder] = useState<PedidoData | null>(null);
@@ -100,32 +98,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
   const [allowFechasEditing, setAllowFechasEditing] = useState<boolean>(false);
   const [allowDocumentacionEditing, setAllowDocumentacionEditing] = useState<boolean>(false);
   const [allowFinancieraEditing, setAllowFinancieraEditing] = useState<boolean>(false);
+  const [isCompletingOrder, setIsCompletingOrder] = useState<boolean>(false);
+  const [showCompletionConfirm, setShowCompletionConfirm] = useState<boolean>(false);
   const [isLoadingInitialData, setIsLoadingInitialData] = useState<boolean>(false);
 
-  // Generar opciones de proveedores dinámicamente desde los datos
-  const proveedorOptions = useMemo(() => {
-    const uniqueProveedores = Array.from(
-      new Set(data.map((item) => item.proveedor))
-    ).filter((value): value is string => typeof value === "string" && value !== "");
-    
-    return uniqueProveedores.sort();
-  }, [data]);
+  // Generar opciones de transportistas dinámicamente desde los datos
 
-  const incotermOptions = useMemo(() => {
-    const uniqueIncoterms = Array.from(
-      new Set(data.map((item) => item.incoterm))
-    ).filter((value): value is string => typeof value === "string" && value !== "");
-    
-    return uniqueIncoterms.sort();
-  }, [data]);
-
-  const transportistaOptions = useMemo(() => {
-    const uniqueTransportistas = Array.from(
-      new Set(data.map((item) => item.transportista))
-    ).filter((value): value is string => typeof value === "string" && value !== "");
-    
-    return uniqueTransportistas.sort();
-  }, [data]);
 
   // Obtener órdenes únicas
   const uniqueOrders = Array.from(
@@ -230,8 +208,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     'fraccion',
     'supplier_percent_diff or upon negotiation',
     'Year',
-    'total_gastos',
-    'tipo_de_cambio'
+    'tipo_de_cambio',
+    'total_gastos'
   ];
 
   // Función para limpiar campos calculados y reordenar según estructura original
@@ -272,7 +250,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     return reorderedOrder;
   };
 
-  const handleSave = async () => {
+  const handleSaveData = async () => {
     if (!editingOrder || orderTelas.length === 0) return;
 
     setValidationErrors({});
@@ -366,8 +344,10 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     if (allowFinancieraEditing) {
       const financieraValidation = editOrderSchema.pick({
         tipo_de_cambio: true,
+        total_gastos: true,
       }).safeParse({
         tipo_de_cambio: editingOrder.tipo_de_cambio || 0,
+        total_gastos: editingOrder.total_gastos || 0,
       });
       
       if (!financieraValidation.success) {
@@ -454,6 +434,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
         
         if (allowFinancieraEditing) {
           updatedTela.tipo_de_cambio = editingOrder.tipo_de_cambio;
+          updatedTela.total_gastos = editingOrder.total_gastos;
+        }
+
+        // Calcular total_factura automáticamente si hay precio FOB y metros factura
+        if (allowTelaEditing && updatedTela.precio_m_fob_usd && updatedTela.m_factura) {
+          updatedTela.total_factura = Number(updatedTela.precio_m_fob_usd) * Number(updatedTela.m_factura);
         }
 
         // Si la edición de telas no está permitida, mantener los valores originales de FOB, venta, m_factura y total_factura
@@ -476,6 +462,317 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
         return cleanAndReorderData(updatedTela);
       });
 
+      if (isPendingOrder) {
+        // Para órdenes pendientes, llamar API específica que no cambia status
+        try {
+          const response = await fetch('/api/orders/save-pending-data', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              orders: updatedTelas,
+              orden_de_compra: editingOrder.orden_de_compra,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Error guardando datos');
+          }
+
+          const result = await response.json();
+          console.log('✅ Datos guardados sin cambiar status:', result);
+          toast.success("Datos guardados exitosamente", {
+            description: "Los datos se guardaron sin cambiar el status de la orden"
+          });
+          
+          // Llamar onDataRefresh para actualizar datos sin completar orden
+          if (onDataRefresh) {
+            onDataRefresh();
+          }
+        } catch (error) {
+          console.error('❌ Error guardando datos:', error);
+          toast.error("Error al guardar datos", {
+            description: "Hubo un problema al guardar los datos. Inténtalo de nuevo."
+          });
+          throw error;
+        }
+      } else {
+        // Para órdenes normales, usar el flujo original
+        onSave(updatedTelas);
+      }
+      
+      // Limpiar estado del modal
+      setSelectedOrderId("");
+      setEditingOrder(null);
+      setOrderTelas([]);
+      setSearchQuery("");
+      setValidationErrors({});
+      setTelaValidationErrors({});
+      setAllowTelaEditing(false);
+      setAllowProveedorEditing(false);
+      setAllowLogisticaEditing(false);
+      setAllowFechasEditing(false);
+      setAllowDocumentacionEditing(false);
+      setAllowFinancieraEditing(false);
+      
+      // Cerrar el modal
+      onClose();
+    } catch (error) {
+      console.error("Error saving order:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCompleteOrder = async () => {
+    if (!editingOrder || orderTelas.length === 0) return;
+
+    setValidationErrors({});
+    setTelaValidationErrors({});
+
+    // Validar cada sección habilitada por separado
+    const errors: Record<string, string> = {};
+    
+    if (allowProveedorEditing) {
+      const proveedorValidation = editOrderSchema.pick({
+        proveedor: true,
+        incoterm: true,
+      }).safeParse({
+        proveedor: editingOrder.proveedor || "",
+        incoterm: editingOrder.incoterm || "",
+      });
+      
+      if (!proveedorValidation.success) {
+        proveedorValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+    
+    if (allowLogisticaEditing) {
+      const logisticaValidation = editOrderSchema.pick({
+        transportista: true,
+        agente_aduanal: true,
+      }).safeParse({
+        transportista: editingOrder.transportista || "",
+        agente_aduanal: editingOrder.agente_aduanal || "",
+      });
+      
+      if (!logisticaValidation.success) {
+        logisticaValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+    
+    if (allowDocumentacionEditing) {
+      const documentacionValidation = editOrderSchema.pick({
+        factura_proveedor: true,
+        pedimento: true,
+        reporte_inspeccion: true,
+        "pedimento_tránsito": true,
+      }).safeParse({
+        factura_proveedor: editingOrder.factura_proveedor || "",
+        pedimento: editingOrder.pedimento || "",
+        reporte_inspeccion: editingOrder.reporte_inspeccion || "",
+        "pedimento_tránsito": editingOrder["pedimento_tránsito"] || "",
+      });
+      
+      if (!documentacionValidation.success) {
+        documentacionValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+
+    if (allowFechasEditing) {
+      const fechasValidation = editOrderSchema.pick({
+        fecha_pedido: true,
+        sale_origen: true,
+        llega_a_Lazaro: true,
+        llega_a_Manzanillo: true,
+        llega_a_mexico: true,
+        llega_almacen_proveedor: true,
+      }).safeParse({
+        fecha_pedido: editingOrder.fecha_pedido || "",
+        sale_origen: editingOrder.sale_origen || "",
+        llega_a_Lazaro: editingOrder.llega_a_Lazaro || "",
+        llega_a_Manzanillo: editingOrder.llega_a_Manzanillo || "",
+        llega_a_mexico: editingOrder.llega_a_mexico || "",
+        llega_almacen_proveedor: editingOrder.llega_almacen_proveedor || "",
+      });
+      
+      if (!fechasValidation.success) {
+        fechasValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+
+    if (allowFinancieraEditing) {
+      const financieraValidation = editOrderSchema.pick({
+        m_factura: true,
+        total_factura: true,
+        tipo_de_cambio: true,
+        total_gastos: true,
+        venta: true,
+      }).safeParse({
+        m_factura: Number(editingOrder.m_factura) || 0,
+        total_factura: Number(editingOrder.total_factura) || 0,
+        tipo_de_cambio: Number(editingOrder.tipo_de_cambio) || 0,
+        total_gastos: Number(editingOrder.total_gastos) || 0,
+        venta: Number(editingOrder.venta) || 0,
+      });
+      
+      if (!financieraValidation.success) {
+        financieraValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+    }
+
+    // Validar telas individuales
+    const telasErrors: Record<number, Record<string, string>> = {};
+    
+    if (allowTelaEditing) {
+      orderTelas.forEach((tela, index) => {
+        const validationData: Record<string, unknown> = {};
+        
+        // Solo incluir campos que tienen valores válidos
+        if (tela.precio_m_fob_usd && Number(tela.precio_m_fob_usd) > 0) {
+          validationData.precio_m_fob_usd = Number(tela.precio_m_fob_usd);
+        }
+        if (tela.venta && Number(tela.venta) > 0) {
+          validationData.venta = Number(tela.venta);
+        }
+        if (tela.m_factura && Number(tela.m_factura) > 0) {
+          validationData.m_factura = Number(tela.m_factura);
+        }
+        
+        console.log(`🔍 Validando tela ${index}:`, validationData);
+        console.log(`🔍 Valores originales tela ${index}:`, {
+          precio_m_fob_usd: tela.precio_m_fob_usd,
+          venta: tela.venta,
+          m_factura: tela.m_factura
+        });
+
+        const telaValidation = editTelaSchema.safeParse(validationData);
+
+        if (!telaValidation.success) {
+          console.log(`❌ Error validación tela ${index}:`, telaValidation.error.errors);
+          const indexErrors: Record<string, string> = {};
+          telaValidation.error.errors.forEach((error) => {
+            if (error.path.length > 0) {
+              indexErrors[error.path[0].toString()] = error.message;
+            }
+          });
+          if (Object.keys(indexErrors).length > 0) {
+            telasErrors[index] = indexErrors;
+          }
+        }
+      });
+    }
+
+    // Si hay errores, mostrarlos y no continuar
+    if (Object.keys(errors).length > 0 || Object.keys(telasErrors).length > 0) {
+      setValidationErrors(errors);
+      setTelaValidationErrors(telasErrors);
+      console.log("Errores de validación:", { errors, telasErrors });
+      return;
+    }
+
+    setIsCompletingOrder(true);
+
+    try {
+      // Preparar datos actualizados manteniendo el orden original
+      const updatedTelas = orderTelas.map((tela) => {
+        const originalTela = data.find(
+          (original) =>
+            original["pedido_cliente.tipo_tela"] === tela["pedido_cliente.tipo_tela"] &&
+            original["pedido_cliente.color"] === tela["pedido_cliente.color"]
+        );
+
+        const updatedTela = { ...originalTela, ...editingOrder };
+
+        // Solo actualizar campos de tela si se permite edición de telas
+        if (allowTelaEditing) {
+          updatedTela["pedido_cliente.tipo_tela"] = tela["pedido_cliente.tipo_tela"];
+          updatedTela["pedido_cliente.color"] = tela["pedido_cliente.color"];
+          updatedTela["pedido_cliente.total_m_pedidos"] = tela["pedido_cliente.total_m_pedidos"];
+          updatedTela.precio_m_fob_usd = tela.precio_m_fob_usd;
+          updatedTela.venta = tela.venta;
+          updatedTela.m_factura = tela.m_factura;
+          updatedTela.total_x_color_fob_usd = tela.total_x_color_fob_usd;
+          updatedTela.fraccion = tela.fraccion;
+          
+          // Calcular total_factura automáticamente: precio_fob * metros_factura
+          if (tela.precio_m_fob_usd && tela.m_factura) {
+            updatedTela.total_factura = Number(tela.precio_m_fob_usd) * Number(tela.m_factura);
+          }
+        }
+
+        // Preservar campos calculados si existen
+        if (originalTela) {
+          if (originalTela.m_factura && !allowFinancieraEditing) {
+            updatedTela.m_factura = originalTela.m_factura;
+          }
+          if (originalTela.total_factura && !allowFinancieraEditing) {
+            updatedTela.total_factura = originalTela.total_factura;
+          }
+        }
+        
+        // Limpiar campos calculados y reordenar antes de enviar
+        return cleanAndReorderData(updatedTela);
+      });
+
+      // Llamar API para completar orden (cambia status a completed)
+      try {
+        const response = await fetch('/api/orders/save-pending', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            orders: updatedTelas,
+            orden_de_compra: editingOrder.orden_de_compra,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Error completando orden');
+        }
+
+        const result = await response.json();
+        console.log('✅ Orden completada:', result);
+        toast.success("Orden completada exitosamente", {
+          description: "La orden se marcó como completada y los datos se guardaron"
+        });
+        
+        // Actualizar datos desde backend después de completar orden
+        if (onDataRefresh) {
+          console.log('🔄 Actualizando datos del dashboard después de completar orden...');
+          await onDataRefresh();
+          console.log('✅ Datos del dashboard actualizados exitosamente');
+        }
+      } catch (error) {
+        console.error('❌ Error completando orden:', error);
+        toast.error("Error al completar orden", {
+          description: "Hubo un problema al completar la orden. Inténtalo de nuevo."
+        });
+        throw error;
+      }
+      
       // Guardar todas las telas actualizadas de una vez (no async para UX fluida)
       onSave(updatedTelas);
       
@@ -492,12 +789,14 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
       setAllowFechasEditing(false);
       setAllowDocumentacionEditing(false);
       setAllowFinancieraEditing(false);
+      setShowCompletionConfirm(false);
       
-      // El modal se cerrará desde el parent component (OrdersCard)
+      // Cerrar el modal
+      onClose();
     } catch (error) {
-      console.error("Error saving order:", error);
+      console.error("Error completing order:", error);
     } finally {
-      setIsSaving(false);
+      setIsCompletingOrder(false);
     }
   };
 
@@ -543,7 +842,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className={`space-y-6 ${showCompletionConfirm ? 'hidden' : ''}`}>
           {/* Selector de Orden de Compra - Solo mostrar si no hay órdenes preseleccionadas */}
           {!preselectedOrders && (
             <Card>
@@ -662,44 +961,28 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="proveedor">Proveedor</Label>
-                      <Select
+                      <Input
+                        id="proveedor"
                         value={editingOrder.proveedor || ""}
-                        onValueChange={(value) => handleInputChange("proveedor", value)}
+                        onChange={(e) => handleInputChange("proveedor", e.target.value)}
+                        placeholder="Nombre del proveedor"
                         disabled={!allowProveedorEditing}
-                      >
-                        <SelectTrigger className={validationErrors.proveedor ? "border-red-500" : ""}>
-                          <SelectValue placeholder="Seleccionar proveedor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {proveedorOptions.map((proveedor) => (
-                            <SelectItem key={proveedor} value={proveedor}>
-                              {proveedor}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        className={validationErrors.proveedor ? "border-red-500" : ""}
+                      />
                       {validationErrors.proveedor && (
                         <p className="text-sm text-red-500">{validationErrors.proveedor}</p>
                       )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="incoterm">Incoterm</Label>
-                      <Select
+                      <Input
+                        id="incoterm"
                         value={editingOrder.incoterm || ""}
-                        onValueChange={(value) => handleInputChange("incoterm", value)}
+                        onChange={(e) => handleInputChange("incoterm", e.target.value)}
+                        placeholder="Términos de entrega (ej: CIF MEXICAN PORT)"
                         disabled={!allowProveedorEditing}
-                      >
-                        <SelectTrigger className={validationErrors.incoterm ? "border-red-500" : ""}>
-                          <SelectValue placeholder="Seleccionar incoterm" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {incotermOptions.map((incoterm) => (
-                            <SelectItem key={incoterm} value={incoterm}>
-                              {incoterm}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        className={validationErrors.incoterm ? "border-red-500" : ""}
+                      />
                       {validationErrors.incoterm && (
                         <p className="text-sm text-red-500">{validationErrors.incoterm}</p>
                       )}
@@ -729,22 +1012,15 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="transportista">Transportista</Label>
-                      <Select
+                      <Input
+                        id="transportista"
+                        type="text"
                         value={editingOrder.transportista || ""}
-                        onValueChange={(value) => handleInputChange("transportista", value)}
+                        onChange={(e) => handleInputChange("transportista", e.target.value)}
+                        placeholder="Transportista"
                         disabled={!allowLogisticaEditing}
-                      >
-                        <SelectTrigger className={validationErrors.transportista ? "border-red-500" : ""}>
-                          <SelectValue placeholder="Seleccionar transportista" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {transportistaOptions.map((transportista) => (
-                            <SelectItem key={transportista} value={transportista}>
-                              {transportista}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        className={validationErrors.transportista ? "border-red-500" : ""}
+                      />
                       {validationErrors.transportista && (
                         <p className="text-sm text-red-500">{validationErrors.transportista}</p>
                       )}
@@ -927,7 +1203,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Información Financiera</CardTitle>
+                    <CardTitle className="text-lg">Información Financiera y Gastos</CardTitle>
                     <div className="flex items-center space-x-2">
                       <Label htmlFor="financiera-editing-checkbox" className="text-sm font-medium">
                         Permitir edición
@@ -941,7 +1217,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                   </div>
                 </CardHeader>
                 <CardContent className={`space-y-4 ${!allowFinancieraEditing ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="tipo_de_cambio">Tipo de Cambio</Label>
                       <Input
@@ -956,6 +1232,22 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                       />
                       {validationErrors.tipo_de_cambio && (
                         <p className="text-sm text-red-500">{validationErrors.tipo_de_cambio}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="total_gastos">Total Gastos (MXN)</Label>
+                      <Input
+                        id="total_gastos"
+                        type="number"
+                        step="0.01"
+                        value={editingOrder.total_gastos || ""}
+                        onChange={(e) => handleInputChange("total_gastos", parseFloat(e.target.value) || 0)}
+                        placeholder="Total de gastos en MXN"
+                        disabled={!allowFinancieraEditing}
+                        className={validationErrors.total_gastos ? "border-red-500" : ""}
+                      />
+                      {validationErrors.total_gastos && (
+                        <p className="text-sm text-red-500">{validationErrors.total_gastos}</p>
                       )}
                     </div>
                   </div>
@@ -989,11 +1281,11 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                           {tela["pedido_cliente.tipo_tela"] || "Sin especificar"} - {tela["pedido_cliente.color"] || "Sin color"}
                         </h4>
                         <span className="text-sm text-gray-500">
-                          {tela["pedido_cliente.total_m_pedidos"] || 0} {tela["pedido_cliente.unidad"] || "m"}
+                          {tela["pedido_cliente.total_m_pedidos"] || 0} m pedidos
                         </span>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor={`tela-${index}-precio-fob`}>Precio FOB (USD)</Label>
                           <Input
@@ -1044,27 +1336,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                           )}
                         </div>
                         
-                        <div className="space-y-2">
-                          <Label>Total Factura (USD)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={tela.total_factura || ""}
-                            onChange={(e) => handleTelaChange(index, "total_factura", parseFloat(e.target.value) || 0)}
-                            placeholder="Total factura USD"
-                            disabled={!allowTelaEditing}
-                            className={telaValidationErrors[index]?.total_factura ? "border-red-500" : ""}
-                          />
-                          {telaValidationErrors[index]?.total_factura && (
-                            <p className="text-sm text-red-500">{telaValidationErrors[index].total_factura}</p>
-                          )}
-                        </div>
                       </div>
                       
                       <div className="bg-gray-50 p-3 rounded text-sm">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <strong>Total FOB:</strong> ${((tela.precio_m_fob_usd || 0) * (tela["pedido_cliente.total_m_pedidos"] || 0)).toLocaleString()}
+                            <strong>Total Factura (USD):</strong> ${((tela.precio_m_fob_usd || 0) * (tela.m_factura || 0)).toLocaleString('es-MX')}
                           </div>
                           <div>
                             <strong>Margen:</strong> {tela.venta && tela.precio_m_fob_usd 
@@ -1093,14 +1370,80 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
                   <XIcon className="h-4 w-4 mr-2" />
                   Cancelar
                 </Button>
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <SaveIcon className="h-4 w-4 mr-2" />
-                  {isSaving ? "Guardando..." : "Guardar Cambios"}
-                </Button>
+                
+                {isPendingOrder ? (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleSaveData} 
+                      disabled={isSaving || isCompletingOrder}
+                    >
+                      <SaveIcon className="h-4 w-4 mr-2" />
+                      {isSaving ? "Guardando..." : "Guardar Datos"}
+                    </Button>
+                    
+                    <Button 
+                      onClick={() => setShowCompletionConfirm(true)} 
+                      disabled={isSaving || isCompletingOrder}
+                      className="bg-black hover:bg-gray-800 text-white"
+                    >
+                      <Check className="h-4 w-4 mr-2" />
+                      Completar Orden
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={handleSaveData} disabled={isSaving}>
+                    <SaveIcon className="h-4 w-4 mr-2" />
+                    {isSaving ? "Guardando..." : "Guardar Cambios"}
+                  </Button>
+                )}
               </div>
+              
             </>
           )}
         </div>
+        
+        {/* Modal de confirmación para completar orden */}
+        {showCompletionConfirm && (
+          <div className="flex flex-col items-center justify-center py-12 space-y-6">
+            <div className="p-4 bg-amber-50 rounded-full">
+              <Check className="h-8 w-8 text-amber-600" />
+            </div>
+            <div className="text-center space-y-4 max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900">Confirmar Completar Orden</h3>
+              <p className="text-gray-600">
+                ¿Estás seguro de que quieres marcar esta orden como completada? 
+                Esta acción cambiará el status de la orden y no se podrá deshacer.
+              </p>
+            </div>
+            <div className="flex justify-center gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowCompletionConfirm(false)}
+                disabled={isCompletingOrder}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleCompleteOrder} 
+                disabled={isCompletingOrder}
+                className="bg-black hover:bg-gray-800 text-white"
+              >
+                {isCompletingOrder ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Completando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Sí, Completar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

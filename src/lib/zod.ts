@@ -198,7 +198,6 @@ export const editOrderSchema = z.object({
   incoterm: z
     .string()
     .min(1, { message: "El incoterm es obligatorio" })
-    .max(20, { message: "El incoterm no puede tener más de 20 caracteres" })
     .regex(/^[^<>'";&|`$(){}[\]\\]*$/, { message: "El incoterm contiene caracteres no permitidos" }),
   transportista: z
     .string()
@@ -304,20 +303,19 @@ export const editTelaSchema = z.object({
   precio_m_fob_usd: z
     .number({ message: "El precio FOB debe ser un número" })
     .min(0.01, { message: "El precio FOB debe ser mayor a 0" })
-    .max(999999.99, { message: "El precio FOB no puede ser mayor a 999,999.99" }),
+    .max(999999.99, { message: "El precio FOB no puede ser mayor a 999,999.99" })
+    .optional(),
   venta: z
     .number({ message: "El precio de venta debe ser un número" })
     .min(0.01, { message: "El precio de venta debe ser mayor a 0" })
-    .max(999999.99, { message: "El precio de venta no puede ser mayor a 999,999.99" }),
+    .max(999999.99, { message: "El precio de venta no puede ser mayor a 999,999.99" })
+    .optional(),
   m_factura: z
     .number({ message: "Los metros factura deben ser un número" })
     .min(0.01, { message: "Los metros factura deben ser mayor a 0" })
-    .max(999999.99, { message: "Los metros factura no pueden ser mayor a 999,999.99" }),
-  total_factura: z
-    .number({ message: "El total factura debe ser un número" })
-    .min(0.01, { message: "El total factura debe ser mayor a 0" })
-    .max(999999.99, { message: "El total factura no puede ser mayor a 999,999.99" }),
-});
+    .max(999999.99, { message: "Los metros factura no pueden ser mayor a 999,999.99" })
+    .optional(),
+}).partial();
 
 export const createProveedorSchema = z.object({
   Empresa: z

@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { OrdersCardMobile } from "./OrdersCardMobile";
+import { UploadOrdersPackingListModal } from "./UploadOrdersPackingListModal";
 import {
   ChevronUpIcon,
   ChevronDownIcon,
@@ -17,10 +18,13 @@ import {
   ChevronRightIcon,
   EditIcon,
   DownloadIcon,
+  PlusIcon,
+  ClockIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -121,6 +125,7 @@ interface PedidoData {
   ddp_usd_unidad_s_iva?: number;
   [key: string]: string | number | null | undefined;
 }
+
 
 interface OrdersFilterSectionProps {
   searchQuery: string;
@@ -610,9 +615,7 @@ const OrdersTable: React.FC<{
                       <td className="p-2 align-middle">
                         {row.proveedor || "-"}
                       </td>
-                      <td className="p-2 align-middle">
-                        {row.origen || "-"}
-                      </td>
+                      <td className="p-2 align-middle">{row.origen || "-"}</td>
                       <td className="p-2 align-middle">
                         {row.incoterm || "-"}
                       </td>
@@ -635,7 +638,9 @@ const OrdersTable: React.FC<{
                         {row["pedido_cliente.color"] || "-"}
                       </td>
                       <td className="p-2 align-middle">
-                        {formatCurrency(row["pedido_cliente.total_m_pedidos"] || 0)}
+                        {formatCurrency(
+                          row["pedido_cliente.total_m_pedidos"] || 0
+                        )}
                       </td>
                       <td className="p-2 align-middle">
                         {row["pedido_cliente.unidad"] || "-"}
@@ -679,9 +684,7 @@ const OrdersTable: React.FC<{
                       <td className="p-2 align-middle">
                         {row.factura_proveedor || "-"}
                       </td>
-                      <td className="p-2 align-middle">
-                        {row.Year || "-"}
-                      </td>
+                      <td className="p-2 align-middle">{row.Year || "-"}</td>
                       <td className="p-2 align-middle">
                         ${formatCurrency(row.venta || 0)}
                       </td>
@@ -786,6 +789,10 @@ interface OrdersCardProps {
   setOrdersCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   onDataUpdate?: () => void;
   loading?: boolean;
+  isAdmin?: boolean;
+  showPendingOrders?: boolean;
+  setShowPendingOrders?: React.Dispatch<React.SetStateAction<boolean>>;
+  pendingOrdersCount?: number;
 }
 
 export const OrdersCard: React.FC<OrdersCardProps> = ({
@@ -812,19 +819,109 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   setOrdersCollapsed,
   onDataUpdate,
   loading = false,
+  isAdmin = false,
+  showPendingOrders = false,
+  setShowPendingOrders,
+  pendingOrdersCount = 0,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [selectedOrderDetails, setSelectedOrderDetails] = useState<PedidoData[]>([]);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<
+    PedidoData[]
+  >([]);
+  const [openUploadDialog, setOpenUploadDialog] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const [pollingAttempts, setPollingAttempts] = useState(0);
 
   const isMobile = useIsMobile();
+
+  // Polling para verificar si ya hay telas en pending después de subir orden de compra
+  useEffect(() => {
+    const handleStartPolling = () => {
+      console.log("🔄 [OrdersCard] Iniciando polling para verificar telas en pending...");
+      setIsPolling(true);
+      setPollingAttempts(0);
+      pollForPendingOrders();
+    };
+
+    const pollForPendingOrders = async () => {
+      const maxAttempts = 3;
+      const pollInterval = 3000; // 3 segundos
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        console.log(`🔄 [OrdersCard] Polling intento ${attempt}/${maxAttempts} - Verificando telas en pending...`);
+        setPollingAttempts(attempt);
+
+        try {
+          // Esperar antes del primer intento (excepto el primero)
+          if (attempt > 1) {
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+          }
+
+          // Llamar a la API para verificar si ya hay telas en pending
+          const response = await fetch("/api/orders/check-pending?refresh=true");
+          
+          if (response.ok) {
+            console.log(`✅ [OrdersCard] API check-pending respondió exitosamente en intento ${attempt}`);
+            
+            // Recargar datos para mostrar las nuevas telas en pending
+            if (onDataUpdate) {
+              await onDataUpdate();
+              console.log(`✅ [OrdersCard] Datos actualizados - telas en pending disponibles`);
+            }
+            
+            toast.success("Telas procesadas y disponibles en pending");
+            
+            // Terminar polling exitosamente
+            setIsPolling(false);
+            setPollingAttempts(0);
+            return;
+          } else {
+            console.log(`⚠️ [OrdersCard] API check-pending no exitosa en intento ${attempt}, status: ${response.status}`);
+          }
+
+          // Si es el último intento y no fue exitoso
+          if (attempt === maxAttempts) {
+            console.log(`⚠️ [OrdersCard] Último intento completado - API aún no responde exitosamente`);
+            
+            // Recargar datos de todas formas
+            if (onDataUpdate) {
+              await onDataUpdate();
+              console.log(`✅ [OrdersCard] Datos actualizados en último intento`);
+            }
+            
+            toast.warning("Orden subida exitosamente. Las telas pueden tomar unos minutos en aparecer en pending.");
+          }
+
+        } catch (error) {
+          console.error(`❌ [OrdersCard] Error en polling intento ${attempt}:`, error);
+          
+          if (attempt === maxAttempts) {
+            toast.warning("Las órdenes fueron subidas pero puede tomar unos minutos en aparecer");
+          }
+        }
+      }
+
+      setIsPolling(false);
+      setPollingAttempts(0);
+    };
+
+    // Escuchar evento de inicio de polling
+    window.addEventListener("start-orders-polling", handleStartPolling);
+
+    return () => {
+      window.removeEventListener("start-orders-polling", handleStartPolling);
+    };
+  }, [onDataUpdate]);
 
   const handleSaveOrder = async (updatedOrders: PedidoData[]) => {
     // Cerrar modal inmediatamente al comenzar el guardado
     setIsEditModalOpen(false);
     setSelectedOrderDetails([]);
-    
-    const loadingToast = toast.loading(`Guardando ${updatedOrders.length} tela${updatedOrders.length > 1 ? 's' : ''}...`);
+
+    const loadingToast = toast.loading(
+      `Guardando ${updatedOrders.length} tela${updatedOrders.length > 1 ? "s" : ""}...`
+    );
 
     try {
       const response = await fetch("/api/s3/pedidos", {
@@ -847,18 +944,21 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         description: `${result.updatedCount || updatedOrders.length} telas actualizadas en ${result.filesUpdated || 0} archivo(s)`,
         duration: 3000,
       });
-      
+
       if (onDataUpdate) {
         await onDataUpdate();
       }
-      
-      console.log(`✅ ${result.updatedCount || updatedOrders.length} telas guardadas en ${result.filesUpdated || 0} archivos`);
+
+      console.log(
+        `✅ ${result.updatedCount || updatedOrders.length} telas guardadas en ${result.filesUpdated || 0} archivos`
+      );
     } catch (error) {
       console.error("❌ Error guardando pedidos:", error);
-      
+
       toast.error("Error al guardar los pedidos", {
         id: loadingToast,
-        description: error instanceof Error ? error.message : "Error desconocido",
+        description:
+          error instanceof Error ? error.message : "Error desconocido",
         duration: 5000,
       });
     }
@@ -879,9 +979,15 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       if (searchQuery) {
         filtered = filtered.filter(
           (item) =>
-            item.orden_de_compra?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item["pedido_cliente.tipo_tela"]?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item["pedido_cliente.color"]?.toLowerCase().includes(searchQuery.toLowerCase())
+            item.orden_de_compra
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.tipo_tela"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.color"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase())
         );
       }
 
@@ -920,9 +1026,15 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       if (searchQuery) {
         filtered = filtered.filter(
           (item) =>
-            item.orden_de_compra?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item["pedido_cliente.tipo_tela"]?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item["pedido_cliente.color"]?.toLowerCase().includes(searchQuery.toLowerCase())
+            item.orden_de_compra
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.tipo_tela"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.color"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase())
         );
       }
 
@@ -963,9 +1075,15 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       if (searchQuery) {
         filtered = filtered.filter(
           (item) =>
-            item.orden_de_compra?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item["pedido_cliente.tipo_tela"]?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item["pedido_cliente.color"]?.toLowerCase().includes(searchQuery.toLowerCase())
+            item.orden_de_compra
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.tipo_tela"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.color"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase())
         );
       }
 
@@ -1004,7 +1122,14 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       tipoTelaOptions: getFilteredTipoTelaOptions(),
       colorOptions: getFilteredColorOptions(),
     };
-  }, [data, searchQuery, ordenDeCompraFilter, tipoTelaFilter, colorFilter, ubicacionFilter]);
+  }, [
+    data,
+    searchQuery,
+    ordenDeCompraFilter,
+    tipoTelaFilter,
+    colorFilter,
+    ubicacionFilter,
+  ]);
 
   const calculateRowData = (row: PedidoData) => {
     const ordenDeCompra = row.orden_de_compra || "";
@@ -1053,17 +1178,19 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         const calculatedData = calculateRowData(row);
         return {
           "Orden de Compra": row.orden_de_compra || "-",
-          "Proveedor": row.proveedor || "-",
-          "Origen": row.origen || "-",
-          "Incoterm": row.incoterm || "-",
-          "Transportista": row.transportista || "-",
+          Proveedor: row.proveedor || "-",
+          Origen: row.origen || "-",
+          Incoterm: row.incoterm || "-",
+          Transportista: row.transportista || "-",
           "Agente Aduanal": row.agente_aduanal || "-",
-          "Pedimento": row.pedimento || "-",
+          Pedimento: row.pedimento || "-",
           "Pago Crédito": row.pago_credito || "-",
           "Tipo de Tela": row["pedido_cliente.tipo_tela"] || "-",
-          "Color": row["pedido_cliente.color"] || "-",
-          "M Pedidos": formatCurrency(row["pedido_cliente.total_m_pedidos"] || 0),
-          "Unidad": row["pedido_cliente.unidad"] || "-",
+          Color: row["pedido_cliente.color"] || "-",
+          "M Pedidos": formatCurrency(
+            row["pedido_cliente.total_m_pedidos"] || 0
+          ),
+          Unidad: row["pedido_cliente.unidad"] || "-",
           "Precio FOB USD": `$${formatCurrency(row.precio_m_fob_usd || 0)}`,
           "Total Factura (USD)": `$${formatCurrency(row.total_factura || 0)}`,
           "M Factura": formatCurrency(row.m_factura || 0),
@@ -1077,8 +1204,8 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           "DDP USD/Unidad": `$${formatCurrency(calculatedData.ddpUsdUnidad)}`,
           "DDP USD/Unidad S/IVA": `$${formatCurrency(calculatedData.ddpUsdUnidadSIva)}`,
           "Factura Proveedor": row.factura_proveedor || "-",
-          "Año": row.Year || "-",
-          "Venta": `$${formatCurrency(row.venta || 0)}`,
+          Año: row.Year || "-",
+          Venta: `$${formatCurrency(row.venta || 0)}`,
           "Fecha Pedido": formatDate(row.fecha_pedido),
           "Sale Origen": formatDate(row.sale_origen),
           "Llega a México": formatDate(row.llega_a_mexico),
@@ -1091,7 +1218,10 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
-      link.setAttribute("download", `ordenes-compra-${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute(
+        "download",
+        `ordenes-compra-${new Date().toISOString().split("T")[0]}.csv`
+      );
       link.style.visibility = "hidden";
       document.body.appendChild(link);
       link.click();
@@ -1118,7 +1248,11 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       doc.setFontSize(16);
       doc.text("Reporte de Órdenes de Compra", 14, 15);
       doc.setFontSize(10);
-      doc.text(`Fecha de generación: ${new Date().toLocaleDateString('es-ES')}`, 14, 22);
+      doc.text(
+        `Fecha de generación: ${new Date().toLocaleDateString("es-ES")}`,
+        14,
+        22
+      );
       doc.text(`Total de pedidos: ${filteredData.length}`, 14, 28);
 
       const tableData = filteredData.map((row) => {
@@ -1143,23 +1277,25 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       });
 
       autoTable(doc, {
-        head: [[
-          "OC",
-          "Proveedor",
-          "Pago Crédito",
-          "Tipo Tela",
-          "Color",
-          "M Pedidos",
-          "Unidad",
-          "Precio FOB",
-          "Total Factura",
-          "Tipo Cambio",
-          "Total MXP",
-          "DDP Total MXP",
-          "Fecha Pedido",
-          "Llega a México",
-          "Llega Almacén Proveedor",
-        ]],
+        head: [
+          [
+            "OC",
+            "Proveedor",
+            "Pago Crédito",
+            "Tipo Tela",
+            "Color",
+            "M Pedidos",
+            "Unidad",
+            "Precio FOB",
+            "Total Factura",
+            "Tipo Cambio",
+            "Total MXP",
+            "DDP Total MXP",
+            "Fecha Pedido",
+            "Llega a México",
+            "Llega Almacén Proveedor",
+          ],
+        ],
         body: tableData,
         startY: 35,
         styles: {
@@ -1178,7 +1314,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         margin: { top: 35, right: 14, bottom: 20, left: 14 },
       });
 
-      doc.save(`ordenes-compra-${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`ordenes-compra-${new Date().toISOString().split("T")[0]}.pdf`);
       toast.success("Archivo PDF exportado exitosamente");
     } catch (error) {
       console.error("Error exportando PDF:", error);
@@ -1186,6 +1322,14 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleOpenUploadDialog = () => {
+    setOpenUploadDialog(true);
+  };
+
+  const handleCloseUploadDialog = () => {
+    setOpenUploadDialog(false);
   };
 
   // Renderizar versión móvil si es dispositivo móvil
@@ -1235,7 +1379,10 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
             setSelectedOrderDetails([]);
           }}
           onSave={handleSaveOrder}
-          preselectedOrders={selectedOrderDetails.length > 0 ? selectedOrderDetails : undefined}
+          onDataRefresh={onDataUpdate}
+          preselectedOrders={
+            selectedOrderDetails.length > 0 ? selectedOrderDetails : undefined
+          }
         >
           {null}
         </EditOrderModal>
@@ -1272,32 +1419,51 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
               </TooltipProvider>
             )}
 
-            <EditOrderModal
-              data={data}
-              isOpen={isEditModalOpen && selectedOrderDetails.length > 0}
-              onClose={() => {
-                setIsEditModalOpen(false);
-                setSelectedOrderDetails([]);
-              }}
-              onSave={handleSaveOrder}
-              preselectedOrders={selectedOrderDetails.length > 0 ? selectedOrderDetails : undefined}
-            >
+            {/* Pending Orders Alert Button - Always visible for admins, but badge only when count > 0 */}
+            {isAdmin && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setIsEditModalOpen(true)}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (setShowPendingOrders) {
+                        setShowPendingOrders(!showPendingOrders);
+                      }
+                    }}
+                    className="relative"
                   >
-                    <EditIcon className="h-4 w-4 mr-2" />
-                    Editar
+                    <ClockIcon className="h-5 w-5 text-orange-600" />
+                    {pendingOrdersCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                      >
+                        {pendingOrdersCount}
+                      </Badge>
+                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Editar Orden de Compra</p>
+                  <p>{showPendingOrders ? 'Ocultar' : 'Mostrar'} Órdenes Pendientes ({pendingOrdersCount})</p>
                 </TooltipContent>
               </Tooltip>
-            </EditOrderModal>
+            )}
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsEditModalOpen(true)}
+                >
+                  <EditIcon className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Editar Orden de Compra</p>
+              </TooltipContent>
+            </Tooltip>
 
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1312,10 +1478,16 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuItem onClick={handleExportCSV} disabled={isExporting}>
+                    <DropdownMenuItem
+                      onClick={handleExportCSV}
+                      disabled={isExporting}
+                    >
                       Exportar CSV
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
+                    <DropdownMenuItem
+                      onClick={handleExportPDF}
+                      disabled={isExporting}
+                    >
                       Exportar PDF
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -1323,6 +1495,34 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
               </TooltipTrigger>
               <TooltipContent>
                 <p>Exportar datos</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="inline-block">
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="bg-black hover:bg-gray-800 rounded-full"
+                    onClick={handleOpenUploadDialog}
+                    disabled={isPolling}
+                  >
+                    {isPolling ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <PlusIcon className="h-5 w-5" />
+                    )}
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {isPolling 
+                    ? `Procesando órdenes... (${pollingAttempts}/3)` 
+                    : "Subir Orden De Compra"
+                  }
+                </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -1401,6 +1601,30 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           )}
         </>
       )}
+
+
+      {/* Upload Modal */}
+      <UploadOrdersPackingListModal
+        isOpen={openUploadDialog}
+        onClose={handleCloseUploadDialog}
+      />
+
+      {/* Edit Order Modal */}
+      <EditOrderModal
+        data={data}
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedOrderDetails([]);
+        }}
+        onSave={handleSaveOrder}
+        onDataRefresh={onDataUpdate}
+        preselectedOrders={
+          selectedOrderDetails.length > 0 ? selectedOrderDetails : undefined
+        }
+      >
+        {null}
+      </EditOrderModal>
     </Card>
   );
 };

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useSession } from "next-auth/react";
 
 import { OrdersMetricsSection } from "./OrdersMetricsSection";
 import { OrdersChartsCard } from "./OrdersChartsCard";
 import { OrdersCard } from "./OrdersCard";
+import { PendingOrdersCard } from "./PendingOrdersCard";
 import { PriceHistoryCard } from "./PriceHistoryCard";
 
 interface PedidoData {
@@ -23,6 +25,7 @@ interface PedidoData {
   pago_credito?: string | null;
   llega_a_Lazaro?: string;
   llega_a_Manzanillo?: string;
+  llega_a_mexico?: string;
   llega_almacen_proveedor?: string;
   factura_proveedor?: string;
   orden_de_compra?: string;
@@ -49,6 +52,7 @@ interface PedidoData {
   ddp_mxp_unidad?: number;
   ddp_usd_unidad?: number;
   ddp_usd_unidad_s_iva?: number;
+  status?: string;
   [key: string]: string | number | null | undefined;
 }
 
@@ -120,6 +124,9 @@ declare global {
 }
 
 const PedidosDashboard: React.FC = () => {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin" || session?.user?.role === "major_admin";
+  
   const [data, setData] = useState<PedidoData[]>([]);
   const [filteredData, setFilteredData] = useState<PedidoData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -127,6 +134,9 @@ const PedidosDashboard: React.FC = () => {
 
   const [chartsCollapsed, setChartsCollapsed] = useState<boolean>(true);
   const [ordersCollapsed, setOrdersCollapsed] = useState<boolean>(false);
+  const [showPendingOrders, setShowPendingOrders] = useState<boolean>(false);
+  const [pendingOrdersData, setPendingOrdersData] = useState<unknown[]>([]);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [ordenDeCompraFilter, setOrdenDeCompraFilter] = useState<string>("all");
@@ -441,6 +451,7 @@ const PedidosDashboard: React.FC = () => {
         setLoading(true);
         setError(null);
 
+        // Obtener los datos principales
         const response = await fetch("/api/s3/pedidos");
 
         if (!response.ok) {
@@ -473,8 +484,16 @@ const PedidosDashboard: React.FC = () => {
             }
           });
 
-          const processedData: PedidoData[] = flattenedData.map(
-            (row: PedidoData) => {
+          const processedData: PedidoData[] = flattenedData
+            .filter((row: PedidoData) => {
+              // Solo filtrar items individuales con status pending, NO órdenes completas
+              if (row.status === "pending") {
+                console.log(`🚫 Filtrando item con status pending: ${row.orden_de_compra} - Status: ${row.status}`);
+                return false;
+              }
+              return true;
+            })
+            .map((row: PedidoData) => {
               const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
               const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
 
@@ -490,8 +509,7 @@ const PedidosDashboard: React.FC = () => {
                 total_mxp: totalMxp,
                 llega_a_mexico: llegaAMexico,
               };
-            }
-          );
+            });
 
           const ordenGroups: Record<string, { totalMxpSum: number }> = {};
           processedData.forEach((row) => {
@@ -674,6 +692,8 @@ const PedidosDashboard: React.FC = () => {
   const handleDataUpdate = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Obtener los datos principales con refresh
       const response = await fetch("/api/s3/pedidos?refresh=true");
 
       if (!response.ok) {
@@ -702,22 +722,31 @@ const PedidosDashboard: React.FC = () => {
           }
         });
 
-        const processedData = flattenedData.map((row: PedidoData) => {
-          const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
-          const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
+        const processedData = flattenedData
+          .filter((row: PedidoData) => {
+            // Solo filtrar items individuales con status pending, NO órdenes completas
+            if (row.status === "pending") {
+              console.log(`🚫 Filtrando item con status pending (refresh): ${row.orden_de_compra} - Status: ${row.status}`);
+              return false;
+            }
+            return true;
+          })
+          .map((row: PedidoData) => {
+            const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+            const totalMxp = (Number(row.total_factura) || 0) * tipoDeCambio;
 
-          // Migrar campos antiguos al nuevo campo llega_a_mexico si no existe
-          let llegaAMexico = row.llega_a_mexico;
-          if (!llegaAMexico) {
-            llegaAMexico = row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
-          }
+            // Migrar campos antiguos al nuevo campo llega_a_mexico si no existe
+            let llegaAMexico = row.llega_a_mexico;
+            if (!llegaAMexico) {
+              llegaAMexico = row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
+            }
 
-          return {
-            ...row,
-            total_mxp: totalMxp,
-            llega_a_mexico: llegaAMexico,
-          };
-        });
+            return {
+              ...row,
+              total_mxp: totalMxp,
+              llega_a_mexico: llegaAMexico,
+            };
+          });
 
         // Calcular campos DDP igual que en el useEffect original
         const ordenGroups: Record<string, { totalMxpSum: number }> = {};
@@ -766,6 +795,46 @@ const PedidosDashboard: React.FC = () => {
     }
   }, [calculateTotals]);
 
+  // Shared function to fetch pending orders count and data
+  const fetchPendingOrdersCount = useCallback(async () => {
+    if (!isAdmin) return;
+    
+    try {
+      const response = await fetch("/api/orders/check-pending");
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+          console.log("No tiene permisos para ver órdenes pendientes");
+          return;
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setPendingOrdersCount(data.totalOrders || 0);
+      setPendingOrdersData(data.pendingOrders || []);
+    } catch (error) {
+      console.error("Error fetching pending orders:", error);
+      setPendingOrdersCount(0);
+      setPendingOrdersData([]);
+    }
+  }, [isAdmin]);
+
+  // Enhanced data update handler that also refreshes pending orders
+  const handleDataUpdateWithPendingRefresh = useCallback(async () => {
+    await handleDataUpdate();
+    if (isAdmin) {
+      await fetchPendingOrdersCount();
+    }
+  }, [handleDataUpdate, fetchPendingOrdersCount, isAdmin]);
+
+  // Fetch pending orders count on component mount
+  useEffect(() => {
+    if (isAdmin) {
+      fetchPendingOrdersCount();
+    }
+  }, [isAdmin, fetchPendingOrdersCount]);
+
   const totalPages = Math.ceil(filteredData.length / recordsPerPage);
   const paginatedData = filteredData.slice(
     (currentPage - 1) * recordsPerPage,
@@ -808,12 +877,25 @@ const PedidosDashboard: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
+
           <div className="hidden md:block">
             <OrdersMetricsSection
               totals={totals}
               filteredDataLength={filteredData.length}
             />
           </div>
+
+          {/* Render PendingOrdersCard above OrdersCard when showPendingOrders is true */}
+          {showPendingOrders && isAdmin && (
+            <PendingOrdersCard
+              isAdmin={isAdmin}
+              onDataUpdate={handleDataUpdateWithPendingRefresh}
+              data={data}
+              fetchPendingOrdersCount={fetchPendingOrdersCount}
+              initialPendingCount={pendingOrdersCount}
+              pendingOrdersData={pendingOrdersData}
+            />
+          )}
 
           <OrdersCard
             data={data}
@@ -837,8 +919,12 @@ const PedidosDashboard: React.FC = () => {
             goToPage={goToPage}
             ordersCollapsed={ordersCollapsed}
             setOrdersCollapsed={setOrdersCollapsed}
-            onDataUpdate={handleDataUpdate}
+            onDataUpdate={handleDataUpdateWithPendingRefresh}
             loading={loading}
+            isAdmin={isAdmin}
+            showPendingOrders={showPendingOrders}
+            setShowPendingOrders={setShowPendingOrders}
+            pendingOrdersCount={pendingOrdersCount}
           />
 
           <div className="hidden md:block">
