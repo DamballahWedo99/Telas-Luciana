@@ -377,11 +377,7 @@ export const LogisticsCard: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-sm font-bold text-green-900">
-                        {new Date(order.etd).toLocaleDateString("es-ES", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })}
+                        {order.etd.split('T')[0].split('-').reverse().join('/')}
                       </p>
                     </div>
                   )}
@@ -395,11 +391,7 @@ export const LogisticsCard: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-sm font-bold text-orange-900">
-                        {new Date(order.eta).toLocaleDateString("es-ES", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })}
+                        {order.eta.split('T')[0].split('-').reverse().join('/')}
                       </p>
                     </div>
                   )}
@@ -495,7 +487,7 @@ export const LogisticsCard: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <CalendarIcon className="h-4 w-4 text-green-600" />
                   <span className="font-medium text-green-700 bg-green-50 px-2 py-1 rounded-md text-sm">
-                    ETD: {new Date(order.etd).toLocaleDateString("es-ES")}
+                    ETD: {order.etd.split('T')[0].split('-').reverse().join('/')}
                   </span>
                 </div>
               )}
@@ -503,7 +495,7 @@ export const LogisticsCard: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <CalendarIcon className="h-4 w-4 text-orange-600" />
                   <span className="font-medium text-orange-700 bg-orange-50 px-2 py-1 rounded-md text-sm">
-                    ETA: {new Date(order.eta).toLocaleDateString("es-ES")}
+                    ETA: {order.eta.split('T')[0].split('-').reverse().join('/')}
                   </span>
                 </div>
               )}
