@@ -5,6 +5,13 @@ import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import {
   ChevronUp,
   ChevronDown,
   Search,
@@ -16,6 +23,7 @@ import {
   Expand,
   Minimize,
   Layers,
+  Filter,
 } from "lucide-react";
 import type {
   FabricPriceHistory,
@@ -24,6 +32,7 @@ import type {
   FabricProviderMatrix,
 } from "@/types/price-history";
 import { ProviderCell } from "./ProviderComponents";
+import { FabricCombobox } from "@/components/ui/fabric-combobox";
 import {
   getTrendColor,
   formatCurrency,
@@ -36,6 +45,12 @@ interface PriceHistoryTableProps {
   multiProviderData?: MultiProviderTableData | null;
   viewMode?: "traditional" | "provider-matrix";
   onViewModeChange?: (mode: "traditional" | "provider-matrix") => void;
+  selectedProviders?: string[];
+  onSelectedProvidersChange?: (providers: string[]) => void;
+  isProviderFilterOpen?: boolean;
+  onProviderFilterOpenChange?: (open: boolean) => void;
+  selectedFabric?: string;
+  onSelectedFabricChange?: (fabricId: string) => void;
 }
 
 interface PriceHistoryTableRef {
@@ -55,6 +70,12 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
   multiProviderData,
   viewMode = "traditional",
   onViewModeChange,
+  selectedProviders = [],
+  onSelectedProvidersChange,
+  isProviderFilterOpen = false,
+  onProviderFilterOpenChange,
+  selectedFabric = "",
+  onSelectedFabricChange,
 }, ref) => {
   const [sortField, setSortField] = useState<SortField>("fabric");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
@@ -144,6 +165,13 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
     let filteredFabrics = multiProviderData.fabrics;
     const availableProviders = multiProviderData.providers;
 
+    // Filter by selected fabric
+    if (selectedFabric && selectedFabric.trim()) {
+      filteredFabrics = filteredFabrics.filter(
+        (fabric) => fabric.fabricId === selectedFabric
+      );
+    }
+
     // Filter by search term
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
@@ -185,6 +213,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
     return { fabrics: sortedFabrics, providers: availableProviders };
   }, [
     multiProviderData,
+    selectedFabric,
     searchTerm,
     providerSortField,
     providerSortOrder,
@@ -344,24 +373,119 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
 
               {/* Expand/Collapse All Button - Only show in provider-matrix mode */}
               {viewMode === "provider-matrix" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setExpandAll(!expandAll)}
-                  className="flex items-center gap-2 h-8"
-                >
-                  {expandAll ? (
-                    <>
-                      <Minimize className="h-4 w-4" />
-                      Contraer Todo
-                    </>
-                  ) : (
-                    <>
-                      <Expand className="h-4 w-4" />
-                      Expandir Todo
-                    </>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExpandAll(!expandAll)}
+                    className="flex items-center gap-2 h-8"
+                  >
+                    {expandAll ? (
+                      <>
+                        <Minimize className="h-4 w-4" />
+                        Contraer
+                      </>
+                    ) : (
+                      <>
+                        <Expand className="h-4 w-4" />
+                        Expandir
+                      </>
+                    )}
+                  </Button>
+
+                  {/* Fabric Filter */}
+                  {multiProviderData && onSelectedFabricChange && (
+                    <FabricCombobox
+                      fabrics={[
+                        { fabricId: "", fabricName: "Todas las telas" },
+                        ...multiProviderData.fabrics.map(f => ({
+                          fabricId: f.fabricId,
+                          fabricName: f.fabricName
+                        }))
+                      ]}
+                      value={selectedFabric}
+                      onValueChange={onSelectedFabricChange}
+                      placeholder="Seleccionar tela..."
+                      className="w-48 h-8"
+                    />
                   )}
-                </Button>
+
+                  {/* Provider Filter Button */}
+                  {multiProviderData && onSelectedProvidersChange && (
+                    <Popover open={isProviderFilterOpen} onOpenChange={onProviderFilterOpenChange}>
+                      <PopoverTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 gap-2"
+                        >
+                          <Filter className="h-4 w-4" />
+                          <span className="hidden sm:inline">
+                            {selectedProviders.length === 0 || selectedProviders.length === multiProviderData.providers.length
+                              ? "Todos los proveedores"
+                              : `${selectedProviders.length} de ${multiProviderData.providers.length}`}
+                          </span>
+                          <Badge variant="secondary" className="ml-1">
+                            {selectedProviders.length === 0 ? multiProviderData.providers.length : selectedProviders.length}
+                          </Badge>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-4" align="end">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-sm">Filtrar proveedores para PDF</h4>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (selectedProviders.length === multiProviderData.providers.length) {
+                                  onSelectedProvidersChange([]);
+                                } else {
+                                  onSelectedProvidersChange(multiProviderData.providers.map(p => p.id));
+                                }
+                              }}
+                            >
+                              {selectedProviders.length === multiProviderData.providers.length ? "Desmarcar todos" : "Marcar todos"}
+                            </Button>
+                          </div>
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {multiProviderData.providers.map((provider) => (
+                              <div key={provider.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`provider-${provider.id}`}
+                                  checked={selectedProviders.includes(provider.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      onSelectedProvidersChange([...selectedProviders, provider.id]);
+                                    } else {
+                                      onSelectedProvidersChange(selectedProviders.filter(p => p !== provider.id));
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`provider-${provider.id}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span>{provider.name}</span>
+                                    <span className="text-xs text-gray-500">
+                                      {provider.totalFabrics} productos
+                                    </span>
+                                  </div>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="text-xs text-gray-500 border-t pt-2">
+                            {selectedProviders.length === 0 
+                              ? "Si no seleccionas ninguno, se exportarán todos los proveedores" 
+                              : `Se exportarán ${selectedProviders.length} proveedor${selectedProviders.length === 1 ? '' : 'es'} al PDF`}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -382,7 +506,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
 
       {/* Table */}
       <div className="border rounded-lg">
-        <div className="relative max-h-[600px] overflow-y-auto">
+        <div className="relative max-h-[460px] overflow-y-auto">
           <table className="w-full caption-bottom text-sm">
             <thead 
               style={{
@@ -421,7 +545,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                           {provider.hasData && (
                             <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                               <Layers className="h-3 w-3" />
-                              <span>{provider.totalFabrics} telas</span>
+                              <span>{provider.totalFabrics} productos</span>
                             </div>
                           )}
                         </button>
@@ -431,7 +555,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                 </tr>
               ) : (
                 <tr className="bg-gray-50 dark:bg-gray-800 border-b">
-                  <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-left align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     <button
                       onClick={() => handleSort("fabric")}
                       className="flex items-center gap-1 font-semibold hover:text-gray-900 dark:hover:text-gray-100"
@@ -445,7 +569,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ))}
                     </button>
                   </th>
-                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-center align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     <button
                       onClick={() => handleSort("minPrice")}
                       className="flex items-center gap-1 font-semibold hover:text-gray-900 dark:hover:text-gray-100"
@@ -459,13 +583,13 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ))}
                     </button>
                   </th>
-                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-center align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Proveedor
                   </th>
-                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-center align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Fecha
                   </th>
-                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-center align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     <button
                       onClick={() => handleSort("maxPrice")}
                       className="flex items-center gap-1 font-semibold hover:text-gray-900 dark:hover:text-gray-100"
@@ -479,13 +603,13 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                         ))}
                     </button>
                   </th>
-                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-center align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Proveedor
                   </th>
-                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-center align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Fecha
                   </th>
-                  <th className="h-10 px-2 text-center align-middle font-medium text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
+                  <th className="h-10 px-2 text-center align-middle text-muted-foreground font-semibold bg-gray-50 dark:bg-gray-800">
                     Tendencia
                   </th>
                 </tr>
@@ -617,7 +741,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
                     }
                     className="p-2 align-middle text-center py-12 text-gray-500"
                   >
-                    No se encontraron registros de telas
+                    No se encontraron registros de productos
                   </td>
                 </tr>
               )}
@@ -638,7 +762,7 @@ export const PriceHistoryTable = React.forwardRef<PriceHistoryTableRef, PriceHis
             <span className="font-medium">
               {Math.min(currentPage * itemsPerPage, sortedData.length)}
             </span>{" "}
-            de <span className="font-medium">{sortedData.length}</span> telas
+            de <span className="font-medium">{sortedData.length}</span> productos
           </p>
           <div className="flex items-center gap-2">
             <Button

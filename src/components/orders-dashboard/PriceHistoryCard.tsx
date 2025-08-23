@@ -11,12 +11,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { 
   TrendingUp, 
-  ChevronUpIcon, 
-  ChevronDownIcon, 
   DownloadIcon,
   Loader2,
-  FileText,
-  Edit3
+  Edit3,
+  Plus,
+  UserPlus
 } from "lucide-react";
 import {
   Tooltip,
@@ -35,6 +34,9 @@ import { PriceHistoryTable } from "./PriceHistoryTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { PriceEditModal } from "./PriceEditModal";
+import { NewProductModal } from "./NewProductModal";
+import { NewProviderModal } from "./NewProviderModal";
+import { PDFExportService } from "@/lib/pdf-export-service";
 
 interface PriceHistoryCardProps {
   initialFabricIds?: string[];
@@ -50,10 +52,14 @@ interface PriceHistoryTableRef {
 export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
   initialFabricIds = [],
 }) => {
-  const [collapsed, setCollapsed] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [viewMode, setViewMode] = useState<'traditional' | 'provider-matrix'>('traditional');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showNewProductModal, setShowNewProductModal] = useState(false);
+  const [showNewProviderModal, setShowNewProviderModal] = useState(false);
+  const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
+  const [isProviderFilterOpen, setIsProviderFilterOpen] = useState(false);
+  const [selectedFabric, setSelectedFabric] = useState<string>("");
   const tableRef = React.useRef<PriceHistoryTableRef>(null);
   
   const {
@@ -66,6 +72,13 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
     initialFabricIds,
     autoFetch: true,
   });
+
+  // Initialize selected providers when multiProviderData changes
+  React.useEffect(() => {
+    if (multiProviderData?.providers) {
+      setSelectedProviders(multiProviderData.providers.map(p => p.id));
+    }
+  }, [multiProviderData]);
 
 
   const handleExportCSV = () => {
@@ -160,8 +173,7 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
         }
       }
 
-      // Importar el servicio de exportación PDF
-      const { PDFExportService } = await import('@/lib/pdf-export-service');
+      // Obtener instancia del servicio de exportación PDF
       const pdfService = PDFExportService.getInstance();
 
       if (viewMode === 'traditional' && data) {
@@ -257,8 +269,17 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
           filterFabricId = multiProviderData.fabrics[0].fabricId;
         }
 
-        // Ejecutar exportación
-        const result = await pdfService.exportProviderMatrix(filteredData, undefined, undefined, filterFabricId);
+        // Determinar qué proveedores exportar
+        // Si no hay proveedores seleccionados (array vacío), exportar todos
+        const providersToExport = selectedProviders.length > 0 
+          ? selectedProviders 
+          : multiProviderData.providers.map(p => p.id);
+
+        // Ejecutar exportación con proveedores seleccionados
+        const result = await pdfService.exportProviderMatrix(filteredData, {
+          filterFabricId,
+          selectedProviders: providersToExport
+        });
         
         if (result.success) {
           let successMessage = "PDF exportado exitosamente";
@@ -277,6 +298,11 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
           } else if (multiProviderData.fabrics.length === 1) {
             const fabricName = multiProviderData.fabrics[0].fabricName || multiProviderData.fabrics[0].fabricId;
             successMessage += ` para la tela: ${fabricName}`;
+          }
+          
+          // Añadir información sobre proveedores filtrados
+          if (selectedProviders.length > 0 && selectedProviders.length < multiProviderData.providers.length) {
+            successMessage += ` con ${providersToExport.length} proveedor${providersToExport.length === 1 ? '' : 'es'}`;
           }
           
           if (result.fileName) {
@@ -307,7 +333,7 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
 
 
   return (
-    <Card className="w-full">
+    <Card className="w-full shadow h-[85vh] flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex-1">
           <CardTitle className="flex items-center mb-1">
@@ -320,82 +346,78 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
         </div>
         <div className="flex space-x-2">
           <TooltipProvider>
-            {!collapsed && (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={() => setShowEditModal(true)}
-                      disabled={!data || data.fabrics.length === 0}
-                    >
-                      <Edit3 className="h-5 w-5" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Plus className="h-5 w-5" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Editar precios</p>
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" disabled={isExporting}>
-                          {isExporting ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <DownloadIcon className="h-5 w-5" />
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={handleExportCSV} disabled={isExporting}>
-                          <DownloadIcon className="h-4 w-4 mr-2" />
-                          Exportar CSV
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
-                          <FileText className="h-4 w-4 mr-2" />
-                          Exportar PDF
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Exportar datos</p>
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            )}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => setShowNewProductModal(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nuevo Producto
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowNewProviderModal(true)}>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Nuevo Proveedor
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Agregar</p>
+              </TooltipContent>
+            </Tooltip>
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
+                <Button 
+                  variant="ghost" 
                   size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCollapsed(!collapsed);
-                  }}
+                  onClick={() => setShowEditModal(true)}
+                  disabled={!data || data.fabrics.length === 0}
                 >
-                  {collapsed ? (
-                    <ChevronDownIcon className="h-5 w-5" />
-                  ) : (
-                    <ChevronUpIcon className="h-5 w-5" />
-                  )}
+                  <Edit3 className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{collapsed ? "Expandir" : "Colapsar"}</p>
+                <p>Editar precios</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={isExporting}>
+                      {isExporting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <DownloadIcon className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-auto min-w-0">
+                    <DropdownMenuItem onClick={handleExportCSV} disabled={isExporting}>
+                      Exportar CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
+                      Exportar PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Exportar datos</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
       </CardHeader>
 
-      {!collapsed && (
-        <CardContent className="space-y-6">
+      <CardContent className="space-y-6 flex-1 overflow-auto">
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -416,6 +438,12 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
               multiProviderData={multiProviderData}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              selectedProviders={selectedProviders}
+              onSelectedProvidersChange={setSelectedProviders}
+              isProviderFilterOpen={isProviderFilterOpen}
+              onProviderFilterOpenChange={setIsProviderFilterOpen}
+              selectedFabric={selectedFabric}
+              onSelectedFabricChange={setSelectedFabric}
             />
           ) : (
             <div className="flex items-center justify-center h-64 text-gray-500">
@@ -423,7 +451,6 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
             </div>
           )}
         </CardContent>
-      )}
 
       {showEditModal && data && (
         <PriceEditModal
@@ -437,6 +464,39 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
           }}
         />
       )}
+
+      <NewProductModal
+        open={showNewProductModal}
+        onClose={() => setShowNewProductModal(false)}
+        onProductCreated={() => {
+          // Refresh data after successful product creation
+          toast.success("Producto creado exitosamente");
+          fetchPriceHistory(true);
+        }}
+        existingFabricIds={data?.fabrics?.map(f => f.fabricId) || []}
+      />
+
+      <NewProviderModal
+        open={showNewProviderModal}
+        onClose={() => setShowNewProviderModal(false)}
+        onProviderAdded={() => {
+          console.log('🔄 PriceHistoryCard: Provider added, cleaning up overlays');
+          
+          // Force cleanup of any lingering dialog overlays
+          setTimeout(() => {
+            const overlays = document.querySelectorAll('[data-radix-dialog-overlay]');
+            overlays.forEach((overlay) => {
+              console.log('🧹 Removing lingering overlay:', overlay);
+              overlay.remove();
+            });
+          }, 50);
+          
+          // Refresh data after successful provider addition
+          toast.success("Proveedor agregado exitosamente");
+          fetchPriceHistory(true);
+        }}
+        availableFabrics={data?.fabrics || []}
+      />
     </Card>
   );
 };

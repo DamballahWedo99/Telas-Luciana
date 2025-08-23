@@ -178,3 +178,34 @@ export interface PriceUpdateResponse {
   message?: string;
   errors?: string[];
 }
+
+export interface NewProductRequest {
+  fabricName: string;
+  initialPrice: {
+    provider: string;
+    date: string;
+    quantity: number;
+    unit: string;
+  };
+}
+
+export interface NewProductResponse {
+  success: boolean;
+  fabricId?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface NewProviderRequest {
+  fabricId: string;
+  provider: string;
+  date: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface NewProviderResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}

@@ -342,13 +342,13 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     }
     
     if (allowFinancieraEditing) {
-      const financieraValidation = editOrderSchema.pick({
-        tipo_de_cambio: true,
-        total_gastos: true,
-      }).safeParse({
-        tipo_de_cambio: editingOrder.tipo_de_cambio || 0,
-        total_gastos: editingOrder.total_gastos || 0,
-      });
+      const financieraValidation = editOrderSchema
+        .pick({
+          tipo_de_cambio: true,
+        })
+        .safeParse({
+          tipo_de_cambio: editingOrder.tipo_de_cambio || 0,
+        });
       
       if (!financieraValidation.success) {
         financieraValidation.error.errors.forEach((error) => {
@@ -596,15 +596,11 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
       const fechasValidation = editOrderSchema.pick({
         fecha_pedido: true,
         sale_origen: true,
-        llega_a_Lazaro: true,
-        llega_a_Manzanillo: true,
         llega_a_mexico: true,
         llega_almacen_proveedor: true,
       }).safeParse({
         fecha_pedido: editingOrder.fecha_pedido || "",
         sale_origen: editingOrder.sale_origen || "",
-        llega_a_Lazaro: editingOrder.llega_a_Lazaro || "",
-        llega_a_Manzanillo: editingOrder.llega_a_Manzanillo || "",
         llega_a_mexico: editingOrder.llega_a_mexico || "",
         llega_almacen_proveedor: editingOrder.llega_almacen_proveedor || "",
       });
@@ -619,22 +615,30 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     }
 
     if (allowFinancieraEditing) {
-      const financieraValidation = editOrderSchema.pick({
-        m_factura: true,
-        total_factura: true,
+      const orderValidation = editOrderSchema.pick({
         tipo_de_cambio: true,
-        total_gastos: true,
+      }).safeParse({
+        tipo_de_cambio: Number(editingOrder.tipo_de_cambio) || 0,
+      });
+
+      if (!orderValidation.success) {
+        orderValidation.error.errors.forEach((error) => {
+          if (error.path.length > 0) {
+            errors[error.path[0].toString()] = error.message;
+          }
+        });
+      }
+
+      const telaValidation = editTelaSchema.pick({
+        m_factura: true,
         venta: true,
       }).safeParse({
         m_factura: Number(editingOrder.m_factura) || 0,
-        total_factura: Number(editingOrder.total_factura) || 0,
-        tipo_de_cambio: Number(editingOrder.tipo_de_cambio) || 0,
-        total_gastos: Number(editingOrder.total_gastos) || 0,
         venta: Number(editingOrder.venta) || 0,
       });
       
-      if (!financieraValidation.success) {
-        financieraValidation.error.errors.forEach((error) => {
+      if (!telaValidation.success) {
+        telaValidation.error.errors.forEach((error) => {
           if (error.path.length > 0) {
             errors[error.path[0].toString()] = error.message;
           }

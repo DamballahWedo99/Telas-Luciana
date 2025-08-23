@@ -52,20 +52,28 @@ export class PDFExportService {
    */
   public async exportProviderMatrix(
     data: MultiProviderTableData,
-    filename?: string,
-    config?: Partial<PDFExportConfig>,
-    filterFabricId?: string
+    options?: {
+      filename?: string;
+      config?: Partial<PDFExportConfig>;
+      filterFabricId?: string;
+      selectedProviders?: string[];
+    }
   ): Promise<ExportResult> {
     try {
       // Validar datos
       this.validateProviderMatrixData(data);
 
       // Crear exportador con configuración
-      const exporterConfig = this.createExportConfig(config);
+      const exporterConfig = this.createExportConfig(options?.config);
       const exporter = new ProviderMatrixPDFExporter(exporterConfig);
 
-      // Ejecutar exportación
-      const result = await exporter.export(data, filename, filterFabricId);
+      // Ejecutar exportación con proveedores seleccionados
+      const result = await exporter.export(
+        data, 
+        options?.filename, 
+        options?.filterFabricId, 
+        options?.selectedProviders
+      );
 
       return result;
 
@@ -225,19 +233,36 @@ export class PDFExportService {
       }
     });
 
+    // Filter out any null, undefined, or invalid summary entries before validation
+    const validSummaries = data.summary.filter(summary => {
+      return summary != null && 
+             typeof summary === 'object' && 
+             summary.fabricId &&
+             typeof summary.minPrice === 'number' &&
+             typeof summary.maxPrice === 'number' &&
+             typeof summary.avgPrice === 'number' &&
+             isFinite(summary.minPrice) &&
+             isFinite(summary.maxPrice) &&
+             isFinite(summary.avgPrice);
+    });
+    
+    // Update the data with filtered summaries
+    data.summary = validSummaries;
+
     // Validar que el summary tenga la estructura correcta
     data.summary.forEach((summary, index) => {
       if (!summary.fabricId) {
         throw new Error(`Summary ${index + 1}: falta fabricId`);
       }
-      if (typeof summary.minPrice !== 'number') {
-        throw new Error(`Summary ${index + 1}: precio mínimo inválido`);
+      
+      if (typeof summary.minPrice !== 'number' || !isFinite(summary.minPrice)) {
+        throw new Error(`Summary ${index + 1}: precio mínimo inválido (fabricId: ${summary.fabricId}, minPrice: ${summary.minPrice}, type: ${typeof summary.minPrice})`);
       }
-      if (typeof summary.maxPrice !== 'number') {
-        throw new Error(`Summary ${index + 1}: precio máximo inválido`);
+      if (typeof summary.maxPrice !== 'number' || !isFinite(summary.maxPrice)) {
+        throw new Error(`Summary ${index + 1}: precio máximo inválido (fabricId: ${summary.fabricId}, maxPrice: ${summary.maxPrice}, type: ${typeof summary.maxPrice})`);
       }
-      if (typeof summary.avgPrice !== 'number') {
-        throw new Error(`Summary ${index + 1}: precio promedio inválido`);
+      if (typeof summary.avgPrice !== 'number' || !isFinite(summary.avgPrice)) {
+        throw new Error(`Summary ${index + 1}: precio promedio inválido (fabricId: ${summary.fabricId}, avgPrice: ${summary.avgPrice}, type: ${typeof summary.avgPrice})`);
       }
     });
   }

@@ -24,14 +24,16 @@ import {
   Menu,
   Building2,
   TruckIcon,
+  TrendingUp,
 } from "lucide-react";
 
-type ViewType = "inventory" | "orders" | "logistics";
+type ViewType = "inventory" | "orders" | "logistics" | "price-history";
 
 interface NavbarProps {
   currentView: ViewType;
   isMajorAdmin: boolean;
   canAccessProveedores: boolean;
+  canAccessPriceHistory: boolean;
   isLoggingOut: boolean;
   onViewChange: (view: ViewType) => void;
   onOpenFichasTecnicas: () => void;
@@ -63,6 +65,7 @@ export default function Navbar({
   currentView,
   isMajorAdmin,
   canAccessProveedores,
+  canAccessPriceHistory,
   isLoggingOut,
   onViewChange,
   onOpenFichasTecnicas,
@@ -81,6 +84,8 @@ export default function Navbar({
         return "Pedidos Históricos";
       case "logistics":
         return "Logística";
+      case "price-history":
+        return "Historial de Precios";
       default:
         return "Panel de Control";
     }
@@ -138,7 +143,7 @@ export default function Navbar({
                   )}
 
 
-                  {isMajorAdmin && (
+                  {(isMajorAdmin || canAccessPriceHistory) && (
                     <>
                       <div className="border-t my-3"></div>
                       <Button
@@ -152,27 +157,45 @@ export default function Navbar({
                         Inventario
                       </Button>
 
-                      <Button
-                        variant="ghost"
-                        className="justify-start h-12 text-base"
-                        onClick={() =>
-                          handleMenuAction(() => onViewChange("orders"))
-                        }
-                      >
-                        <BarChart className="mr-3 h-5 w-5" />
-                        Pedidos Históricos
-                      </Button>
+                      {isMajorAdmin && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            className="justify-start h-12 text-base"
+                            onClick={() =>
+                              handleMenuAction(() => onViewChange("orders"))
+                            }
+                          >
+                            <BarChart className="mr-3 h-5 w-5" />
+                            Pedidos Históricos
+                          </Button>
 
-                      <Button
-                        variant="ghost"
-                        className="justify-start h-12 text-base"
-                        onClick={() =>
-                          handleMenuAction(() => onViewChange("logistics"))
-                        }
-                      >
-                        <TruckIcon className="mr-3 h-5 w-5" />
-                        Logística
-                      </Button>
+                          <Button
+                            variant="ghost"
+                            className="justify-start h-12 text-base"
+                            onClick={() =>
+                              handleMenuAction(() => onViewChange("logistics"))
+                            }
+                          >
+                            <TruckIcon className="mr-3 h-5 w-5" />
+                            Logística
+                          </Button>
+                        </>
+                      )}
+
+                      {/* Historial de Precios oculto en móviles por diseño no responsivo */}
+                      {/* {canAccessPriceHistory && (
+                        <Button
+                          variant="ghost"
+                          className="justify-start h-12 text-base"
+                          onClick={() =>
+                            handleMenuAction(() => onViewChange("price-history"))
+                          }
+                        >
+                          <TrendingUp className="mr-3 h-5 w-5" />
+                          Historial de Precios
+                        </Button>
+                      )} */}
                     </>
                   )}
 
@@ -245,7 +268,7 @@ export default function Navbar({
         )}
 
 
-        {isMajorAdmin && (
+        {(isMajorAdmin || canAccessPriceHistory) && (
           <Sheet>
             <TooltipProvider>
               <Tooltip>
@@ -272,24 +295,41 @@ export default function Navbar({
                   onClick={() => onViewChange("inventory")}
                 >
                   <LayoutDashboardIcon className="mr-3 h-5 w-5" />
-                  Dashboard de Inventario
+                  Inventario
                 </Button>
-                <Button
-                  variant={currentView === "orders" ? "default" : "ghost"}
-                  className="justify-start h-12 text-base"
-                  onClick={() => onViewChange("orders")}
-                >
-                  <BarChart className="mr-3 h-5 w-5" />
-                  Dashboard de Pedidos
-                </Button>
-                <Button
-                  variant={currentView === "logistics" ? "default" : "ghost"}
-                  className="justify-start h-12 text-base"
-                  onClick={() => onViewChange("logistics")}
-                >
-                  <TruckIcon className="mr-3 h-5 w-5" />
-                  Dashboard de Logística
-                </Button>
+                
+                {isMajorAdmin && (
+                  <>
+                    <Button
+                      variant={currentView === "orders" ? "default" : "ghost"}
+                      className="justify-start h-12 text-base"
+                      onClick={() => onViewChange("orders")}
+                    >
+                      <BarChart className="mr-3 h-5 w-5" />
+                      Pedidos históricos
+                    </Button>
+                    
+                    <Button
+                      variant={currentView === "logistics" ? "default" : "ghost"}
+                      className="justify-start h-12 text-base"
+                      onClick={() => onViewChange("logistics")}
+                    >
+                      <TruckIcon className="mr-3 h-5 w-5" />
+                      Logística
+                    </Button>
+                  </>
+                )}
+                
+                {canAccessPriceHistory && (
+                  <Button
+                    variant={currentView === "price-history" ? "default" : "ghost"}
+                    className="justify-start h-12 text-base"
+                    onClick={() => onViewChange("price-history")}
+                  >
+                    <TrendingUp className="mr-3 h-5 w-5" />
+                    Historial de Precios
+                  </Button>
+                )}
               </div>
             </SheetContent>
           </Sheet>

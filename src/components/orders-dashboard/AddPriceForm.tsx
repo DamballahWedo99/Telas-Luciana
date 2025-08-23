@@ -40,7 +40,7 @@ interface AddPriceFormProps {
   existingDates?: string[]; // To check for duplicates
 }
 
-const COMMON_UNITS = ['kg', 'mt', 'yrd', 'pza', 'lt'];
+const COMMON_UNITS = ['kg', 'mt'];
 
 export const AddPriceForm: React.FC<AddPriceFormProps> = ({
   provider,

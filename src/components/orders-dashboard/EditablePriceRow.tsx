@@ -42,7 +42,7 @@ interface EditablePriceRowProps {
   validateEntry: (entry: Partial<PriceHistoryEntry>) => ValidationError[];
 }
 
-const COMMON_UNITS = ['kg', 'mt', 'yrd', 'pza', 'lt'];
+const COMMON_UNITS = ['kg', 'mt'];
 
 export const EditablePriceRow: React.FC<EditablePriceRowProps> = ({
   entry,
@@ -224,8 +224,11 @@ export const EditablePriceRow: React.FC<EditablePriceRowProps> = ({
           <div className="space-y-1">
             <Input
               type="number"
-              value={localData.quantity}
-              onChange={(e) => handleFieldChange('quantity', parseFloat(e.target.value) || 0)}
+              value={entry.isNew && localData.quantity === 0 ? '' : localData.quantity}
+              onChange={(e) => {
+                const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
+                handleFieldChange('quantity', value);
+              }}
               className={`w-full ${quantityErrors.length > 0 ? 'border-red-500' : ''}`}
               placeholder="0.00"
               step="0.01"

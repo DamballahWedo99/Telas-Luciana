@@ -4,6 +4,7 @@ import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Command,
   CommandEmpty,
@@ -13,13 +14,22 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-interface FabricOption {
-  fabricId: string;
-  fabricName: string;
+interface ProviderStats {
+  totalEntries: number;
+  hasChanges: boolean;
+  newEntries: number;
+  changedEntries: number;
+  deletedEntries: number;
 }
 
-interface FabricComboboxProps {
-  fabrics: FabricOption[];
+interface ProviderOption {
+  providerId: string;
+  providerName: string;
+  stats?: ProviderStats;
+}
+
+interface ProviderComboboxProps {
+  providers: ProviderOption[];
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
@@ -27,34 +37,34 @@ interface FabricComboboxProps {
   disabled?: boolean;
 }
 
-export function FabricCombobox({
-  fabrics,
+export function ProviderCombobox({
+  providers,
   value,
   onValueChange,
-  placeholder = "Seleccionar tela...",
+  placeholder = "Seleccionar proveedor...",
   className,
   disabled = false,
-}: FabricComboboxProps) {
+}: ProviderComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Find the selected fabric
-  const selectedFabric = React.useMemo(() => {
-    return fabrics.find((fabric) => fabric.fabricId === value);
-  }, [fabrics, value]);
+  // Find the selected provider
+  const selectedProvider = React.useMemo(() => {
+    return providers.find((provider) => provider.providerId === value);
+  }, [providers, value]);
 
-  // Filter fabrics based on search
-  const filteredFabrics = React.useMemo(() => {
-    if (!search) return fabrics;
+  // Filter providers based on search
+  const filteredProviders = React.useMemo(() => {
+    if (!search) return providers;
     
     const searchLower = search.toLowerCase();
-    return fabrics.filter(
-      (fabric) =>
-        fabric.fabricName.toLowerCase().includes(searchLower) ||
-        fabric.fabricId.toLowerCase().includes(searchLower)
+    return providers.filter(
+      (provider) =>
+        provider.providerName.toLowerCase().includes(searchLower) ||
+        provider.providerId.toLowerCase().includes(searchLower)
     );
-  }, [fabrics, search]);
+  }, [providers, search]);
 
   // Handle selection
   const handleSelect = React.useCallback((selectedValue: string) => {
@@ -125,20 +135,28 @@ export function FabricCombobox({
         type="button"
         onClick={handleButtonClick}
       >
-        <span className="truncate">
-          {selectedFabric ? selectedFabric.fabricName : placeholder}
+        <span className="truncate flex items-center space-x-2">
+          <span>{selectedProvider ? selectedProvider.providerName : placeholder}</span>
+          {selectedProvider?.stats?.hasChanges && (
+            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+          )}
+          {selectedProvider?.stats && selectedProvider.stats.totalEntries > 0 && (
+            <Badge variant="outline" className="text-xs">
+              {selectedProvider.stats.totalEntries}
+            </Badge>
+          )}
         </span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
       
       {open && (
         <div 
-          className="absolute top-full left-0 w-full min-w-[400px] mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-0"
+          className="absolute top-full left-0 w-full min-w-[300px] mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-0"
           style={{ zIndex: 9999 }}
         >
           <Command shouldFilter={false}>
             <CommandInput 
-              placeholder="Buscar tela..." 
+              placeholder="Buscar proveedor..." 
               className="h-9"
               value={search}
               onValueChange={handleSearchChange}
@@ -146,23 +164,35 @@ export function FabricCombobox({
             />
             <CommandList className="max-h-[300px] overflow-y-auto">
               <CommandEmpty>
-                No se encontraron telas.
+                No se encontraron proveedores.
               </CommandEmpty>
               <CommandGroup>
-                {filteredFabrics.map((fabric) => (
+                {filteredProviders.map((provider) => (
                   <CommandItem
-                    key={fabric.fabricId}
-                    value={fabric.fabricId}
-                    onSelect={() => handleSelect(fabric.fabricId)}
+                    key={provider.providerId}
+                    value={provider.providerId}
+                    onSelect={() => handleSelect(provider.providerId)}
                     className="cursor-pointer"
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        value === fabric.fabricId ? "opacity-100" : "opacity-0"
+                        value === provider.providerId ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <span className="font-medium">{fabric.fabricName}</span>
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium">{provider.providerName}</span>
+                        {provider.stats?.hasChanges && (
+                          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                        )}
+                      </div>
+                      {provider.stats && provider.stats.totalEntries > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {provider.stats.totalEntries}
+                        </Badge>
+                      )}
+                    </div>
                   </CommandItem>
                 ))}
               </CommandGroup>

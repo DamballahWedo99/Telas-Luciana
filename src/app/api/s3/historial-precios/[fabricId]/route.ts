@@ -96,7 +96,7 @@ export async function GET(
 
           const fabricHistory: FabricPriceHistory = {
             fabricId,
-            fabricName: fabricId.replace(/\.(json|JSON)$/, ''),
+            fabricName: fabricId.replace(/\.(json|JSON)$/, '').replace(/_/g, ' '),
             history,
             lastUpdated: new Date().toISOString(),
           };

@@ -6,7 +6,32 @@ import { OrdersMetricsSection } from "./OrdersMetricsSection";
 import { OrdersChartsCard } from "./OrdersChartsCard";
 import { OrdersCard } from "./OrdersCard";
 import { PendingOrdersCard } from "./PendingOrdersCard";
-import { PriceHistoryCard } from "./PriceHistoryCard";
+
+interface OrderItem {
+  num_archivo?: number | null;
+  proveedor?: string | null;
+  contacto?: string | null;
+  email?: string | null;
+  teléfono?: number | null;
+  celular?: number | null;
+  origen?: string | null;
+  incoterm?: string | null;
+  transportista?: string | null;
+  agente_aduanal?: string | null;
+  pedimento?: string | null;
+  fecha_pedido?: string | null;
+  sale_origen?: string | null;
+  [key: string]: string | number | null | undefined;
+}
+
+interface PendingOrder {
+  orden_de_compra: string;
+  proveedor: string | null;
+  total_items: number;
+  items: OrderItem[];
+  fecha_creacion?: string;
+  missing_fields: string[];
+}
 
 interface PedidoData {
   num_archivo?: number;
@@ -893,7 +918,7 @@ const PedidosDashboard: React.FC = () => {
               data={data}
               fetchPendingOrdersCount={fetchPendingOrdersCount}
               initialPendingCount={pendingOrdersCount}
-              pendingOrdersData={pendingOrdersData}
+              pendingOrdersData={pendingOrdersData as PendingOrder[]}
             />
           )}
 
@@ -945,10 +970,6 @@ const PedidosDashboard: React.FC = () => {
               colorFilter={colorFilter}
               ubicacionFilter={ubicacionFilter}
             />
-
-            <div className="hidden md:block">
-              <PriceHistoryCard />
-            </div>
           </div>
         </div>
       )}

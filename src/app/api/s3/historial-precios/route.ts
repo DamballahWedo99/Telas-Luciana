@@ -139,13 +139,12 @@ function calculateSummary(
   const validEntries = history.filter(h => h.quantity > 0);
   const quantities = validEntries.map(h => h.quantity);
   
+  // If no valid entries with price > 0, return null
+  if (quantities.length === 0) return null;
+  
   const currentPrice = sortedHistory[0]?.quantity || 0;
   const previousPrice = sortedHistory[1]?.quantity || currentPrice;
-  const priceChange = currentPrice - previousPrice;
-  const priceChangePercent = previousPrice > 0 
-    ? (priceChange / previousPrice) * 100 
-    : 0;
-
+  
   const avgPrice = quantities.reduce((sum, q) => sum + q, 0) / quantities.length;
   const minPrice = Math.min(...quantities);
   const maxPrice = Math.max(...quantities);
@@ -154,13 +153,42 @@ function calculateSummary(
   const minPriceEntry = validEntries.find(entry => entry.quantity === minPrice);
   const maxPriceEntry = validEntries.find(entry => entry.quantity === maxPrice);
 
+  // Calculate trend based on most recent min vs max prices
+  // The trend shows if the current price is closer to min (down trend) or max (up trend)
   let trend: 'up' | 'down' | 'stable' = 'stable';
-  if (priceChangePercent > 1) trend = 'up';
-  else if (priceChangePercent < -1) trend = 'down';
+  let priceChange = 0;
+  let priceChangePercent = 0;
+  
+  // If we have different min and max prices, calculate trend based on position
+  if (minPrice !== maxPrice && minPrice > 0) {
+    // Calculate where the current price sits between min and max
+    const range = maxPrice - minPrice;
+    const positionInRange = ((currentPrice - minPrice) / range) * 100;
+    
+    // Price change represents how far from the minimum we are
+    priceChange = currentPrice - minPrice;
+    priceChangePercent = (priceChange / minPrice) * 100;
+    
+    // Determine trend based on position in the range
+    if (positionInRange > 60) {
+      trend = 'up'; // Price is in the upper 40% of the range (closer to max)
+    } else if (positionInRange < 40) {
+      trend = 'down'; // Price is in the lower 40% of the range (closer to min)
+    } else {
+      trend = 'stable'; // Price is in the middle range
+    }
+  } else if (previousPrice > 0 && currentPrice !== previousPrice) {
+    // Fallback to comparing with previous price if min/max are the same
+    priceChange = currentPrice - previousPrice;
+    priceChangePercent = (priceChange / previousPrice) * 100;
+    
+    if (priceChangePercent > 1) trend = 'up';
+    else if (priceChangePercent < -1) trend = 'down';
+  }
 
   return {
     fabricId,
-    fabricName: fabricId.replace(/\.(json|JSON)$/, ''),
+    fabricName: fabricId.replace(/\.(json|JSON)$/, '').replace(/_/g, ' '),
     currentPrice,
     previousPrice,
     priceChange,
@@ -204,7 +232,7 @@ async function listAvailableFabrics(): Promise<FabricMetadata[]> {
             
             fabrics.push({
               id: fabricId,
-              name: fabricId,
+              name: fabricId.replace(/\.(json|JSON)$/, '').replace(/_/g, ' '),
               hasHistory: true,
               entryCount: 0,
               lastUpdate: item.LastModified?.toISOString() || '',
@@ -265,7 +293,7 @@ export async function GET(req: NextRequest) {
             if (history.length > 0) {
               fabrics.push({
                 fabricId,
-                fabricName: fabricId,
+                fabricName: fabricId.replace(/\.(json|JSON)$/, '').replace(/_/g, ' '),
                 history,
                 lastUpdated: new Date().toISOString(),
               });

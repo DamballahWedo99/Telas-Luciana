@@ -4,7 +4,7 @@ import { LayoutStrategy, LayoutStrategyType, StrategySelection, ExportResult, PD
 import { CompactLayoutStrategy } from './strategies/compact-layout-strategy';
 import { StandardLayoutStrategy } from './strategies/standard-layout-strategy';
 import { MultiTableLayoutStrategy } from './strategies/multi-table-layout-strategy';
-import { MultiProviderTableData } from '@/types/price-history';
+import { MultiProviderTableData, ProviderPriceData } from '@/types/price-history';
 
 export class ProviderMatrixPDFExporter {
   private strategy!: LayoutStrategy;
@@ -23,7 +23,7 @@ export class ProviderMatrixPDFExporter {
     }
   }
 
-  async export(data: MultiProviderTableData, filename?: string, filterFabricId?: string): Promise<ExportResult> {
+  async export(data: MultiProviderTableData, filename?: string, filterFabricId?: string, selectedProviders?: string[]): Promise<ExportResult> {
     try {
       // Aplicar filtro por tela específica si se proporciona
       let filteredData = data;
@@ -37,6 +37,35 @@ export class ProviderMatrixPDFExporter {
           return {
             success: false,
             error: `No se encontró la tela con ID: ${filterFabricId}`
+          };
+        }
+      }
+
+      // Aplicar filtro de proveedores si se proporciona
+      // Si selectedProviders está vacío o undefined, incluir todos los proveedores
+      if (selectedProviders && selectedProviders.length > 0) {
+        // Filtrar proveedores en los datos
+        filteredData = {
+          ...filteredData,
+          providers: filteredData.providers.filter(provider => 
+            selectedProviders.includes(provider.id)
+          ),
+          // También filtrar los datos de proveedores en cada tela
+          fabrics: filteredData.fabrics.map(fabric => ({
+            ...fabric,
+            providers: Object.keys(fabric.providers).reduce((acc, providerId) => {
+              if (selectedProviders.includes(providerId)) {
+                acc[providerId] = fabric.providers[providerId];
+              }
+              return acc;
+            }, {} as Record<string, ProviderPriceData | null>)
+          }))
+        };
+        
+        if (filteredData.providers.length === 0) {
+          return {
+            success: false,
+            error: 'No se encontraron proveedores seleccionados'
           };
         }
       }

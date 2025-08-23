@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "../globals.css";
 import { Nav } from "@/components/static/Nav";
 import { Footer } from "@/components/static/Footer";
-import { Toaster } from "@/components/ui/sonner";
+// Removed duplicate toaster import - using root layout toaster
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,7 +26,6 @@ export default function RootLayout({
             <Nav />
           </div>
           <main className="flex-grow">{children}</main>
-          <Toaster />
           <Footer />
         </div>
       </body>

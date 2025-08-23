@@ -305,8 +305,18 @@ export function processMultiProviderData(data: PriceHistoryResponse): MultiProvi
   };
 }
 
-// Format date for display in the table
+// Format date for display in the table without timezone issues
 export function formatTableDate(dateStr: string): string {
+  if (!dateStr) return '';
+  
+  // Handle dates in YYYY-MM-DD format (avoid timezone conversion)
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3) {
+    const [year, month] = parts;
+    return `${month}/${year.slice(2)}`;
+  }
+  
+  // Fallback for other formats
   try {
     const date = new Date(dateStr);
     return date.toLocaleDateString('es-ES', { 
@@ -318,8 +328,18 @@ export function formatTableDate(dateStr: string): string {
   }
 }
 
-// Format full date for display in expanded entries
+// Format full date for display in expanded entries without timezone issues
 export function formatFullDate(dateStr: string): string {
+  if (!dateStr) return '';
+  
+  // Handle dates in YYYY-MM-DD format (avoid timezone conversion)
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  }
+  
+  // Fallback for other formats
   try {
     const date = new Date(dateStr);
     return date.toLocaleDateString('es-ES', { 
@@ -342,8 +362,18 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-// Format date for min/max display (DD/MM/YYYY format)
+// Format date for min/max display (DD/MM/YYYY format) without timezone issues
 export function formatMinMaxDate(dateStr: string): string {
+  if (!dateStr) return '';
+  
+  // Handle dates in YYYY-MM-DD format (avoid timezone conversion)
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  }
+  
+  // Fallback for other formats
   try {
     const date = new Date(dateStr);
     return date.toLocaleDateString('es-ES', { 

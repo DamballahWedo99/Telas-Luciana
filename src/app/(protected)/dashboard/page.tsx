@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import Dashboard from "@/components/inventory-dashboard/InventoryDashboard";
 import PedidosDashboard from "@/components/orders-dashboard/OrdersDashboard";
 import LogisticsDashboard from "@/components/logistics-dashboard/LogisticsDashboard";
+import PriceHistoryDashboard from "@/components/price-history-dashboard/PriceHistoryDashboard";
 import FichasTecnicasDialog from "@/components/fichas-tecnicas/FichasTecnicasDialog";
 import ClientesDialog from "@/components/directorio/ClientesDialog";
 import ProveedoresDialog from "@/components/proveedores/ProveedoresDialog";
@@ -15,7 +16,7 @@ import Navbar from "@/components/NavBar";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useUserVerification } from "@/hooks/useUserVerification";
 
-type ViewType = "inventory" | "orders" | "logistics";
+type ViewType = "inventory" | "orders" | "logistics" | "price-history";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -30,6 +31,7 @@ export default function DashboardPage() {
 
   const isMajorAdmin = session?.user?.role === "major_admin";
   const canAccessProveedores = session?.user?.role === "admin" || session?.user?.role === "major_admin";
+  const canAccessPriceHistory = session?.user?.role === "admin" || session?.user?.role === "major_admin";
 
   useEffect(() => {
     console.log("📊 [Dashboard] Estado actual:", {
@@ -108,6 +110,7 @@ export default function DashboardPage() {
             currentView={currentView}
             isMajorAdmin={isMajorAdmin}
             canAccessProveedores={canAccessProveedores}
+            canAccessPriceHistory={canAccessPriceHistory}
             isLoggingOut={isLoggingOut}
             onViewChange={handleViewChange}
             onOpenFichasTecnicas={handleOpenFichasTecnicas}
@@ -119,9 +122,11 @@ export default function DashboardPage() {
 
         {currentView === "inventory" && <Dashboard />}
 
-        {currentView === "orders" && <PedidosDashboard />}
+        {currentView === "orders" && isMajorAdmin && <PedidosDashboard />}
 
-        {currentView === "logistics" && <LogisticsDashboard />}
+        {currentView === "logistics" && isMajorAdmin && <LogisticsDashboard />}
+
+        {currentView === "price-history" && canAccessPriceHistory && <PriceHistoryDashboard />}
 
         <FichasTecnicasDialog
           open={openFichasTecnicas}

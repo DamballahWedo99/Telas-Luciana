@@ -18,12 +18,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -35,6 +29,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { FabricCombobox } from "@/components/ui/fabric-combobox";
+import { ProviderCombobox } from "@/components/ui/provider-combobox";
 import { usePriceEditing } from "@/hooks/usePriceEditing";
 import { ProviderTabContent } from "./ProviderTabContent";
 import type {
@@ -214,8 +209,8 @@ export const PriceEditModal: React.FC<PriceEditModalProps> = ({
             </div>
           </DialogTitle>
 
-          {/* Fabric selector */}
-          <div className="flex items-center space-x-4 mt-4">
+          {/* Fabric and Provider selectors */}
+          <div className="flex items-center space-x-6 mt-4">
             <div className="flex items-center space-x-2">
               <span className="text-sm font-medium">Tela:</span>
               <FabricCombobox
@@ -229,9 +224,28 @@ export const PriceEditModal: React.FC<PriceEditModalProps> = ({
                   initializeFabricForEditing(fabricId);
                 }}
                 placeholder="Seleccionar tela"
-                className="w-64"
+                className="w-64 h-8"
               />
             </div>
+            
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium">Proveedor:</span>
+              <ProviderCombobox
+                providers={availableProviders.map(provider => {
+                  const stats = getProviderStats(provider);
+                  return {
+                    providerId: provider,
+                    providerName: provider,
+                    stats
+                  };
+                })}
+                value={activeProvider}
+                onValueChange={setActiveProvider}
+                placeholder="Seleccionar proveedor"
+                className="w-48 h-8"
+              />
+            </div>
+            
             {selectedFabricData && (
               <div className="text-sm text-gray-600">
                 {selectedFabricData.history.length} registro{selectedFabricData.history.length !== 1 ? 's' : ''} total{selectedFabricData.history.length !== 1 ? 'es' : ''}
@@ -261,59 +275,31 @@ export const PriceEditModal: React.FC<PriceEditModalProps> = ({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden">
-          {availableProviders.length > 0 && selectedFabric ? (
-            <Tabs value={activeProvider} onValueChange={setActiveProvider} className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-7 flex-shrink-0">
-                {availableProviders.map((provider) => {
-                  const stats = getProviderStats(provider);
-                  return (
-                    <TabsTrigger 
-                      key={provider} 
-                      value={provider}
-                      className="relative"
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>{provider}</span>
-                        {stats.hasChanges && (
-                          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                        )}
-                      </div>
-                      {stats.totalEntries > 0 && (
-                        <Badge variant="outline" className="ml-1 text-xs">
-                          {stats.totalEntries}
-                        </Badge>
-                      )}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-
-              <div className="flex-1 overflow-hidden">
-                {availableProviders.map((provider) => (
-                  <TabsContent 
-                    key={provider} 
-                    value={provider}
-                    className="h-full overflow-hidden data-[state=active]:flex data-[state=active]:flex-col"
-                  >
-                    <ProviderTabContent
-                      provider={provider}
-                      entries={getEntriesForProvider(selectedFabric, provider)}
-                      onAddEntry={() => addNewEntry(selectedFabric, provider)}
-                      onUpdateEntry={(entryId, data) => updateEntry(selectedFabric, provider, entryId, data)}
-                      onDeleteEntry={(entryId) => deleteEntry(selectedFabric, provider, entryId)}
-                      onCancelEdit={(entryId) => cancelEdit(selectedFabric, provider, entryId)}
-                      validateEntry={validateEntry}
-                      errors={currentProviderErrors}
-                    />
-                  </TabsContent>
-                ))}
-              </div>
-            </Tabs>
+          {availableProviders.length > 0 && selectedFabric && activeProvider ? (
+            <div className="h-full flex flex-col">
+              <ProviderTabContent
+                provider={activeProvider}
+                entries={getEntriesForProvider(selectedFabric, activeProvider)}
+                onAddEntry={() => addNewEntry(selectedFabric, activeProvider)}
+                onUpdateEntry={(entryId, data) => updateEntry(selectedFabric, activeProvider, entryId, data)}
+                onDeleteEntry={(entryId) => deleteEntry(selectedFabric, activeProvider, entryId)}
+                onCancelEdit={(entryId) => cancelEdit(selectedFabric, activeProvider, entryId)}
+                validateEntry={validateEntry}
+                errors={currentProviderErrors}
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-center h-64 text-gray-500">
               <div className="text-center">
                 <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                <p>No hay datos disponibles para esta tela</p>
+                <p>
+                  {!selectedFabric 
+                    ? "Selecciona una tela para continuar"
+                    : availableProviders.length === 0 
+                    ? "No hay datos disponibles para esta tela"
+                    : "Selecciona un proveedor para continuar"
+                  }
+                </p>
               </div>
             </div>
           )}
