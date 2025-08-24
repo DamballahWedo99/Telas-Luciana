@@ -31,6 +31,7 @@ import {
   Loader2Icon,
   AlertCircleIcon,
   CheckCircleIcon,
+  TrashIcon,
 } from "lucide-react";
 import { InventoryItem } from "../../../types/types";
 
@@ -80,6 +81,9 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   const [showCostsDialog, setShowCostsDialog] = useState(false);
   const [fabricsWithCosts, setFabricsWithCosts] = useState<PendingFabric[]>([]);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [ocToDelete, setOcToDelete] = useState<GroupedByOC | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const initialCheckRef = useRef(false);
 
@@ -374,6 +378,82 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
     return true;
   };
 
+  const handleDeleteOC = (ocGroup: GroupedByOC) => {
+    console.log(
+      "🗑️ [PendingFabricsCard] Preparando eliminación de OC:",
+      ocGroup.oc
+    );
+    setOcToDelete(ocGroup);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!ocToDelete) return;
+
+    console.log(
+      "🗑️ [PendingFabricsCard] Confirmando eliminación de OC:",
+      ocToDelete.oc
+    );
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch("/api/packing-list/delete-pending", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          oc: ocToDelete.oc,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al eliminar los registros");
+      }
+
+      const result = await response.json();
+      console.log(
+        "✅ [PendingFabricsCard] Registros eliminados exitosamente:",
+        result
+      );
+
+      // Optimistic UI update - remove deleted OC from list
+      setGroupedByOC((prev) => prev.filter((group) => group.oc !== ocToDelete.oc));
+
+      setShowDeleteDialog(false);
+      setOcToDelete(null);
+
+      const description = result.totalDeletedRolls > 0 
+        ? `Se eliminaron ${result.totalDeletedFabrics} telas y ${result.totalDeletedRolls} rollos`
+        : `Se eliminaron ${result.totalDeletedFabrics} telas`;
+
+      toast.success(
+        `OC ${ocToDelete.oc} eliminada completamente del sistema`,
+        {
+          description: description,
+          duration: 5000,
+        }
+      );
+
+      // Refresh pending files after deletion
+      console.log(
+        "🔧 [PendingFabricsCard] TRIGGER 5: Verificación post-eliminación"
+      );
+      setTimeout(() => {
+        checkPendingFiles();
+      }, 1000);
+    } catch (error) {
+      console.error("❌ [PendingFabricsCard] Error al eliminar OC:", error);
+      toast.error("Error al eliminar los registros", {
+        description: "Por favor, intenta de nuevo o contacta al administrador",
+        duration: 5000,
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleSaveCosts = async () => {
     if (!validateCosts() || !selectedOCGroup) return;
 
@@ -574,6 +654,27 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteOC(ocGroup)}
+                          className="flex items-center gap-2 border-red-300 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                          Eliminar
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>
+                          Eliminar las {ocGroup.totalFabrics} telas de esta OC del sistema
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
             ))}
@@ -669,6 +770,96 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
                 <>
                   <CheckCircleIcon className="h-4 w-4" />
                   Guardar Costos
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">
+              ⚠️ Confirmar Eliminación
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas eliminar la OC <strong>{ocToDelete?.oc}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircleIcon className="h-5 w-5 text-red-600 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm text-red-800 font-medium">
+                    Esta acción eliminará permanentemente:
+                  </p>
+                  <ul className="mt-2 text-sm text-red-700 space-y-1">
+                    <li>• {ocToDelete?.totalFabrics} telas de esta OC</li>
+                    <li>• {ocToDelete?.fileNames.length} archivo{ocToDelete?.fileNames.length !== 1 ? 's' : ''} asociado{ocToDelete?.fileNames.length !== 1 ? 's' : ''}</li>
+                    <li>• Todos los rollos asociados a esta OC</li>
+                    <li>• Todos los archivos de inventario procesados</li>
+                    <li>• Todos los registros pending relacionados</li>
+                  </ul>
+                  <p className="mt-3 text-sm text-red-800 font-medium">
+                    Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {ocToDelete && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700">
+                  Telas que serán eliminadas:
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {ocToDelete.fabrics.slice(0, 5).map((fabric, index) => (
+                    <span
+                      key={index}
+                      className="inline-block px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs"
+                    >
+                      {fabric.tela} {fabric.color} ({formatNumber(fabric.cantidad)} {fabric.unidades})
+                    </span>
+                  ))}
+                  {ocToDelete.fabrics.length > 5 && (
+                    <span className="inline-block px-2 py-1 bg-gray-200 text-gray-600 rounded-full text-xs">
+                      +{ocToDelete.fabrics.length - 5} más
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setOcToDelete(null);
+              }}
+              disabled={isDeleting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="flex items-center gap-2"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <TrashIcon className="h-4 w-4" />
+                  Eliminar OC
                 </>
               )}
             </Button>
