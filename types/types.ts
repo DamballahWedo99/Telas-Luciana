@@ -87,3 +87,30 @@ export interface FilterOptions {
   colorFilter: string;
   ubicacionFilter: string;
 }
+
+// Tipos para Packing List Edit Modal
+export interface PackingListRoll {
+  rollo_id: string;
+  OC: string;
+  tela: string;
+  color: string;
+  lote: string;
+  unidad: "KG" | "MTS";
+  cantidad: number;
+  fecha_ingreso: string;
+  status: string;
+}
+
+export interface PackingListEditData {
+  oc: string;
+  fileName: string;
+  lastModified: string;
+  rolls: PackingListRoll[];
+}
+
+export interface AvailableOrder {
+  oc: string;
+  fileName: string;
+  rollCount: number;
+  lastModified: string;
+}

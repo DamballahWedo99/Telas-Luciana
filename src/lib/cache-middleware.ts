@@ -53,7 +53,6 @@ export function withCache(
     if (skipCacheForLastLogin) {
       const url = new URL(req.url);
       if (url.searchParams.get("includeActivity") === "true") {
-        console.log("🚫 Skipping cache for lastLogin activity data");
         return handler(req);
       }
     }
@@ -73,15 +72,34 @@ export function withCache(
       if (cached) {
         onCacheHit?.(cacheKey);
 
+        // Handle arrays properly - don't use spread operator on arrays
+        const responseData = Array.isArray(cached) 
+          ? cached  // Keep arrays as arrays
+          : {       // Only spread objects
+              ...cached,
+            };
+
+        // Add cache metadata without breaking array structure
+        const finalResponse = Array.isArray(responseData)
+          ? {
+              data: responseData,
+              _cache: {
+                hit: true,
+                key: cacheKey,
+                timestamp: new Date().toISOString(),
+              },
+            }
+          : {
+              ...responseData,
+              _cache: {
+                hit: true,
+                key: cacheKey,
+                timestamp: new Date().toISOString(),
+              },
+            };
+
         return new NextResponse(
-          JSON.stringify({
-            ...cached,
-            _cache: {
-              hit: true,
-              key: cacheKey,
-              timestamp: new Date().toISOString(),
-            },
-          }),
+          JSON.stringify(finalResponse),
           {
             status: 200,
             headers: {
@@ -108,15 +126,27 @@ export function withCache(
           await cacheRedis.setex(cacheKey, ttl, JSON.stringify(responseData));
         }
 
+        // Handle arrays properly for cache MISS as well
+        const finalResponse = Array.isArray(responseData)
+          ? {
+              data: responseData,
+              _cache: {
+                hit: false,
+                key: cacheKey,
+                timestamp: new Date().toISOString(),
+              },
+            }
+          : {
+              ...responseData,
+              _cache: {
+                hit: false,
+                key: cacheKey,
+                timestamp: new Date().toISOString(),
+              },
+            };
+
         return new NextResponse(
-          JSON.stringify({
-            ...responseData,
-            _cache: {
-              hit: false,
-              key: cacheKey,
-              timestamp: new Date().toISOString(),
-            },
-          }),
+          JSON.stringify(finalResponse),
           {
             status: 200,
             headers: {
@@ -214,7 +244,6 @@ export async function getCachedHistoricalData(): Promise<unknown[] | null> {
     
     if (cached) {
       const currentYear = new Date().getFullYear();
-      console.log(`🧊 Datos históricos (2015-${currentYear-1}) servidos desde cache consolidado`);
       return typeof cached === 'string' ? JSON.parse(cached) : cached;
     }
     
@@ -231,7 +260,6 @@ export async function setCachedHistoricalData(data: unknown[]): Promise<boolean>
     const currentYear = new Date().getFullYear();
     
     await cacheRedis.setex(cacheKeys.historicalConsolidated, YEAR_CACHE_TTL.HISTORICAL_YEAR, JSON.stringify(data));
-    console.log(`🧊 Datos históricos (2015-${currentYear-1}) almacenados en cache consolidado (TTL: ${YEAR_CACHE_TTL.HISTORICAL_YEAR}s)`);
     
     return true;
   } catch (error) {
@@ -247,7 +275,6 @@ export async function getCachedCurrentYearData(): Promise<unknown[] | null> {
     
     if (cached) {
       const currentYear = new Date().getFullYear();
-      console.log(`⚡ Año actual (${currentYear}) servido desde cache`);
       return typeof cached === 'string' ? JSON.parse(cached) : cached;
     }
     
@@ -264,7 +291,6 @@ export async function setCachedCurrentYearData(data: unknown[]): Promise<boolean
     const currentYear = new Date().getFullYear();
     
     await cacheRedis.setex(cacheKeys.currentYear, YEAR_CACHE_TTL.CURRENT_YEAR, JSON.stringify(data));
-    console.log(`⚡ Año actual (${currentYear}) almacenado en cache (TTL: ${YEAR_CACHE_TTL.CURRENT_YEAR}s)`);
     
     return true;
   } catch (error) {
@@ -286,10 +312,8 @@ export async function invalidateCurrentYearOnly(): Promise<number> {
     // Invalidar cache combinado (para que se regenere con datos actualizados)
     totalInvalidated += await invalidateCachePattern(`${cacheKeys.combined}*`);
     
-    console.log(`🎯 Cache invalidado solo para año ${currentYear} y vista combinada (${totalInvalidated} entradas)`);
     
     // Los datos históricos consolidados permanecen intactos
-    console.log(`🧊 Cache consolidado histórico (2015-${currentYear-1}) permanece congelado`);
     
     return totalInvalidated;
   } catch (error) {
@@ -312,24 +336,20 @@ export async function invalidateCacheForOrderYear(orderData: { fecha_pedido?: st
       try {
         orderYear = new Date(orderData.fecha_pedido).getFullYear();
       } catch {
-        console.log(`⚠️ Fecha inválida en pedido, asumiendo año actual: ${orderData.fecha_pedido}`);
       }
     }
     
     if (orderYear === currentYear) {
       // Es del año actual - invalidar solo año actual
       totalInvalidated += await invalidateCachePattern(`${cacheKeys.currentYear}*`);
-      console.log(`🎯 Pedido del año actual (${currentYear}) - Cache año actual invalidado`);
     } else {
       // Es histórico - invalidar cache histórico consolidado
       totalInvalidated += await invalidateCachePattern(`${cacheKeys.historicalConsolidated}*`);
-      console.log(`🧊 Pedido histórico del año ${orderYear} - Cache histórico consolidado invalidado`);
     }
     
     // Siempre invalidar cache combinado
     totalInvalidated += await invalidateCachePattern(`${cacheKeys.combined}*`);
     
-    console.log(`✅ Cache invalidado inteligentemente: ${totalInvalidated} entradas eliminadas`);
     
     return totalInvalidated;
   } catch (error) {
@@ -346,9 +366,7 @@ export async function freezeHistoricalData(): Promise<void> {
     const cachedData = await getCachedHistoricalData();
     
     if (!cachedData) {
-      console.log(`🧊 Cache consolidado histórico (2015-${currentYear-1}) no existe, será cargado dinámicamente cuando se necesite`);
     } else {
-      console.log(`🧊 Cache consolidado histórico (2015-${currentYear-1}) ya existe y está congelado`);
     }
   } catch (error) {
     console.error("Error in freeze historical data process:", error);
@@ -378,7 +396,6 @@ export async function invalidateUserActivityCache(userId?: string): Promise<numb
         totalInvalidated += await invalidateCachePattern(pattern);
       }
       
-      console.log(`🎯 Cache de actividad invalidado para usuario ${userId} (${totalInvalidated} entradas)`);
     } else {
       const patterns = [
         "cache:api:users:activity:*",
@@ -390,7 +407,6 @@ export async function invalidateUserActivityCache(userId?: string): Promise<numb
         totalInvalidated += await invalidateCachePattern(pattern);
       }
       
-      console.log(`🎯 Cache de actividad invalidado para todos los usuarios (${totalInvalidated} entradas)`);
     }
     
     return totalInvalidated;
@@ -408,7 +424,6 @@ export async function setUserActivityCache(
   try {
     const cacheKey = `cache:api:users:activity:${userId}`;
     await cacheRedis.setex(cacheKey, ttl, JSON.stringify(activityData));
-    console.log(`⚡ Actividad de usuario ${userId} almacenada en cache (TTL: ${ttl}s)`);
     return true;
   } catch (error) {
     console.error("Error setting user activity cache:", error);
@@ -422,7 +437,6 @@ export async function getUserActivityCache(userId: string): Promise<{ lastLogin:
     const cached = await cacheRedis.get(cacheKey);
     
     if (cached) {
-      console.log(`⚡ Actividad de usuario ${userId} servida desde cache`);
       return typeof cached === 'string' ? JSON.parse(cached) : cached;
     }
     

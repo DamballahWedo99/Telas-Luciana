@@ -24,6 +24,7 @@ import {
   PencilIcon,
   UndoIcon,
   HistoryIcon,
+  EditIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { parseNumericValue, formatNumber } from "@/lib/utils";
 import { InventoryItem, UnitType } from "../../../types/types";
+import { PackingListEditModal } from "./PackingListEditModal";
 
 interface RawInventoryItem {
   OC?: string | null;
@@ -559,6 +561,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     Record<string, Record<number, ApiSoldRoll[]>>
   >({});
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [openPackingListEditDialog, setOpenPackingListEditDialog] = useState(false);
   const [isLoadingHistorical, setIsLoadingHistorical] = useState(false);
   const [isCreatingRow, setIsCreatingRow] = useState(false);
   const [formErrors, setFormErrors] = useState<
@@ -1311,22 +1314,21 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       const now = new Date();
       const currentYear = now.getFullYear().toString();
       const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
-      const apiUrl = `/api/s3/inventario?year=${currentYear}&month=${currentMonth}`;
+      const apiUrl = `/api/s3/inventario?year=${currentYear}&month=${currentMonth}&refresh=true`;
 
       const response = await fetch(apiUrl);
       const jsonData = await response.json();
 
       if (jsonData.data && Array.isArray(jsonData.data)) {
         const parsedData = processInventoryData(jsonData.data);
+        
         setInventory(parsedData);
-
         setCurrentViewingYear(currentYear);
         setCurrentViewingMonth(currentMonth);
-
         toast.success("Inventario actualizado con éxito");
       }
     } catch (error) {
-      console.error("Error recargando inventario:", error);
+      console.error("Error reloading inventory:", error);
       toast.error("Error recargando inventario");
     } finally {
       if (onLoadingChange) {
@@ -1343,12 +1345,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   ) => {
     setIsLoadingPackingList(true);
     try {
-      console.log(`🔍 [PACKING-LIST] Cargando rollos para venta:`, {
-        tela,
-        color,
-        ubicacion,
-        oc,
-      });
 
       const response = await fetch(
         `/api/packing-list/get-rolls?tela=${encodeURIComponent(
@@ -1362,16 +1358,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
       const data: PackingListEntry[] = await response.json();
 
+
       let normalizedData: PackingListEntry[];
       if (Array.isArray(data)) {
         normalizedData = data;
       } else if (data && typeof data === "object") {
-        const keys = Object.keys(data)
-          .filter((key) => !isNaN(Number(key)))
-          .sort((a, b) => Number(a) - Number(b));
-        normalizedData = keys.map(
-          (key) => data[key as keyof typeof data]
-        ) as PackingListEntry[];
+        // Handle cache response with data wrapper
+        if ('data' in data && Array.isArray(data.data)) {
+          normalizedData = data.data as PackingListEntry[];
+        } else {
+          // Handle object with numeric keys (legacy format)
+          const keys = Object.keys(data)
+            .filter((key) => !isNaN(Number(key)))
+            .sort((a, b) => Number(a) - Number(b));
+          normalizedData = keys.map(
+            (key) => data[key as keyof typeof data]
+          ) as PackingListEntry[];
+        }
       } else {
         normalizedData = [];
       }
@@ -1990,24 +1993,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           invItem.Unidades === item.Unidades
       );
 
-      console.log("🔍 BÚSQUEDA DE ITEM CONSOLIDABLE:", {
-        found: !!existingMeridaItem,
-        criteria: {
-          OC: item.OC,
-          Tela: item.Tela,
-          Color: item.Color,
-          Ubicacion: "Mérida",
-          Costo: item.Costo,
-          Unidades: item.Unidades,
-        },
-        existingItem: existingMeridaItem
-          ? {
-              OC: existingMeridaItem.OC,
-              Cantidad: existingMeridaItem.Cantidad,
-              Ubicacion: existingMeridaItem.Ubicacion,
-            }
-          : null,
-      });
 
       let updatePayload: TransferUpdatePayload;
 
@@ -2951,6 +2936,23 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Limpiar filtros</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {isAdmin && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setOpenPackingListEditDialog(true)}
+                  >
+                    <EditIcon className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Editar packing list</p>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -5320,6 +5322,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <PackingListEditModal
+          open={openPackingListEditDialog}
+          onClose={() => setOpenPackingListEditDialog(false)}
+        />
       </Card>
     </TooltipProvider>
   );
