@@ -426,7 +426,8 @@ export const PackingListEditModal: React.FC<PackingListEditModalProps> = ({
       setSelectedColor("all");
       setSelectedLote("all");
     }
-  }, [selectedOC, loadOrderRolls]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOC]);
 
   // NOTE: Removed auto-reload effect that was causing unnecessary loading screens
   // The resetChanges function should handle restoring data instantly without reload
