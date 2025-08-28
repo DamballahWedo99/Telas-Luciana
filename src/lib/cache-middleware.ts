@@ -243,7 +243,6 @@ export async function getCachedHistoricalData(): Promise<unknown[] | null> {
     const cached = await cacheRedis.get(cacheKeys.historicalConsolidated);
     
     if (cached) {
-      const currentYear = new Date().getFullYear();
       return typeof cached === 'string' ? JSON.parse(cached) : cached;
     }
     
@@ -257,7 +256,6 @@ export async function getCachedHistoricalData(): Promise<unknown[] | null> {
 export async function setCachedHistoricalData(data: unknown[]): Promise<boolean> {
   try {
     const cacheKeys = getYearCacheKeys();
-    const currentYear = new Date().getFullYear();
     
     await cacheRedis.setex(cacheKeys.historicalConsolidated, YEAR_CACHE_TTL.HISTORICAL_YEAR, JSON.stringify(data));
     
@@ -274,7 +272,6 @@ export async function getCachedCurrentYearData(): Promise<unknown[] | null> {
     const cached = await cacheRedis.get(cacheKeys.currentYear);
     
     if (cached) {
-      const currentYear = new Date().getFullYear();
       return typeof cached === 'string' ? JSON.parse(cached) : cached;
     }
     
@@ -288,7 +285,6 @@ export async function getCachedCurrentYearData(): Promise<unknown[] | null> {
 export async function setCachedCurrentYearData(data: unknown[]): Promise<boolean> {
   try {
     const cacheKeys = getYearCacheKeys();
-    const currentYear = new Date().getFullYear();
     
     await cacheRedis.setex(cacheKeys.currentYear, YEAR_CACHE_TTL.CURRENT_YEAR, JSON.stringify(data));
     
@@ -301,7 +297,6 @@ export async function setCachedCurrentYearData(data: unknown[]): Promise<boolean
 
 export async function invalidateCurrentYearOnly(): Promise<number> {
   try {
-    const currentYear = new Date().getFullYear();
     const cacheKeys = getYearCacheKeys();
     
     let totalInvalidated = 0;
@@ -360,8 +355,6 @@ export async function invalidateCacheForOrderYear(orderData: { fecha_pedido?: st
 
 export async function freezeHistoricalData(): Promise<void> {
   try {
-    const currentYear = new Date().getFullYear();
-    
     // Verificar si ya existe el cache consolidado histórico
     const cachedData = await getCachedHistoricalData();
     

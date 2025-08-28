@@ -1356,7 +1356,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         throw new Error("Error al cargar los datos del packing list");
       }
 
-      const data: PackingListEntry[] = await response.json();
+      const data: PackingListEntry[] | { data: PackingListEntry[] } | Record<string, PackingListEntry> = await response.json();
 
 
       let normalizedData: PackingListEntry[];
@@ -1507,7 +1507,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         throw new Error("Error al cargar los datos del packing list");
       }
 
-      const data: PackingListEntry[] = await response.json();
+      const data: PackingListEntry[] | { data: PackingListEntry[] } | Record<string, PackingListEntry> = await response.json();
 
       let normalizedData: PackingListEntry[];
       if (Array.isArray(data)) {

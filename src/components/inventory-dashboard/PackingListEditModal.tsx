@@ -426,7 +426,7 @@ export const PackingListEditModal: React.FC<PackingListEditModalProps> = ({
       setSelectedColor("all");
       setSelectedLote("all");
     }
-  }, [selectedOC]); // FIXED: Remove loadOrderRolls dependency to prevent infinite loop
+  }, [selectedOC, loadOrderRolls]);
 
   // NOTE: Removed auto-reload effect that was causing unnecessary loading screens
   // The resetChanges function should handle restoring data instantly without reload
@@ -632,7 +632,7 @@ export const PackingListEditModal: React.FC<PackingListEditModalProps> = ({
                             </td>
                           </TableRow>
                         ) : (
-                        filteredEditingRolls.map((roll, index) => (
+                        filteredEditingRolls.map((roll) => (
                             <EditablePackingListRow
                               key={roll.id}
                               roll={roll}

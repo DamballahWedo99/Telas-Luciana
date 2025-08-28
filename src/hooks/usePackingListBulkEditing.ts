@@ -63,9 +63,10 @@ interface UsePackingListBulkEditingReturn {
 }
 
 export function usePackingListBulkEditing(
-  options: UsePackingListBulkEditingOptions
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _options: UsePackingListBulkEditingOptions
 ): UsePackingListBulkEditingReturn {
-  const { onDataUpdated } = options;
+  // Options parameter kept for future extensibility but not currently used
   
   const [editingRolls, setEditingRolls] = useState<EditablePackingListRoll[]>([]);
   const [pendingChanges, setPendingChanges] = useState<PendingRollChange[]>([]);
@@ -397,7 +398,7 @@ export function usePackingListBulkEditing(
   const validateDataConsistency = useCallback((changes: PendingRollChange[]): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
     
-    changes.forEach((change, index) => {
+    changes.forEach((change) => {
       // For updates and deletes, originalData is REQUIRED to prevent wrong roll edits
       if (change.type === 'update' || change.type === 'delete') {
         if (!change.originalData) {
@@ -486,7 +487,7 @@ export function usePackingListBulkEditing(
         try {
           const errorData = await response.json();
           errorText = errorData.error || `Error ${response.status}: ${response.statusText}`;
-        } catch (parseError) {
+        } catch {
           errorText = `Error ${response.status}: ${response.statusText}`;
         }
         throw new Error(errorText);
@@ -524,7 +525,7 @@ export function usePackingListBulkEditing(
     } finally {
       setIsSaving(false);
     }
-  }, [validation.isValid, validation.errors, validation.warnings, pendingChanges, validateDataConsistency]);
+  }, [validation.isValid, pendingChanges, validateDataConsistency]);
 
   // Reset all changes - RESTORE ORIGINAL DATA (following PriceEditModal pattern)
   const resetChanges = useCallback(() => {
@@ -542,7 +543,7 @@ export function usePackingListBulkEditing(
     setIsResetting(false);
     
     toast.info('Cambios descartados');
-  }, [editingRolls]);
+  }, []);
 
   // Reset editing state only (for filter context changes)
   const resetEditingState = useCallback(() => {
