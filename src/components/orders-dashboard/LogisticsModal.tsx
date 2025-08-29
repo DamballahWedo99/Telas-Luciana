@@ -178,6 +178,19 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
   };
 
   const handleShowForm = () => {
+    // ✅ FIX: Limpiar completamente el estado antes de mostrar el formulario
+    setEditingOrder(null);
+    setOriginalOrderName("");
+    setFormErrors({});
+    setFormData({
+      orden_de_compra: "",
+      tela: [],
+      contenedor: "",
+      etd: "",
+      eta: "",
+      importador: "",
+      notas: "",
+    });
     setShowForm(true);
   };
 
@@ -615,7 +628,9 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
                     <Button
                       onClick={handleShowForm}
                       className="flex-1 h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-sm"
-                    ></Button>
+                    >
+                      Agregar
+                    </Button>
                   </div>
                 </div>
               </>

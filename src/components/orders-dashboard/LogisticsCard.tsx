@@ -145,6 +145,20 @@ export const LogisticsCard: React.FC = () => {
   };
 
   const handleShowForm = () => {
+    // ✅ FIX: Limpiar completamente el estado antes de mostrar el formulario para nueva OC
+    setEditingOrder(null);
+    setOriginalOrderName("");
+    setFormErrors({});
+    setDeleteConfirmation(null);
+    setFormData({
+      orden_de_compra: "",
+      tela: [],
+      contenedor: "",
+      etd: "",
+      eta: "",
+      importador: "",
+      notas: "",
+    });
     setShowForm(true);
   };
 
@@ -762,7 +776,14 @@ export const LogisticsCard: React.FC = () => {
       )}
 
       {/* Modal de formulario */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={(open) => {
+        if (!open) {
+          // When dialog is closed, clear all editing state
+          handleBackToList();
+        } else {
+          setShowForm(open);
+        }
+      }}>
         <DialogContent className={isMobile ? "max-w-[95vw] h-[85vh] overflow-hidden p-0 rounded-3xl [&>button]:hidden" : "max-w-2xl max-h-[90vh] overflow-y-auto"}>
           {isMobile ? (
             <>
