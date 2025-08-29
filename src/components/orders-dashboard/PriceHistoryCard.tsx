@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -15,7 +15,9 @@ import {
   Loader2,
   Edit3,
   Plus,
-  UserPlus
+  UserPlus,
+  Filter,
+  FileText
 } from "lucide-react";
 import {
   Tooltip,
@@ -29,6 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FabricCombobox } from "@/components/ui/fabric-combobox";
 import { usePriceHistory } from "@/hooks/usePriceHistory";
 import { PriceHistoryTable } from "./PriceHistoryTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -49,10 +52,35 @@ interface PriceHistoryTableRef {
   };
 }
 
+// Mobile hook
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkIsMobile = () => {
+      const mobileQuery = window.matchMedia("(max-width: 768px)");
+      setIsMobile(mobileQuery.matches);
+    };
+
+    checkIsMobile();
+    const mobileQuery = window.matchMedia("(max-width: 768px)");
+    mobileQuery.addEventListener("change", checkIsMobile);
+
+    return () => {
+      mobileQuery.removeEventListener("change", checkIsMobile);
+    };
+  }, []);
+
+  return isMobile;
+}
+
 export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
   initialFabricIds = [],
 }) => {
+  const isMobile = useIsMobile();
   const [isExporting, setIsExporting] = useState(false);
+  // Mobile-specific state
+  const [mobileSelectedFabric, setMobileSelectedFabric] = useState<string>("");
   const [viewMode, setViewMode] = useState<'traditional' | 'provider-matrix'>('traditional');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNewProductModal, setShowNewProductModal] = useState(false);
@@ -330,7 +358,204 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
     }
   };
 
+  const handleMobileProviderExport = async () => {
+    if (!mobileSelectedFabric) {
+      toast.error("Por favor selecciona una tela para exportar");
+      return;
+    }
 
+    if (selectedProviders.length === 0) {
+      toast.error("Por favor selecciona al menos un proveedor para exportar");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Ensure we have multi-provider data
+      if (!multiProviderData || !multiProviderData.fabrics || multiProviderData.fabrics.length === 0) {
+        toast.error("No hay datos de proveedores disponibles");
+        return;
+      }
+
+      // Find the selected fabric
+      const selectedFabricData = multiProviderData.fabrics.find(f => f.fabricId === mobileSelectedFabric);
+      if (!selectedFabricData) {
+        toast.error("La tela seleccionada no tiene datos disponibles");
+        return;
+      }
+
+      // Create filtered data with only the selected fabric
+      const filteredData = {
+        ...multiProviderData,
+        fabrics: [selectedFabricData]
+      };
+
+      // Get PDF service instance
+      const pdfService = PDFExportService.getInstance();
+
+      // Export provider matrix for the selected fabric with selected providers
+      const result = await pdfService.exportProviderMatrix(filteredData, {
+        filterFabricId: mobileSelectedFabric,
+        selectedProviders: selectedProviders
+      });
+      
+      if (result.success) {
+        const fabricName = selectedFabricData.fabricName || mobileSelectedFabric;
+        let successMessage = `PDF exportado exitosamente para la tela: ${fabricName}`;
+        
+        // Add provider count information
+        if (selectedProviders.length < multiProviderData.providers.length) {
+          successMessage += ` con ${selectedProviders.length} proveedor${selectedProviders.length === 1 ? '' : 'es'} seleccionado${selectedProviders.length === 1 ? '' : 's'}`;
+        }
+        
+        if (result.fileName) {
+          successMessage += ` como "${result.fileName}"`;
+        }
+        if (result.pages && result.pages > 1) {
+          successMessage += ` (${result.pages} páginas)`;
+        }
+        toast.success(successMessage);
+      } else {
+        toast.error(`Error al exportar PDF: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error exporting mobile PDF:", error);
+      toast.error(`Error al exportar: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  if (isMobile) {
+    return (
+      <div className="px-4">
+        <div className="max-w-lg w-full mx-auto space-y-4">
+          {/* Simplified Mobile Header */}
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="flex items-center mb-3">
+              <Filter className="mr-2 h-5 w-5 text-blue-600" />
+              <h1 className="text-lg font-semibold text-gray-900">
+                Exportar por Proveedor
+              </h1>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Selecciona una tela y los proveedores para descargar la comparación
+            </p>
+          </div>
+
+          {/* Mobile Filter & Export */}
+          <div className="bg-white rounded-lg shadow p-4">
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {loading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-pulse text-gray-500">
+                  Cargando datos...
+                </div>
+              </div>
+            ) : data && data.fabrics.length > 0 ? (
+              <div className="space-y-4">
+                {/* Fabric Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Seleccionar Tela
+                  </label>
+                  <FabricCombobox
+                    fabrics={data.fabrics.map(f => ({ fabricId: f.fabricId, fabricName: f.fabricName }))}
+                    value={mobileSelectedFabric}
+                    onValueChange={setMobileSelectedFabric}
+                    placeholder="Elige una tela para comparar proveedores"
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Provider Selection */}
+                {mobileSelectedFabric && multiProviderData && multiProviderData.providers.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Seleccionar Proveedores ({selectedProviders.length} de {multiProviderData.providers.length})
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3">
+                      {multiProviderData.providers.map((provider) => (
+                        <div key={provider.id} className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            id={`mobile-provider-${provider.id}`}
+                            checked={selectedProviders.includes(provider.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedProviders(prev => [...prev, provider.id]);
+                              } else {
+                                setSelectedProviders(prev => prev.filter(id => id !== provider.id));
+                              }
+                            }}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <label
+                            htmlFor={`mobile-provider-${provider.id}`}
+                            className="text-sm text-gray-700 cursor-pointer flex-1"
+                          >
+                            {provider.name}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProviders(multiProviderData.providers.map(p => p.id))}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Seleccionar todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProviders([])}
+                        className="text-xs text-gray-600 hover:text-gray-800"
+                      >
+                        Deseleccionar todos
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Export Button */}
+                <Button 
+                  onClick={handleMobileProviderExport}
+                  disabled={!mobileSelectedFabric || selectedProviders.length === 0 || isExporting}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  size="lg"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Generando PDF...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Descargar PDF ({selectedProviders.length} proveedor{selectedProviders.length !== 1 ? 'es' : ''})
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-32 text-gray-500">
+                <div className="text-center">
+                  <Filter className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p>No hay datos disponibles</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Card className="w-full shadow h-[85vh] flex flex-col">

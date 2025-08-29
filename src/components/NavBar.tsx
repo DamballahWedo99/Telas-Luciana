@@ -183,8 +183,7 @@ export default function Navbar({
                         </>
                       )}
 
-                      {/* Historial de Precios oculto en móviles por diseño no responsivo */}
-                      {/* {canAccessPriceHistory && (
+                      {canAccessPriceHistory && (
                         <Button
                           variant="ghost"
                           className="justify-start h-12 text-base"
@@ -195,7 +194,7 @@ export default function Navbar({
                           <TrendingUp className="mr-3 h-5 w-5" />
                           Historial de Precios
                         </Button>
-                      )} */}
+                      )}
                     </>
                   )}
 

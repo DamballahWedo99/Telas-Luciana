@@ -133,7 +133,7 @@ export function FabricCombobox({
       
       {open && (
         <div 
-          className="absolute top-full left-0 w-full min-w-[400px] mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-0"
+          className="absolute top-full left-0 w-full max-w-full min-w-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-0"
           style={{ zIndex: 9999 }}
         >
           <Command shouldFilter={false}>
