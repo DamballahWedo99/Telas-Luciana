@@ -1,5 +1,5 @@
 import React from "react";
-import { LogisticsCard } from "../orders-dashboard/LogisticsCard";
+import { LogisticsCard } from "./LogisticsCard";
 
 const LogisticsDashboard: React.FC = () => {
   return (

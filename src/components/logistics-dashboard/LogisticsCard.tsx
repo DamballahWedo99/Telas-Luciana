@@ -11,8 +11,10 @@ import {
   EditIcon,
   TrashIcon,
   PlusIcon,
+  Download,
 } from "lucide-react";
 import { logisticsSchema } from "@/lib/zod";
+import { useLogisticsPDF } from "@/hooks/useLogisticsPDF";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,6 +89,18 @@ export const LogisticsCard: React.FC = () => {
   const [deleteConfirmation, setDeleteConfirmation] =
     useState<LogisticsData | null>(null);
   const isMobile = useIsMobile();
+  const { isGenerating: isGeneratingPDF, error: pdfError, generatePDF, clearError: clearPDFError } = useLogisticsPDF();
+
+  // Show PDF error toast when there's an error
+  React.useEffect(() => {
+    if (pdfError) {
+      toast.error("Error al generar el PDF", {
+        description: pdfError,
+        duration: 5000,
+      });
+      clearPDFError();
+    }
+  }, [pdfError, clearPDFError]);
 
   const [formData, setFormData] = useState<LogisticsData>({
     orden_de_compra: "",
@@ -459,6 +473,18 @@ export const LogisticsCard: React.FC = () => {
                 Editar
               </button>
               <button
+                onClick={() => generatePDF(order)}
+                disabled={isGeneratingPDF}
+                className="px-3 py-3 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 hover:text-green-700 transition-all duration-150 transform active:scale-95 disabled:opacity-50"
+                title="Descargar PDF"
+              >
+                {isGeneratingPDF ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </button>
+              <button
                 onClick={() => handleDeleteOrder(order)}
                 disabled={isDeleting}
                 className="px-3 py-3 bg-gray-100 text-gray-600 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all duration-150 transform active:scale-95 disabled:opacity-50"
@@ -531,6 +557,29 @@ export const LogisticsCard: React.FC = () => {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Editar información logística</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => generatePDF(order)}
+                    disabled={isGeneratingPDF}
+                    className="h-9 px-3 hover:bg-green-50 hover:border-green-300 hover:text-green-700"
+                  >
+                    {isGeneratingPDF ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-1" />
+                    )}
+                    PDF
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Descargar información logística en PDF</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
