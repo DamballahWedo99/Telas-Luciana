@@ -26,6 +26,7 @@ interface S3InventoryItem {
   Unidades: string;
   CDMX: number | string;
   MID: number | string;
+  CONPARTEX: number | string;
   Total: number;
   Importación: string;
 }
@@ -64,9 +65,10 @@ const convertToRequiredStructure = (
 ): S3InventoryItem => {
   const { Ubicacion, Cantidad, Costo, Importacion, ...rest } = validatedData;
 
-  const item: Omit<S3InventoryItem, "CDMX" | "MID" | "Importación"> & {
+  const item: Omit<S3InventoryItem, "CDMX" | "MID" | "CONPARTEX" | "Importación"> & {
     CDMX?: number | string;
     MID?: number | string;
+    CONPARTEX?: number | string;
     Importación?: string;
   } = {
     OC: rest.OC,
@@ -81,12 +83,19 @@ const convertToRequiredStructure = (
   if (Ubicacion === "CDMX") {
     item.CDMX = Cantidad;
     item.MID = "Nan";
+    item.CONPARTEX = "Nan";
   } else if (Ubicacion === "Mérida") {
     item.CDMX = "Nan";
     item.MID = Cantidad;
+    item.CONPARTEX = "Nan";
+  } else if (Ubicacion === "CEDIS CONPARTEX") {
+    item.CDMX = "Nan";
+    item.MID = "Nan";
+    item.CONPARTEX = Cantidad;
   } else {
     item.CDMX = "Nan";
     item.MID = "Nan";
+    item.CONPARTEX = "Nan";
   }
 
   if (Importacion && Importacion === "DA") {

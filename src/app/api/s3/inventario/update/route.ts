@@ -31,6 +31,7 @@ interface InventoryItem {
   Unidades: string;
   CDMX?: number;
   MID?: number;
+  CONPARTEX?: number;
   Importacion?: string;
   FacturaDragonAzteca?: string;
   status?: string;
@@ -49,6 +50,7 @@ interface RawInventoryItem {
   Unidades?: unknown;
   CDMX?: unknown;
   MID?: unknown;
+  CONPARTEX?: unknown;
   Importacion?: unknown;
   FacturaDragonAzteca?: unknown;
   status?: unknown;
@@ -60,8 +62,8 @@ interface TransferPayload {
   transferType: "transfer";
   oldItem: RawInventoryItem;
   quantityToTransfer: number;
-  sourceLocation: "CDMX" | "MID";
-  destinationLocation: "CDMX" | "MID";
+  sourceLocation: "CDMX" | "MID" | "CONPARTEX";
+  destinationLocation: "CDMX" | "MID" | "CONPARTEX";
 }
 
 interface UpdateRequest {
@@ -69,7 +71,7 @@ interface UpdateRequest {
   newItem?: RawInventoryItem;
   isEdit?: boolean;
   quantityChange?: number;
-  location?: "CDMX" | "MID";
+  location?: "CDMX" | "MID" | "CONPARTEX";
 }
 
 interface FileSearchResult {
@@ -175,6 +177,17 @@ const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
         item.MID = safeNumber(rawItem.MID, 0);
       }
     }
+    if (rawItem.CONPARTEX !== undefined) {
+      if (
+        rawItem.CONPARTEX === null ||
+        rawItem.CONPARTEX === "NaN" ||
+        Number.isNaN(rawItem.CONPARTEX)
+      ) {
+        item.CONPARTEX = undefined;
+      } else {
+        item.CONPARTEX = safeNumber(rawItem.CONPARTEX, 0);
+      }
+    }
 
     Object.keys(rawItem).forEach((key) => {
       if (
@@ -188,6 +201,7 @@ const normalizeItem = (rawItem: RawInventoryItem): InventoryItem | null => {
           "Unidades",
           "CDMX",
           "MID",
+          "CONPARTEX",
         ].includes(key)
       ) {
         item[key] = rawItem[key];
@@ -293,6 +307,7 @@ const reorderItemFields = (item: InventoryItem): InventoryItem => {
   if (item.Unidades !== undefined) orderedItem.Unidades = item.Unidades;
   if (item.CDMX !== undefined) orderedItem.CDMX = item.CDMX;
   if (item.MID !== undefined) orderedItem.MID = item.MID;
+  if (item.CONPARTEX !== undefined) orderedItem.CONPARTEX = item.CONPARTEX;
   if (item.Total !== undefined) orderedItem.Total = item.Total;
 
   Object.keys(item).forEach((key) => {
@@ -337,6 +352,9 @@ const saveFileSafely = async (
       }
       if (saveItem.MID === undefined) {
         saveItem.MID = NaN;
+      }
+      if (saveItem.CONPARTEX === undefined) {
+        saveItem.CONPARTEX = NaN;
       }
 
       delete saveItem.lastModified;
@@ -425,7 +443,9 @@ const processTransferWithConsolidation = async (
       const currentLocationQuantity =
         sourceLocation === "CDMX"
           ? currentItem.CDMX || 0
-          : currentItem.MID || 0;
+          : sourceLocation === "MID"
+          ? currentItem.MID || 0
+          : currentItem.CONPARTEX || 0;
 
       if (currentLocationQuantity < quantityToTransfer) {
         throw new Error(
@@ -441,6 +461,22 @@ const processTransferWithConsolidation = async (
         currentItem.MID = currentLocationQuantity - quantityToTransfer;
         const currentCDMX = currentItem.CDMX || 0;
         currentItem.CDMX = currentCDMX + quantityToTransfer;
+      } else if (sourceLocation === "CDMX" && destinationLocation === "CONPARTEX") {
+        currentItem.CDMX = currentLocationQuantity - quantityToTransfer;
+        const currentCONPARTEX = currentItem.CONPARTEX || 0;
+        currentItem.CONPARTEX = currentCONPARTEX + quantityToTransfer;
+      } else if (sourceLocation === "CONPARTEX" && destinationLocation === "CDMX") {
+        currentItem.CONPARTEX = currentLocationQuantity - quantityToTransfer;
+        const currentCDMX = currentItem.CDMX || 0;
+        currentItem.CDMX = currentCDMX + quantityToTransfer;
+      } else if (sourceLocation === "MID" && destinationLocation === "CONPARTEX") {
+        currentItem.MID = currentLocationQuantity - quantityToTransfer;
+        const currentCONPARTEX = currentItem.CONPARTEX || 0;
+        currentItem.CONPARTEX = currentCONPARTEX + quantityToTransfer;
+      } else if (sourceLocation === "CONPARTEX" && destinationLocation === "MID") {
+        currentItem.CONPARTEX = currentLocationQuantity - quantityToTransfer;
+        const currentMID = currentItem.MID || 0;
+        currentItem.MID = currentMID + quantityToTransfer;
       }
 
       modifiedData[result.itemIndex] = currentItem;
@@ -573,9 +609,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (location && location !== "CDMX" && location !== "MID") {
+    if (location && !['CDMX', 'MID', 'CONPARTEX'].includes(location)) {
       return NextResponse.json(
-        { error: "location debe ser 'CDMX' o 'MID'" },
+        { error: "location debe ser 'CDMX', 'MID' o 'CONPARTEX'" },
         { status: 400 }
       );
     }
@@ -652,13 +688,16 @@ export async function POST(request: NextRequest) {
 
         if (location === "CDMX") {
           editedItem.CDMX = newQuantity;
-        } else {
+        } else if (location === "MID") {
           editedItem.MID = newQuantity;
+        } else if (location === "CONPARTEX") {
+          editedItem.CONPARTEX = newQuantity;
         }
 
         const cdmxAmount = editedItem.CDMX || 0;
         const midAmount = editedItem.MID || 0;
-        editedItem.Cantidad = cdmxAmount + midAmount;
+        const conpartexAmount = editedItem.CONPARTEX || 0;
+        editedItem.Cantidad = cdmxAmount + midAmount + conpartexAmount;
       }
 
       if (newItem.Costo !== undefined) {
@@ -682,8 +721,10 @@ export async function POST(request: NextRequest) {
 
       if (location === "CDMX") {
         currentLocationQuantity = currentItem.CDMX || 0;
-      } else {
+      } else if (location === "MID") {
         currentLocationQuantity = currentItem.MID || 0;
+      } else if (location === "CONPARTEX") {
+        currentLocationQuantity = currentItem.CONPARTEX || 0;
       }
 
       if (currentLocationQuantity < quantityChange) {
@@ -700,13 +741,16 @@ export async function POST(request: NextRequest) {
 
       if (location === "CDMX") {
         currentItem.CDMX = currentLocationQuantity - quantityChange;
-      } else {
+      } else if (location === "MID") {
         currentItem.MID = currentLocationQuantity - quantityChange;
+      } else if (location === "CONPARTEX") {
+        currentItem.CONPARTEX = currentLocationQuantity - quantityChange;
       }
 
       const cdmxAmount = currentItem.CDMX || 0;
       const midAmount = currentItem.MID || 0;
-      const newTotalQuantity = cdmxAmount + midAmount;
+      const conpartexAmount = currentItem.CONPARTEX || 0;
+      const newTotalQuantity = cdmxAmount + midAmount + conpartexAmount;
 
       if (newTotalQuantity <= 0) {
         modifiedData.splice(targetItemIndex, 1);

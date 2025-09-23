@@ -469,8 +469,16 @@ function processInventoryData(
     } else if (item.CDMX !== undefined && item.MID !== undefined) {
       const cantidadCDMX = parseNumericValue(safeNumericValue(item.CDMX));
       const cantidadMID = parseNumericValue(safeNumericValue(item.MID));
+      const cantidadCONPARTEX = parseNumericValue(safeNumericValue(item.CONPARTEX));
 
-      if (cantidadCDMX > 0 && cantidadMID > 0) {
+      // Create an array to track locations with quantities > 0
+      const locationQuantities = [];
+      if (cantidadCDMX > 0) locationQuantities.push({ name: "CDMX", quantity: cantidadCDMX });
+      if (cantidadMID > 0) locationQuantities.push({ name: "Mérida", quantity: cantidadMID });
+      if (cantidadCONPARTEX > 0) locationQuantities.push({ name: "CEDIS CONPARTEX", quantity: cantidadCONPARTEX });
+
+      if (locationQuantities.length > 1) {
+        // Multiple locations with quantities - create separate items for each
         const baseItem = {
           OC: safeStringValue(item.OC),
           Tela: safeStringValue(item.Tela),
@@ -486,27 +494,20 @@ function processInventoryData(
           ),
         };
 
-        processedItems.push({
-          ...baseItem,
-          Cantidad: cantidadCDMX,
-          Total: costo * cantidadCDMX,
-          Ubicacion: "CDMX",
-        });
-
-        processedItems.push({
-          ...baseItem,
-          Cantidad: cantidadMID,
-          Total: costo * cantidadMID,
-          Ubicacion: "Mérida",
+        locationQuantities.forEach(location => {
+          processedItems.push({
+            ...baseItem,
+            Cantidad: location.quantity,
+            Total: costo * location.quantity,
+            Ubicacion: location.name,
+          });
         });
 
         return;
-      } else if (cantidadCDMX > 0) {
-        ubicacion = "CDMX";
-        cantidadFinal = cantidadCDMX;
-      } else if (cantidadMID > 0) {
-        ubicacion = "Mérida";
-        cantidadFinal = cantidadMID;
+      } else if (locationQuantities.length === 1) {
+        // Single location with quantity > 0
+        ubicacion = locationQuantities[0].name;
+        cantidadFinal = locationQuantities[0].quantity;
       } else {
         ubicacion = safeStringValue(item.Ubicacion);
       }

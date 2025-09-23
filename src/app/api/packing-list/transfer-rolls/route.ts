@@ -58,6 +58,7 @@ interface TransferRequest {
   color: string;
   lot: number;
   transferRolls: number[];
+  destinationLocation: "MID" | "CONPARTEX";
 }
 
 async function getAllPackingListFiles(): Promise<string[]> {
@@ -276,7 +277,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as TransferRequest;
-    const { tela, color, lot, transferRolls } = body;
+    const { tela, color, lot, transferRolls, destinationLocation } = body;
 
     if (!tela || typeof tela !== "string") {
       return NextResponse.json(
@@ -316,6 +317,13 @@ export async function POST(request: NextRequest) {
     if (invalidRolls.length > 0) {
       return NextResponse.json(
         { error: "Todos los números de rollo deben ser válidos" },
+        { status: 400 }
+      );
+    }
+
+    if (!destinationLocation || !["MID", "CONPARTEX"].includes(destinationLocation)) {
+      return NextResponse.json(
+        { error: "El campo 'destinationLocation' debe ser 'MID' o 'CONPARTEX'" },
         { status: 400 }
       );
     }
@@ -417,7 +425,7 @@ export async function POST(request: NextRequest) {
         if (transferRolls.includes(rollNumber) && currentAlmacen === "CDMX") {
           return {
             ...rawRoll,
-            almacen: "MID",
+            almacen: destinationLocation,
           };
         }
       }
@@ -463,7 +471,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `${transferRolls.length} rollos trasladados de CDMX a Mérida`,
+      message: `${transferRolls.length} rollos trasladados de CDMX a ${destinationLocation === "MID" ? "Mérida" : "CEDIS CONPARTEX"}`,
       updatedFile: fileKey,
       backupFile: `Inventario/Catalogo_Rollos/backups/${backupFileName}`,
       rollsTransferred: transferRolls,

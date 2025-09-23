@@ -103,6 +103,7 @@ interface RawInventoryItem {
   almacen?: string | null;
   CDMX?: number | string | null;
   MID?: number | string | null;
+  CONPARTEX?: number | string | null;
   "Factura Dragón Azteca"?: string | null;
   "Factura Dragon Azteca"?: string | null;
   Importación?: string | null;
@@ -195,8 +196,8 @@ interface TransferUpdatePayload {
   newItem?: InventoryItemData;
   quantityToTransfer: number;
   newMeridaQuantity?: number;
-  sourceLocation: "CDMX" | "MID";
-  destinationLocation: "CDMX" | "MID";
+  sourceLocation: "CDMX" | "MID" | "CONPARTEX";
+  destinationLocation: "CDMX" | "MID" | "CONPARTEX";
 }
 
 interface ProcessReturnResponse {
@@ -327,8 +328,16 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
     let cantidadFinal = cantidad;
 
     if (typedItem.almacen) {
-      ubicacion = typedItem.almacen === LOCATIONS.CDMX ? LOCATIONS.CDMX : LOCATIONS.MERIDA;
-    } else if (typedItem.CDMX !== undefined && typedItem.MID !== undefined) {
+      if (typedItem.almacen === LOCATIONS.CDMX) {
+        ubicacion = LOCATIONS.CDMX;
+      } else if (typedItem.almacen === "MID") {
+        ubicacion = LOCATIONS.MERIDA;
+      } else if (typedItem.almacen === "CONPARTEX") {
+        ubicacion = LOCATIONS.CONPARTEX;
+      } else {
+        ubicacion = LOCATIONS.MERIDA;
+      }
+    } else if (typedItem.CDMX !== undefined || typedItem.MID !== undefined || typedItem.CONPARTEX !== undefined) {
       const cantidadCDMX =
         typeof typedItem.CDMX === "number"
           ? typedItem.CDMX
@@ -337,57 +346,97 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
         typeof typedItem.MID === "number"
           ? typedItem.MID
           : parseNumericValue(typedItem.MID);
+      const cantidadCONPARTEX =
+        typeof typedItem.CONPARTEX === "number"
+          ? typedItem.CONPARTEX
+          : parseNumericValue(typedItem.CONPARTEX);
 
-      if (cantidadCDMX > 0 && cantidadMID > 0) {
-        const cdmxItem = {
-          OC: String(typedItem.OC || ""),
-          Tela: String(typedItem.Tela || ""),
-          Color: String(typedItem.Color || ""),
-          Costo: costo,
-          Cantidad: cantidadCDMX,
-          Unidades: (typedItem.Unidades || "") as UnitType,
-          Total: costo * cantidadCDMX,
-          Ubicacion: LOCATIONS.CDMX,
-          Importacion: normalizeImportacion(
-            typedItem.Importacion ||
-              typedItem["Importación"] ||
-              typedItem["Importaci\u00f3n"] ||
-              ""
-          ),
-          FacturaDragonAzteca: String(
-            typedItem["Factura Dragón Azteca"] ||
-              typedItem["Factura Dragon Azteca"] ||
-              typedItem.FacturaDragonAzteca ||
-              ""
-          ),
-        };
+      // Count how many locations have inventory
+      const locationsWithInventory = [
+        cantidadCDMX > 0 ? 'CDMX' : null,
+        cantidadMID > 0 ? 'MID' : null,
+        cantidadCONPARTEX > 0 ? 'CONPARTEX' : null
+      ].filter(Boolean);
 
-        processedItems.push(cdmxItem);
+      // If multiple locations have inventory, create separate entries
+      if (locationsWithInventory.length > 1) {
+        if (cantidadCDMX > 0) {
+          const cdmxItem = {
+            OC: String(typedItem.OC || ""),
+            Tela: String(typedItem.Tela || ""),
+            Color: String(typedItem.Color || ""),
+            Costo: costo,
+            Cantidad: cantidadCDMX,
+            Unidades: (typedItem.Unidades || "") as UnitType,
+            Total: costo * cantidadCDMX,
+            Ubicacion: LOCATIONS.CDMX,
+            Importacion: normalizeImportacion(
+              typedItem.Importacion ||
+                typedItem["Importación"] ||
+                typedItem["Importaci\u00f3n"] ||
+                ""
+            ),
+            FacturaDragonAzteca: String(
+              typedItem["Factura Dragón Azteca"] ||
+                typedItem["Factura Dragon Azteca"] ||
+                typedItem.FacturaDragonAzteca ||
+                ""
+            ),
+          };
+          processedItems.push(cdmxItem);
+        }
 
-        const meridaItem = {
-          OC: String(typedItem.OC || ""),
-          Tela: String(typedItem.Tela || ""),
-          Color: String(typedItem.Color || ""),
-          Costo: costo,
-          Cantidad: cantidadMID,
-          Unidades: (typedItem.Unidades || "") as UnitType,
-          Total: costo * cantidadMID,
-          Ubicacion: LOCATIONS.MERIDA,
-          Importacion: normalizeImportacion(
-            typedItem.Importacion ||
-              typedItem["Importación"] ||
-              typedItem["Importaci\u00f3n"] ||
-              ""
-          ),
-          FacturaDragonAzteca: String(
-            typedItem["Factura Dragón Azteca"] ||
-              typedItem["Factura Dragon Azteca"] ||
-              typedItem.FacturaDragonAzteca ||
-              ""
-          ),
-        };
+        if (cantidadMID > 0) {
+          const meridaItem = {
+            OC: String(typedItem.OC || ""),
+            Tela: String(typedItem.Tela || ""),
+            Color: String(typedItem.Color || ""),
+            Costo: costo,
+            Cantidad: cantidadMID,
+            Unidades: (typedItem.Unidades || "") as UnitType,
+            Total: costo * cantidadMID,
+            Ubicacion: LOCATIONS.MERIDA,
+            Importacion: normalizeImportacion(
+              typedItem.Importacion ||
+                typedItem["Importación"] ||
+                typedItem["Importaci\u00f3n"] ||
+                ""
+            ),
+            FacturaDragonAzteca: String(
+              typedItem["Factura Dragón Azteca"] ||
+                typedItem["Factura Dragon Azteca"] ||
+                typedItem.FacturaDragonAzteca ||
+                ""
+            ),
+          };
+          processedItems.push(meridaItem);
+        }
 
-        processedItems.push(meridaItem);
+        if (cantidadCONPARTEX > 0) {
+          const conpartexItem = {
+            OC: String(typedItem.OC || ""),
+            Tela: String(typedItem.Tela || ""),
+            Color: String(typedItem.Color || ""),
+            Costo: costo,
+            Cantidad: cantidadCONPARTEX,
+            Unidades: (typedItem.Unidades || "") as UnitType,
+            Total: costo * cantidadCONPARTEX,
+            Ubicacion: LOCATIONS.CONPARTEX,
+            Importacion: normalizeImportacion(
+              typedItem.Importacion ||
+                typedItem["Importación"] ||
+                typedItem["Importaci\u00f3n"] ||
+                ""
+            ),
+            FacturaDragonAzteca: String(
+              typedItem["Factura Dragón Azteca"] ||
+                typedItem["Factura Dragon Azteca"] ||
+                typedItem.FacturaDragonAzteca ||
+                ""
+            ),
+          };
+          processedItems.push(conpartexItem);
+        }
 
         return;
       } else if (cantidadCDMX > 0) {
@@ -396,6 +445,9 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
       } else if (cantidadMID > 0) {
         ubicacion = LOCATIONS.MERIDA;
         cantidadFinal = cantidadMID;
+      } else if (cantidadCONPARTEX > 0) {
+        ubicacion = LOCATIONS.CONPARTEX;
+        cantidadFinal = cantidadCONPARTEX;
       } else {
         ubicacion = String(typedItem.Ubicacion || "");
       }
@@ -510,6 +562,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [availableTransferRolls, setAvailableTransferRolls] = useState<Roll[]>(
     []
   );
+  const [transferDestination, setTransferDestination] = useState<"MID" | "CONPARTEX">("MID");
   const [selectedLot, setSelectedLot] = useState<number | null>(null);
   const [availableLots, setAvailableLots] = useState<number[]>([]);
   const [rollsGroupedByLot, setRollsGroupedByLot] = useState<
@@ -969,8 +1022,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           inventory[selectedItemIndex].FacturaDragonAzteca || "",
       };
 
-      const locationForAPI =
-        editingItem.Ubicacion === LOCATIONS.MERIDA ? LOCATION_API_MAP[LOCATIONS.MERIDA] : LOCATION_API_MAP[LOCATIONS.CDMX];
+      const locationForAPI = LOCATION_API_MAP[editingItem.Ubicacion as keyof typeof LOCATION_API_MAP] || LOCATION_API_MAP[LOCATIONS.CDMX];
 
       const updatedInventory = [...inventory];
       updatedInventory[selectedItemIndex] = {
@@ -1689,7 +1741,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
       try {
 
-        const locationForAPI = item.Ubicacion === LOCATIONS.MERIDA ? LOCATION_API_MAP[LOCATIONS.MERIDA] : LOCATION_API_MAP[LOCATIONS.CDMX];
+        const locationForAPI = LOCATION_API_MAP[item.Ubicacion as keyof typeof LOCATION_API_MAP] || LOCATION_API_MAP[LOCATIONS.CDMX];
 
         const inventoryUpdatePayload = {
           oldItem: {
@@ -1929,11 +1981,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         Unidades: item.Unidades || "",
       };
 
-      const existingMeridaItem = inventory.find(
+      // Determine destination location based on transferDestination state
+      const destinationLocation = transferDestination === "MID" ? LOCATIONS.MERIDA : LOCATIONS.CONPARTEX;
+      const destinationApiLocation = transferDestination; // MID or CONPARTEX
+
+      const existingDestinationItem = inventory.find(
         (invItem) =>
           invItem.Tela.toLowerCase() === item.Tela.toLowerCase() &&
           invItem.Color.toLowerCase() === item.Color.toLowerCase() &&
-          invItem.Ubicacion === LOCATIONS.MERIDA &&
+          invItem.Ubicacion === destinationLocation &&
           invItem.OC === item.OC &&
           Math.abs(invItem.Costo - item.Costo) < 0.01 &&
           invItem.Unidades === item.Unidades
@@ -1942,31 +1998,31 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
       let updatePayload: TransferUpdatePayload;
 
-      if (existingMeridaItem) {
+      if (existingDestinationItem) {
         updatePayload = {
           transferType: "consolidate",
           oldItem,
           existingMeridaItem: {
-            OC: existingMeridaItem.OC,
-            Tela: existingMeridaItem.Tela,
-            Color: existingMeridaItem.Color,
-            Ubicacion: existingMeridaItem.Ubicacion,
-            Cantidad: existingMeridaItem.Cantidad,
-            Costo: existingMeridaItem.Costo,
-            Unidades: existingMeridaItem.Unidades,
+            OC: existingDestinationItem.OC,
+            Tela: existingDestinationItem.Tela,
+            Color: existingDestinationItem.Color,
+            Ubicacion: existingDestinationItem.Ubicacion,
+            Cantidad: existingDestinationItem.Cantidad,
+            Costo: existingDestinationItem.Costo,
+            Unidades: existingDestinationItem.Unidades,
           },
           quantityToTransfer,
-          newMeridaQuantity: existingMeridaItem.Cantidad + quantityToTransfer,
+          newMeridaQuantity: existingDestinationItem.Cantidad + quantityToTransfer,
           sourceLocation: LOCATION_API_MAP[LOCATIONS.CDMX],
-          destinationLocation: LOCATION_API_MAP[LOCATIONS.MERIDA],
+          destinationLocation: destinationApiLocation,
         };
       } else {
 
-        const newMeridaItem = {
+        const newDestinationItem = {
           OC: item.OC || "",
           Tela: item.Tela || "",
           Color: item.Color || "",
-          Ubicacion: LOCATIONS.MERIDA,
+          Ubicacion: destinationLocation,
           Cantidad: quantityToTransfer,
           Costo: item.Costo,
           Unidades: item.Unidades || "",
@@ -1979,10 +2035,10 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         updatePayload = {
           transferType: "create",
           oldItem,
-          newItem: newMeridaItem,
+          newItem: newDestinationItem,
           quantityToTransfer,
           sourceLocation: LOCATION_API_MAP[LOCATIONS.CDMX],
-          destinationLocation: LOCATION_API_MAP[LOCATIONS.MERIDA],
+          destinationLocation: destinationApiLocation,
         };
       }
 
@@ -1994,26 +2050,26 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         Total: item.Costo * (item.Cantidad - quantityToTransfer),
       };
 
-      if (existingMeridaItem) {
-        const meridaIndex = updatedInventory.findIndex(
+      if (existingDestinationItem) {
+        const destinationIndex = updatedInventory.findIndex(
           (invItem) =>
             invItem.Tela.toLowerCase() ===
-              existingMeridaItem.Tela.toLowerCase() &&
+              existingDestinationItem.Tela.toLowerCase() &&
             invItem.Color.toLowerCase() ===
-              existingMeridaItem.Color.toLowerCase() &&
-            invItem.Ubicacion === LOCATIONS.MERIDA &&
-            invItem.OC === existingMeridaItem.OC &&
-            Math.abs(invItem.Costo - existingMeridaItem.Costo) < 0.01
+              existingDestinationItem.Color.toLowerCase() &&
+            invItem.Ubicacion === destinationLocation &&
+            invItem.OC === existingDestinationItem.OC &&
+            Math.abs(invItem.Costo - existingDestinationItem.Costo) < 0.01
         );
 
-        if (meridaIndex >= 0) {
-          updatedInventory[meridaIndex] = {
-            ...updatedInventory[meridaIndex],
+        if (destinationIndex >= 0) {
+          updatedInventory[destinationIndex] = {
+            ...updatedInventory[destinationIndex],
             Cantidad:
-              updatedInventory[meridaIndex].Cantidad + quantityToTransfer,
+              updatedInventory[destinationIndex].Cantidad + quantityToTransfer,
             Total:
-              updatedInventory[meridaIndex].Costo *
-              (updatedInventory[meridaIndex].Cantidad + quantityToTransfer),
+              updatedInventory[destinationIndex].Costo *
+              (updatedInventory[destinationIndex].Cantidad + quantityToTransfer),
           };
 
         }
@@ -2057,7 +2113,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           if (inventoryResponseData.operation === "consolidate") {
             toast.success("Traslado realizado exitosamente");
           } else if (inventoryResponseData.operation === "create") {
-            toast.success("Nuevo item creado en Mérida");
+            const destinationName = transferDestination === "MID" ? "Mérida" : "CEDIS CONPARTEX";
+            toast.success(`Nuevo item creado en ${destinationName}`);
           }
         } catch (inventoryError) {
           console.error(
@@ -2092,6 +2149,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 transferRolls: selectedTransferRolls.map(
                   (index) => availableTransferRolls[index].roll_number
                 ),
+                destinationLocation: transferDestination,
               }),
             });
 
@@ -2161,7 +2219,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         setIsProcessingTransfer(false);
       }
     }
-  };
+  };;
 
   const generateFileName = (): string => {
     const now = new Date();
@@ -2685,12 +2743,17 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   );
 
   const uniqueUbicaciones = useMemo(
-    () =>
-      Array.from(
+    () => {
+      const inventoryUbicaciones = Array.from(
         new Set(filteredInventoryForUbicacion.map((item) => item.Ubicacion))
-      )
-        .filter((ubicacion) => ubicacion !== "" && ubicacion != null)
-        .sort(),
+      ).filter((ubicacion) => ubicacion !== "" && ubicacion != null);
+      
+      // Always include all predefined locations to ensure CONPARTEX is available
+      const allLocations = [LOCATIONS.CDMX, LOCATIONS.MERIDA, LOCATIONS.CONPARTEX];
+      const combinedUbicaciones = Array.from(new Set([...allLocations, ...inventoryUbicaciones]));
+      
+      return combinedUbicaciones.sort();
+    },
     [filteredInventoryForUbicacion]
   );
 
@@ -3198,6 +3261,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         <SelectItem value="all">Todas</SelectItem>
                         <SelectItem value={LOCATIONS.CDMX}>{LOCATIONS.CDMX}</SelectItem>
                         <SelectItem value={LOCATIONS.MERIDA}>{LOCATIONS.MERIDA}</SelectItem>
+                        <SelectItem value={LOCATIONS.CONPARTEX}>{LOCATIONS.CONPARTEX}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -3475,7 +3539,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                             )} ${currentViewingYear}`
                                           : item.Ubicacion !== LOCATIONS.CDMX
                                             ? "Solo desde CDMX"
-                                            : "Trasladar a Mérida"}
+                                            : "Trasladar rollos"}
                                       </p>
                                     </TooltipContent>
                                   </Tooltip>
@@ -3725,6 +3789,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         <SelectContent>
                           <SelectItem value={LOCATIONS.CDMX}>{LOCATIONS.CDMX}</SelectItem>
                           <SelectItem value={LOCATIONS.MERIDA}>{LOCATIONS.MERIDA}</SelectItem>
+                          <SelectItem value={LOCATIONS.CONPARTEX}>{LOCATIONS.CONPARTEX}</SelectItem>
                         </SelectContent>
                       </Select>
                       {formErrors.Ubicacion && touchedFields.Ubicacion && (
@@ -4329,7 +4394,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
                   />
                 </svg>
-                Trasladar a Mérida
+                Trasladar a {transferDestination === "MID" ? "Mérida" : "CEDIS CONPARTEX"}
               </DialogTitle>
               <DialogDescription>
                 {selectedItemIndex !== null &&
@@ -4338,6 +4403,27 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             </DialogHeader>
 
             <div className="space-y-3">
+              {/* Destination Selection */}
+              <div className="space-y-2">
+                <Label>Destino del traslado</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant={transferDestination === "MID" ? "default" : "outline"}
+                    onClick={() => setTransferDestination("MID")}
+                    className="flex-1"
+                  >
+                    Mérida
+                  </Button>
+                  <Button
+                    variant={transferDestination === "CONPARTEX" ? "default" : "outline"}
+                    onClick={() => setTransferDestination("CONPARTEX")}
+                    className="flex-1"
+                  >
+                    CEDIS CONPARTEX
+                  </Button>
+                </div>
+              </div>
+
               <div className="flex gap-4">
                 <Button
                   variant={transferMode === "manual" ? "default" : "outline"}
@@ -4807,6 +4893,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     <SelectContent>
                       <SelectItem value={LOCATIONS.CDMX}>{LOCATIONS.CDMX}</SelectItem>
                       <SelectItem value={LOCATIONS.MERIDA}>{LOCATIONS.MERIDA}</SelectItem>
+                      <SelectItem value={LOCATIONS.CONPARTEX}>{LOCATIONS.CONPARTEX}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

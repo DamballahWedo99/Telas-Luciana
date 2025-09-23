@@ -6,6 +6,7 @@
 export const LOCATIONS = {
   CDMX: "CDMX",
   MERIDA: "Mérida",
+  CONPARTEX: "CEDIS CONPARTEX",
   MID: "MID", // API code for Mérida
 } as const;
 
@@ -15,6 +16,7 @@ export type LocationType = typeof LOCATIONS[keyof typeof LOCATIONS];
 export const LOCATION_API_MAP = {
   [LOCATIONS.CDMX]: "CDMX",
   [LOCATIONS.MERIDA]: "MID",
+  [LOCATIONS.CONPARTEX]: "CONPARTEX",
 } as const;
 
 // Status constants
@@ -46,4 +48,5 @@ export const DEFAULTS = {
 export const LOCATION_OPTIONS = [
   { value: LOCATIONS.CDMX, label: LOCATIONS.CDMX },
   { value: LOCATIONS.MERIDA, label: LOCATIONS.MERIDA },
+  { value: LOCATIONS.CONPARTEX, label: LOCATIONS.CONPARTEX },
 ] as const;

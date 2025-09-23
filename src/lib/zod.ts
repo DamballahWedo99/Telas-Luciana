@@ -172,7 +172,7 @@ export const newRowSchema = z.object({
     .regex(/^[^<>]+$/, {
       message: "El Color no puede contener los caracteres < o >",
     }),
-  Ubicacion: z.enum(["CDMX", "Mérida"], {
+  Ubicacion: z.enum(["CDMX", "Mérida", "CEDIS CONPARTEX"], {
     message: "Debe seleccionar una ubicación válida",
   }),
   Cantidad: z
