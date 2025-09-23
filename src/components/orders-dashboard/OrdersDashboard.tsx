@@ -679,6 +679,15 @@ const PedidosDashboard: React.FC = () => {
     }
 
     filtered.sort((a, b) => {
+      // Ordenar por año primero (más reciente primero)
+      const yearA = a.Year || 0;
+      const yearB = b.Year || 0;
+
+      if (yearA !== yearB) {
+        return yearB - yearA; // Años más recientes primero
+      }
+
+      // Si el año es el mismo, ordenar por fecha (más reciente primero)
       if (!a.fecha_pedido) return 1;
       if (!b.fecha_pedido) return -1;
 

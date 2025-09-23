@@ -456,7 +456,7 @@ const OrdersTable: React.FC<{
     const ordenDeCompra = row.orden_de_compra || "";
     const totalFactura = row.total_factura || 0;
     const tipoDeCambio = row.tipo_de_cambio || 0;
-    const totalGastos = row.total_gastos || 0;
+    const totalGastos = parseNumericValue(row.total_gastos);
     const mFactura = row.m_factura || 1;
 
     const totalMxp = totalFactura * tipoDeCambio;
@@ -661,7 +661,7 @@ const OrdersTable: React.FC<{
                         $MXN {formatCurrency(calculatedData.totalMxp)}
                       </td>
                       <td className="p-2 align-middle">
-                        ${formatCurrency(row.total_gastos || 0)}
+                        ${formatCurrency(parseNumericValue(row.total_gastos))}
                       </td>
                       <td className="p-2 align-middle">
                         {(calculatedData.tCambio * 100).toFixed(2)}%
@@ -794,6 +794,23 @@ interface OrdersCardProps {
   setShowPendingOrders?: React.Dispatch<React.SetStateAction<boolean>>;
   pendingOrdersCount?: number;
 }
+
+const parseNumericValue = (value: string | number | null | undefined): number => {
+  if (typeof value === "number") return value;
+  if (!value) return 0;
+
+  // Convert to string and handle comma-separated values
+  const stringValue = String(value);
+  if (stringValue.includes(",")) {
+    // Remove commas from string values before parsing
+    const cleanedValue = stringValue.replace(/,/g, "");
+    const parsed = parseFloat(cleanedValue);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+
+  const parsed = parseFloat(stringValue);
+  return isNaN(parsed) ? 0 : parsed;
+};
 
 export const OrdersCard: React.FC<OrdersCardProps> = ({
   data,
@@ -1135,7 +1152,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     const ordenDeCompra = row.orden_de_compra || "";
     const totalFactura = row.total_factura || 0;
     const tipoDeCambio = row.tipo_de_cambio || 0;
-    const totalGastos = row.total_gastos || 0;
+    const totalGastos = parseNumericValue(row.total_gastos);
     const mFactura = row.m_factura || 1;
 
     const totalMxp = totalFactura * tipoDeCambio;
@@ -1196,7 +1213,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           "M Factura": formatCurrency(row.m_factura || 0),
           "Tipo Cambio": formatCurrency(row.tipo_de_cambio || 0),
           "Total MXP": `$MXN ${formatCurrency(calculatedData.totalMxp)}`,
-          "Total Gastos": `$${formatCurrency(row.total_gastos || 0)}`,
+          "Total Gastos": `$${formatCurrency(parseNumericValue(row.total_gastos))}`,
           "T. Cambio": `${(calculatedData.tCambio * 100).toFixed(2)}%`,
           "Gastos MXP": `$MXN ${formatCurrency(calculatedData.gastosMxp)}`,
           "DDP Total MXP": `$MXN ${formatCurrency(calculatedData.ddpTotalMxp)}`,
