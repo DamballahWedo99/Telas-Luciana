@@ -267,71 +267,81 @@ export default function Navbar({
         )}
 
 
-        {(isMajorAdmin || canAccessPriceHistory) && (
-          <Sheet>
+        {/* Inventario - Acceso universal */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={currentView === "inventory" ? "default" : "outline"}
+                size="icon"
+                onClick={() => onViewChange("inventory")}
+              >
+                <LayoutDashboardIcon className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Inventario</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Dashboards para Major Admin */}
+        {isMajorAdmin && (
+          <>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <SheetTrigger asChild>
-                    <Button variant="outline" size="icon">
-                      <LayoutDashboardIcon className="h-4 w-4" />
-                    </Button>
-                  </SheetTrigger>
+                  <Button
+                    variant={currentView === "orders" ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => onViewChange("orders")}
+                  >
+                    <BarChart className="h-4 w-4" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Dashboards</p>
+                  <p>Pedidos Históricos</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <SheetContent side="right" className="w-80">
-              <SheetHeader>
-                <SheetTitle>Seleccionar Dashboard</SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-col gap-4 mt-8">
-                <Button
-                  variant={currentView === "inventory" ? "default" : "ghost"}
-                  className="justify-start h-12 text-base"
-                  onClick={() => onViewChange("inventory")}
-                >
-                  <LayoutDashboardIcon className="mr-3 h-5 w-5" />
-                  Inventario
-                </Button>
-                
-                {isMajorAdmin && (
-                  <>
-                    <Button
-                      variant={currentView === "orders" ? "default" : "ghost"}
-                      className="justify-start h-12 text-base"
-                      onClick={() => onViewChange("orders")}
-                    >
-                      <BarChart className="mr-3 h-5 w-5" />
-                      Pedidos históricos
-                    </Button>
-                    
-                    <Button
-                      variant={currentView === "logistics" ? "default" : "ghost"}
-                      className="justify-start h-12 text-base"
-                      onClick={() => onViewChange("logistics")}
-                    >
-                      <TruckIcon className="mr-3 h-5 w-5" />
-                      Logística
-                    </Button>
-                  </>
-                )}
-                
-                {canAccessPriceHistory && (
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <Button
-                    variant={currentView === "price-history" ? "default" : "ghost"}
-                    className="justify-start h-12 text-base"
-                    onClick={() => onViewChange("price-history")}
+                    variant={currentView === "logistics" ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => onViewChange("logistics")}
                   >
-                    <TrendingUp className="mr-3 h-5 w-5" />
-                    Historial de Precios
+                    <TruckIcon className="h-4 w-4" />
                   </Button>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Logística</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </>
+        )}
+
+        {/* Historial de Precios */}
+        {canAccessPriceHistory && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={currentView === "price-history" ? "default" : "outline"}
+                  size="icon"
+                  onClick={() => onViewChange("price-history")}
+                >
+                  <TrendingUp className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Historial de Precios</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
 
         <Button
