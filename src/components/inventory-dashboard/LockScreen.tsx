@@ -516,10 +516,12 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
                     <SelectItem value="Mérida">Mérida</SelectItem>
+                    <SelectItem value="CEDIS CONPARTEX">CEDIS CONPARTEX</SelectItem>
                     {uniqueUbicaciones.map(
                       (ubicacion) =>
                         ubicacion !== "Mérida" &&
-                        ubicacion !== "Edo Mex" && (
+                        ubicacion !== "Edo Mex" &&
+                        ubicacion !== "CEDIS CONPARTEX" && (
                           <SelectItem key={ubicacion} value={ubicacion}>
                             {ubicacion}
                           </SelectItem>

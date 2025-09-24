@@ -12,6 +12,7 @@ import {
   TrashIcon,
   PlusIcon,
   Download,
+  X,
 } from "lucide-react";
 import { logisticsSchema } from "@/lib/zod";
 import { useLogisticsPDF } from "@/hooks/useLogisticsPDF";
@@ -40,6 +41,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { YearFilter } from "./YearFilter";
 
 interface TelaLogistic {
   tipo_tela: string;
@@ -82,6 +84,7 @@ export const LogisticsCard: React.FC = () => {
   const [isLoadingLogistics, setIsLoadingLogistics] = useState(false);
   const [logisticsOrders, setLogisticsOrders] = useState<LogisticsData[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [editingOrder, setEditingOrder] = useState<LogisticsData | null>(null);
   const [originalOrderName, setOriginalOrderName] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -135,21 +138,43 @@ export const LogisticsCard: React.FC = () => {
     loadLogisticsOrders();
   }, []);
 
-  const filteredLogisticsOrders = React.useMemo(() => {
-    if (!searchQuery.trim()) return logisticsOrders;
+  // Calculate available years from ETA dates
+  const availableYears = React.useMemo(() => {
+    const years = logisticsOrders
+      .filter(order => order.eta)
+      .map(order => new Date(order.eta).getFullYear())
+      .filter((year, index, array) => array.indexOf(year) === index && !isNaN(year))
+      .sort((a, b) => b - a); // Descending order (newest first)
 
-    return logisticsOrders.filter(
-      (order) =>
-        order.orden_de_compra
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
+    return years;
+  }, [logisticsOrders]);
+
+  const filteredLogisticsOrders = React.useMemo(() => {
+    let filtered = logisticsOrders;
+
+    // Year filter based on ETA
+    if (selectedYear !== null) {
+      filtered = filtered.filter(order => {
+        if (!order.eta) return false;
+        const etaYear = new Date(order.eta).getFullYear();
+        return etaYear === selectedYear;
+      });
+    }
+
+    // Text search filter (existing)
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(order =>
+        order.orden_de_compra.toLowerCase().includes(searchQuery.toLowerCase()) ||
         order.contenedor?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         order.importador?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        order.tela?.some((tela) =>
+        order.tela?.some(tela =>
           tela.tipo_tela.toLowerCase().includes(searchQuery.toLowerCase())
         )
-    );
-  }, [logisticsOrders, searchQuery]);
+      );
+    }
+
+    return filtered;
+  }, [logisticsOrders, searchQuery, selectedYear]);
 
   const handleInputChange = (field: keyof LogisticsData, value: string) => {
     setFormData((prev) => ({
@@ -661,7 +686,18 @@ export const LogisticsCard: React.FC = () => {
                       Logística
                     </h1>
                     <p className="text-sm text-gray-500">
-                      {filteredLogisticsOrders.length} órdenes activas
+                      {selectedYear ? (
+                        <>
+                          {filteredLogisticsOrders.length} órdenes de {selectedYear}
+                          {filteredLogisticsOrders.length !== logisticsOrders.length && (
+                            <span className="text-blue-600 ml-1">
+                              (de {logisticsOrders.length} total)
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        `${filteredLogisticsOrders.length} órdenes activas`
+                      )}
                     </p>
                   </div>
                 </div>
@@ -673,18 +709,48 @@ export const LogisticsCard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Barra de búsqueda mejorada */}
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+              {/* Barra de búsqueda y filtros */}
+              <div className="space-y-4">
+                {/* Search Bar */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar órdenes, contenedores..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 text-sm"
+                  />
                 </div>
-                <input
-                  type="text"
-                  placeholder="Buscar órdenes, contenedores..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 text-sm"
-                />
+
+                {/* Filters Row */}
+                <div className="flex gap-3 items-center">
+                  {/* Year Filter */}
+                  <div className="flex-1">
+                    <YearFilter
+                      selectedYear={selectedYear}
+                      onYearChange={setSelectedYear}
+                      availableYears={availableYears}
+                      className="w-full min-h-[44px]"
+                    />
+                  </div>
+
+                  {/* Clear Filters Button */}
+                  {(selectedYear !== null || searchQuery.trim()) && (
+                    <button
+                      onClick={() => {
+                        setSelectedYear(null);
+                        setSearchQuery("");
+                      }}
+                      className="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-colors text-sm flex items-center gap-2 min-h-[44px] whitespace-nowrap"
+                    >
+                      <X className="h-4 w-4" />
+                      Limpiar
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -749,8 +815,18 @@ export const LogisticsCard: React.FC = () => {
                 Información Logística
               </CardTitle>
               <CardDescription>
-                {filteredLogisticsOrders.length} órdenes de logística
-                registradas
+                {selectedYear ? (
+                  <>
+                    {filteredLogisticsOrders.length} órdenes de {selectedYear}
+                    {filteredLogisticsOrders.length !== logisticsOrders.length && (
+                      <span className="text-blue-600 ml-2">
+                        (de {logisticsOrders.length} total)
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  `${filteredLogisticsOrders.length} órdenes de logística registradas`
+                )}
               </CardDescription>
             </div>
             <div className="flex space-x-2">
@@ -775,19 +851,48 @@ export const LogisticsCard: React.FC = () => {
           </CardHeader>
 
           <CardContent>
-            {/* Barra de búsqueda */}
-            <div className="mb-4">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search size={16} className="text-gray-400" />
+            {/* Barra de búsqueda y filtros */}
+            <div className="mb-6">
+              <div className="flex gap-4 items-center">
+                {/* Search Input */}
+                <div className="flex-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search size={16} className="text-gray-400" />
+                  </div>
+                  <Input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por orden, contenedor, importador..."
+                    className="pl-10"
+                  />
                 </div>
-                <Input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar por orden, contenedor, importador o tipo de tela..."
-                  className="pl-10 w-full"
-                />
+
+                {/* Year Filter */}
+                <div className="min-w-[160px]">
+                  <YearFilter
+                    selectedYear={selectedYear}
+                    onYearChange={setSelectedYear}
+                    availableYears={availableYears}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Clear Filters Button */}
+                {(selectedYear !== null || searchQuery.trim()) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedYear(null);
+                      setSearchQuery("");
+                    }}
+                    className="text-gray-500 hover:text-gray-700 whitespace-nowrap"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Limpiar
+                  </Button>
+                )}
               </div>
             </div>
 
