@@ -49,6 +49,7 @@ interface TelaLogistic {
 
 interface LogisticsData {
   orden_de_compra: string;
+  año: number;
   tela: TelaLogistic[];
   contenedor: string;
   etd: string;
@@ -107,6 +108,7 @@ export const LogisticsCard: React.FC = () => {
 
   const [formData, setFormData] = useState<LogisticsData>({
     orden_de_compra: "",
+    año: new Date().getFullYear(),
     tela: [],
     contenedor: "",
     etd: "",
@@ -138,12 +140,17 @@ export const LogisticsCard: React.FC = () => {
     loadLogisticsOrders();
   }, []);
 
-  // Calculate available years from ETA dates
+  // Calculate available years from año field - only include valid years
   const availableYears = React.useMemo(() => {
     const years = logisticsOrders
-      .filter(order => order.eta)
-      .map(order => new Date(order.eta).getFullYear())
-      .filter((year, index, array) => array.indexOf(year) === index && !isNaN(year))
+      .map(order => order.año)
+      .filter((year, index, array) => {
+        // Only include valid numeric years that are not duplicated
+        return typeof year === 'number' && 
+               !isNaN(year) && 
+               year > 0 && 
+               array.indexOf(year) === index;
+      })
       .sort((a, b) => b - a); // Descending order (newest first)
 
     return years;
@@ -152,12 +159,13 @@ export const LogisticsCard: React.FC = () => {
   const filteredLogisticsOrders = React.useMemo(() => {
     let filtered = logisticsOrders;
 
-    // Year filter based on ETA
+    // Year filter based on año field - only show records with valid year values
     if (selectedYear !== null) {
       filtered = filtered.filter(order => {
-        if (!order.eta) return false;
-        const etaYear = new Date(order.eta).getFullYear();
-        return etaYear === selectedYear;
+        // Only include records that have a valid year field and matches the selected year
+        return typeof order.año === 'number' && 
+               !isNaN(order.año) && 
+               order.año === selectedYear;
       });
     }
 
@@ -176,7 +184,7 @@ export const LogisticsCard: React.FC = () => {
     return filtered;
   }, [logisticsOrders, searchQuery, selectedYear]);
 
-  const handleInputChange = (field: keyof LogisticsData, value: string) => {
+  const handleInputChange = (field: keyof LogisticsData, value: string | number) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -191,6 +199,7 @@ export const LogisticsCard: React.FC = () => {
     setDeleteConfirmation(null);
     setFormData({
       orden_de_compra: "",
+      año: new Date().getFullYear(),
       tela: [],
       contenedor: "",
       etd: "",
@@ -209,6 +218,7 @@ export const LogisticsCard: React.FC = () => {
     setDeleteConfirmation(null);
     setFormData({
       orden_de_compra: "",
+      año: new Date().getFullYear(),
       tela: [],
       contenedor: "",
       etd: "",
@@ -333,6 +343,7 @@ export const LogisticsCard: React.FC = () => {
       setOriginalOrderName("");
       setFormData({
         orden_de_compra: "",
+        año: new Date().getFullYear(),
         tela: [],
         contenedor: "",
         etd: "",
@@ -970,6 +981,26 @@ export const LogisticsCard: React.FC = () => {
                   )}
                 </div>
 
+                {/* Año */}
+                <div>
+                  <Label htmlFor="año" className="text-sm font-medium text-gray-700">
+                    Año *
+                  </Label>
+                  <Input
+                    id="año"
+                    type="number"
+                    min="2020"
+                    max={Math.max(2030, new Date().getFullYear() + 2)}
+                    value={formData.año}
+                    onChange={(e) => handleInputChange("año", parseInt(e.target.value) || new Date().getFullYear())}
+                    placeholder="Año de la orden"
+                    className={`mt-1.5 w-full h-11 px-3 border rounded-lg focus:outline-none transition-colors ${formErrors.año ? "border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                  />
+                  {formErrors.año && (
+                    <p className="text-red-500 text-xs mt-1.5">{formErrors.año}</p>
+                  )}
+                </div>
+
                 {/* Contenedor */}
                 <div>
                   <Label htmlFor="contenedor" className="text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -1198,6 +1229,26 @@ export const LogisticsCard: React.FC = () => {
                     <p className="text-sm text-red-600">
                       {formErrors.orden_de_compra}
                     </p>
+                  )}
+                </div>
+
+                {/* Año */}
+                <div className="space-y-2">
+                  <Label htmlFor="año">Año *</Label>
+                  <Input
+                    id="año"
+                    type="number"
+                    min="2020"
+                    max={Math.max(2030, new Date().getFullYear() + 2)}
+                    value={formData.año}
+                    onChange={(e) =>
+                      handleInputChange("año", parseInt(e.target.value) || new Date().getFullYear())
+                    }
+                    placeholder="Año de la orden"
+                    className={`w-full ${formErrors.año ? "border-red-500" : ""}`}
+                  />
+                  {formErrors.año && (
+                    <p className="text-sm text-red-600">{formErrors.año}</p>
                   )}
                 </div>
 

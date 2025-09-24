@@ -17,6 +17,7 @@ interface TelaLogistic {
 
 interface LogisticsData {
   orden_de_compra: string;
+  año: number; // NEW: Mandatory year field (2020-2030)
   tela: TelaLogistic[];
   contenedor: string;
   etd: string; // Estimated Time of Departure
@@ -26,6 +27,80 @@ interface LogisticsData {
   fecha_registro?: string; // Cuando se registró la información
   fecha_actualizacion?: string; // Cuando se actualizó por última vez
   original_orden_de_compra?: string; // Para manejar cambios de nombre en actualizaciones
+}
+
+// Validation helper functions
+function validateYear(year: unknown): number | null {
+  const currentYear = new Date().getFullYear();
+  const minYear = 2020;
+  const maxYear = Math.max(2030, currentYear + 2); // Allow up to 2 years in the future
+
+  if (typeof year !== 'number' || !Number.isInteger(year)) {
+    return null;
+  }
+
+  if (year < minYear || year > maxYear) {
+    return null;
+  }
+
+  return year;
+}
+
+
+function validateLogisticsData(data: LogisticsData): { isValid: boolean; error?: string } {
+  // Validate orden_de_compra
+  if (!data.orden_de_compra?.trim()) {
+    return {
+      isValid: false,
+      error: "La orden de compra es obligatoria"
+    };
+  }
+
+  // Validate año
+  const validatedYear = validateYear(data.año);
+  if (validatedYear === null) {
+    const currentYear = new Date().getFullYear();
+    const maxYear = Math.max(2030, currentYear + 2);
+    return {
+      isValid: false,
+      error: `El año debe ser un número entero entre 2020 y ${maxYear}`
+    };
+  }
+
+  // Update the year with validated value
+  data.año = validatedYear;
+
+  // Validate telas if provided
+  if (Array.isArray(data.tela) && data.tela.length > 0) {
+    const incompleteTelas = data.tela.filter(
+      tela => !tela.tipo_tela?.trim()
+    );
+
+    if (incompleteTelas.length > 0) {
+      return {
+        isValid: false,
+        error: "Las telas agregadas deben tener tipo especificado"
+      };
+    }
+  }
+
+  // Validate date consistency if ETA/ETD are provided
+  if (data.eta) {
+    try {
+      const etaDate = new Date(data.eta);
+      if (!isNaN(etaDate.getTime())) {
+        const etaYear = etaDate.getFullYear();
+        if (Math.abs(etaYear - data.año) > 1) {
+          console.warn(`⚠️ Year mismatch: año=${data.año}, ETA year=${etaYear} for order ${data.orden_de_compra}`);
+        }
+      }
+    } catch {
+      // Invalid date format, but not a blocking error
+      console.warn(`⚠️ Invalid ETA date format: ${data.eta} for order ${data.orden_de_compra}`);
+    }
+  }
+
+  return { isValid: true };
 }
 
 async function createLogisticsData(request: NextRequest) {
@@ -56,26 +131,13 @@ async function createLogisticsData(request: NextRequest) {
     const body = await request.json();
     const logisticsData: LogisticsData = body;
 
-    // Validar datos requeridos
-    if (!logisticsData.orden_de_compra?.trim()) {
+    // Validate logistics data
+    const validation = validateLogisticsData(logisticsData);
+    if (!validation.isValid) {
       return NextResponse.json(
-        { error: "La orden de compra es obligatoria" },
+        { error: validation.error },
         { status: 400 }
       );
-    }
-
-    // Solo validar telas si se envían (no es obligatorio)
-    if (Array.isArray(logisticsData.tela) && logisticsData.tela.length > 0) {
-      const incompleteTelas = logisticsData.tela.filter(
-        tela => !tela.tipo_tela?.trim()
-      );
-
-      if (incompleteTelas.length > 0) {
-        return NextResponse.json(
-          { error: "Las telas agregadas deben tener tipo especificado" },
-          { status: 400 }
-        );
-      }
     }
 
     // Agregar fecha de registro
@@ -84,28 +146,28 @@ async function createLogisticsData(request: NextRequest) {
       fecha_registro: new Date().toISOString(),
     };
 
-    console.log(`🚛 Creando información logística para orden: ${logisticsData.orden_de_compra}`);
+    console.log(`🚛 Creando información logística para orden: ${logisticsData.orden_de_compra} (año: ${logisticsData.año})`);
 
     // Verificar si ya existe información logística para esta orden
     let existingData: LogisticsData[] = [];
     const consolidatedPath = `logistica/orden_${logisticsData.orden_de_compra}.json`;
-    
+
     try {
       const getCommand = new GetObjectCommand({
         Bucket: "telas-luciana",
         Key: consolidatedPath,
       });
-      
+
       const existingResponse = await s3Client.send(getCommand);
       if (existingResponse.Body) {
         const existingContent = await existingResponse.Body.transformToString();
         const parsed = JSON.parse(existingContent);
         existingData = Array.isArray(parsed) ? parsed : [parsed];
-        console.log(`📋 Encontrada información logística existente para ${logisticsData.orden_de_compra}`);
+
+
       }
     } catch {
       // El archivo no existe, es la primera vez que se registra información para esta orden
-      console.log(`📋 Primera información logística para orden: ${logisticsData.orden_de_compra}`);
     }
 
     // Agregar nueva información al historial
@@ -124,6 +186,7 @@ async function createLogisticsData(request: NextRequest) {
     console.log(`✅ Información logística guardada exitosamente:`);
     console.log(`   - Archivo: ${consolidatedPath}`);
     console.log(`   - Orden: ${logisticsData.orden_de_compra}`);
+    console.log(`   - Año: ${logisticsData.año}`);
     console.log(`   - Contenedor: ${logisticsData.contenedor || 'No especificado'}`);
     console.log(`   - Telas: ${logisticsData.tela?.length || 0}`);
 
@@ -132,6 +195,7 @@ async function createLogisticsData(request: NextRequest) {
       message: "Información logística guardada exitosamente",
       data: {
         orden_de_compra: logisticsData.orden_de_compra,
+        año: logisticsData.año,
         contenedor: logisticsData.contenedor || null,
         telas_count: logisticsData.tela?.length || 0,
         archivo_guardado: consolidatedPath,
@@ -140,7 +204,7 @@ async function createLogisticsData(request: NextRequest) {
   } catch (error) {
     console.error("❌ Error guardando información logística:", error);
     return NextResponse.json(
-      { 
+      {
         error: "Error interno del servidor al guardar información logística",
         details: error instanceof Error ? error.message : "Error desconocido"
       },
@@ -168,11 +232,23 @@ async function getLogisticsData(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const ordenDeCompra = searchParams.get('orden_de_compra');
+    const año = searchParams.get('año');
+
+    // Parse and validate year filter if provided
+    let yearFilter: number | null = null;
+    if (año) {
+      yearFilter = validateYear(parseInt(año, 10));
+      if (yearFilter === null) {
+        return NextResponse.json(
+          { error: `Año inválido: ${año}. Debe ser un número entre 2020 y 2030` },
+          { status: 400 }
+        );
+      }
+    }
 
     // Si no se especifica una orden de compra, devolver todas las órdenes disponibles
     if (!ordenDeCompra) {
-      console.log(`🔍 Consultando todas las órdenes logísticas disponibles`);
-      
+
       const listCommand = new ListObjectsV2Command({
         Bucket: "telas-luciana",
         Prefix: "logistica/orden_",
@@ -193,17 +269,23 @@ async function getLogisticsData(request: NextRequest) {
           });
 
           const fileResponse = await s3Client.send(getCommand);
-          
+
           if (fileResponse.Body) {
             const content = await fileResponse.Body.transformToString();
             const logisticsData = JSON.parse(content);
-            
+
             // Si es un array, tomar el último elemento (más reciente)
-            const latestData = Array.isArray(logisticsData) 
-              ? logisticsData[logisticsData.length - 1]
-              : logisticsData;
-            
-            allLogisticsData.push(latestData);
+            let processedData: LogisticsData;
+            if (Array.isArray(logisticsData)) {
+              processedData = logisticsData[logisticsData.length - 1];
+            } else {
+              processedData = logisticsData;
+            }
+
+            // Apply year filter if specified - only include records that have año field
+            if (yearFilter === null || (typeof processedData.año === 'number' && processedData.año === yearFilter)) {
+              allLogisticsData.push(processedData);
+            }
           }
         } catch {
           // Continuar con el siguiente archivo si hay error
@@ -211,17 +293,18 @@ async function getLogisticsData(request: NextRequest) {
         }
       }
 
-      console.log(`✅ Encontradas ${allLogisticsData.length} órdenes logísticas`);
 
       return NextResponse.json({
         success: true,
         data: allLogisticsData,
         count: allLogisticsData.length,
+        filters: {
+          año: yearFilter
+        }
       });
     }
 
     // Consulta específica por orden de compra
-    console.log(`🔍 Consultando información logística para orden: ${ordenDeCompra}`);
 
     const getCommand = new GetObjectCommand({
       Bucket: "telas-luciana",
@@ -230,16 +313,46 @@ async function getLogisticsData(request: NextRequest) {
 
     try {
       const response = await s3Client.send(getCommand);
-      
+
       if (response.Body) {
         const content = await response.Body.transformToString();
         const logisticsData = JSON.parse(content);
 
-        console.log(`✅ Información logística encontrada para orden: ${ordenDeCompra}`);
+        // Process data and filter by year if specified
+        let processedData;
+        if (Array.isArray(logisticsData)) {
+          // Filter by year if specified - only include records that have año field
+          const filteredArray = yearFilter
+            ? logisticsData.filter(item => typeof item.año === 'number' && item.año === yearFilter)
+            : logisticsData;
+
+          if (filteredArray.length === 0 && yearFilter) {
+            return NextResponse.json(
+              { error: `No se encontró información logística para la orden ${ordenDeCompra} en el año ${yearFilter}` },
+              { status: 404 }
+            );
+          }
+
+          processedData = filteredArray;
+        } else {
+          // Filter by year if specified - only include if record has año field
+          if (yearFilter && (typeof logisticsData.año !== 'number' || logisticsData.año !== yearFilter)) {
+            return NextResponse.json(
+              { error: `No se encontró información logística para la orden ${ordenDeCompra} en el año ${yearFilter}` },
+              { status: 404 }
+            );
+          }
+
+          processedData = logisticsData;
+        }
+
 
         return NextResponse.json({
           success: true,
-          data: logisticsData,
+          data: processedData,
+          filters: {
+            año: yearFilter
+          }
         });
       }
     } catch (getError) {
@@ -259,7 +372,7 @@ async function getLogisticsData(request: NextRequest) {
   } catch (error) {
     console.error("❌ Error consultando información logística:", error);
     return NextResponse.json(
-      { 
+      {
         error: "Error interno del servidor al consultar información logística",
         details: error instanceof Error ? error.message : "Error desconocido"
       },
@@ -303,7 +416,6 @@ async function deleteLogisticsData(request: NextRequest) {
       );
     }
 
-    console.log(`🗑️ Eliminando información logística para orden: ${ordenDeCompra}`);
 
     const filePath = `logistica/orden_${ordenDeCompra}.json`;
 
@@ -331,9 +443,6 @@ async function deleteLogisticsData(request: NextRequest) {
 
     await s3Client.send(deleteCommand);
 
-    console.log(`✅ Información logística eliminada exitosamente:`);
-    console.log(`   - Archivo eliminado: ${filePath}`);
-    console.log(`   - Orden: ${ordenDeCompra}`);
 
     return NextResponse.json({
       success: true,
@@ -346,7 +455,7 @@ async function deleteLogisticsData(request: NextRequest) {
   } catch (error) {
     console.error("❌ Error eliminando información logística:", error);
     return NextResponse.json(
-      { 
+      {
         error: "Error interno del servidor al eliminar información logística",
         details: error instanceof Error ? error.message : "Error desconocido"
       },
@@ -383,60 +492,43 @@ async function updateLogisticsData(request: NextRequest) {
     const body = await request.json();
     const logisticsData: LogisticsData = body;
 
-    // Validar datos requeridos
-    if (!logisticsData.orden_de_compra?.trim()) {
+    // Validate logistics data
+    const validation = validateLogisticsData(logisticsData);
+    if (!validation.isValid) {
       return NextResponse.json(
-        { error: "La orden de compra es obligatoria" },
+        { error: validation.error },
         { status: 400 }
       );
     }
 
-    // Solo validar telas si se envían (no es obligatorio)
-    if (Array.isArray(logisticsData.tela) && logisticsData.tela.length > 0) {
-      const incompleteTelas = logisticsData.tela.filter(
-        tela => !tela.tipo_tela?.trim()
-      );
-
-      if (incompleteTelas.length > 0) {
-        return NextResponse.json(
-          { error: "Las telas agregadas deben tener tipo especificado" },
-          { status: 400 }
-        );
-      }
-    }
-
     const originalOrderName = logisticsData.original_orden_de_compra || logisticsData.orden_de_compra;
-    const isOrderNameChanged = logisticsData.original_orden_de_compra && 
+    const isOrderNameChanged = logisticsData.original_orden_de_compra &&
                                logisticsData.original_orden_de_compra !== logisticsData.orden_de_compra;
 
-    console.log(`✏️ Actualizando información logística para orden: ${logisticsData.orden_de_compra}`);
-    if (isOrderNameChanged) {
-      console.log(`📝 Detectado cambio de nombre: "${originalOrderName}" → "${logisticsData.orden_de_compra}"`);
-    }
 
     const originalFilePath = `logistica/orden_${originalOrderName}.json`;
     const newFilePath = `logistica/orden_${logisticsData.orden_de_compra}.json`;
 
     // Verificar si existe información logística existente (usando el nombre original)
     let existingData: LogisticsData[] = [];
-    
+
     try {
       const getCommand = new GetObjectCommand({
         Bucket: "telas-luciana",
         Key: originalFilePath,
       });
-      
+
       const existingResponse = await s3Client.send(getCommand);
       if (existingResponse.Body) {
         const existingContent = await existingResponse.Body.transformToString();
         const parsed = JSON.parse(existingContent);
         existingData = Array.isArray(parsed) ? parsed : [parsed];
-        console.log(`📋 Encontrada información logística existente para ${originalOrderName}`);
+
+
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'NoSuchKey') {
         // Si no existe el archivo, crear uno nuevo (caso de primera actualización)
-        console.log(`📋 No se encontró archivo existente, creando nuevo para ${logisticsData.orden_de_compra}`);
         existingData = [];
       } else {
         throw error;
@@ -446,7 +538,7 @@ async function updateLogisticsData(request: NextRequest) {
     // Modificar directamente la información más reciente
     const dataToSave: LogisticsData = {
       ...logisticsData,
-      fecha_registro: existingData.length > 0 
+      fecha_registro: existingData.length > 0
         ? existingData[existingData.length - 1]?.fecha_registro || new Date().toISOString()
         : new Date().toISOString(),
       fecha_actualizacion: new Date().toISOString(),
@@ -456,7 +548,7 @@ async function updateLogisticsData(request: NextRequest) {
     delete dataToSave.original_orden_de_compra;
 
     // Si hay datos existentes, reemplazar el último elemento; si no, crear nuevo array
-    const updatedData = existingData.length > 0 
+    const updatedData = existingData.length > 0
       ? [...existingData.slice(0, -1), dataToSave]
       : [dataToSave];
 
@@ -478,27 +570,19 @@ async function updateLogisticsData(request: NextRequest) {
           Key: originalFilePath,
         });
         await s3Client.send(deleteCommand);
-        console.log(`🗑️ Archivo original eliminado: ${originalFilePath}`);
       } catch (deleteError) {
         console.warn(`⚠️ No se pudo eliminar el archivo original: ${originalFilePath}`, deleteError);
         // No fallar la operación por no poder eliminar el archivo anterior
       }
     }
 
-    console.log(`✅ Información logística actualizada exitosamente:`);
-    console.log(`   - Archivo: ${newFilePath}`);
-    console.log(`   - Orden: ${logisticsData.orden_de_compra}`);
-    console.log(`   - Contenedor: ${logisticsData.contenedor || 'No especificado'}`);
-    console.log(`   - Telas: ${logisticsData.tela?.length || 0}`);
-    if (isOrderNameChanged) {
-      console.log(`   - Nombre anterior: ${originalOrderName}`);
-    }
 
     return NextResponse.json({
       success: true,
       message: "Información logística actualizada exitosamente",
       data: {
         orden_de_compra: logisticsData.orden_de_compra,
+        año: logisticsData.año,
         contenedor: logisticsData.contenedor || null,
         telas_count: logisticsData.tela?.length || 0,
         archivo_guardado: newFilePath,
@@ -508,7 +592,7 @@ async function updateLogisticsData(request: NextRequest) {
   } catch (error) {
     console.error("❌ Error actualizando información logística:", error);
     return NextResponse.json(
-      { 
+      {
         error: "Error interno del servidor al actualizar información logística",
         details: error instanceof Error ? error.message : "Error desconocido"
       },

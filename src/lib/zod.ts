@@ -374,6 +374,11 @@ export const logisticsSchema = z.object({
     .min(1, { message: "La orden de compra es obligatoria" })
     .max(50, { message: "La orden de compra no puede tener más de 50 caracteres" })
     .regex(/^[^<>'";;&|`$(){}[\]\\]*$/, { message: "La orden de compra contiene caracteres no permitidos" }),
+  año: z
+    .number({ message: "El año debe ser un número" })
+    .int("El año debe ser un número entero")
+    .min(2020, "El año no puede ser menor a 2020")
+    .max(Math.max(2030, new Date().getFullYear() + 2), `El año no puede ser mayor a ${Math.max(2030, new Date().getFullYear() + 2)}`),
   tela: z
     .array(
       z.object({

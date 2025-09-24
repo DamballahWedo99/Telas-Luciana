@@ -29,7 +29,7 @@ export const YearFilter: React.FC<YearFilterProps> = ({
       <SelectTrigger className={`w-[160px] ${className}`}>
         <div className="flex items-center gap-2">
           <CalendarIcon className="h-4 w-4 text-gray-500" />
-          <SelectValue placeholder="Año ETA" />
+          <SelectValue placeholder="Filtrar por año" />
         </div>
       </SelectTrigger>
       <SelectContent>
