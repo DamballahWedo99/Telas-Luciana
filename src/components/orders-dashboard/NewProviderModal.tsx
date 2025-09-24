@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FabricCombobox } from "@/components/ui/fabric-combobox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   UserPlus,
@@ -115,6 +116,14 @@ export const NewProviderModal: React.FC<NewProviderModalProps> = ({
     state.unit && 
     errors.length === 0;
 
+  // Transform availableFabrics to FabricCombobox format
+  const fabricOptions = useMemo(() => {
+    return availableFabrics.map(fabric => ({
+      fabricId: fabric.fabricId,
+      fabricName: fabric.fabricName
+    }));
+  }, [availableFabrics]);
+
   // Get selected fabric info for preview
   const selectedFabric = availableFabrics.find(f => f.fabricId === state.fabricId);
 
@@ -204,24 +213,14 @@ export const NewProviderModal: React.FC<NewProviderModalProps> = ({
               <Shirt className="h-4 w-4 mr-1" />
               Tela
             </Label>
-            <Select
+            <FabricCombobox
+              fabrics={fabricOptions}
               value={state.fabricId}
               onValueChange={(value) => updateField('fabricId', value)}
-            >
-              <SelectTrigger className={fabricErrors.length > 0 ? 'border-red-500' : ''}>
-                <SelectValue placeholder="Seleccionar tela..." />
-              </SelectTrigger>
-              <SelectContent className="z-[10000]">
-                {availableFabrics.map((fabric) => (
-                  <SelectItem key={fabric.fabricId} value={fabric.fabricId}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{fabric.fabricName}</span>
-                      <span className="text-xs text-gray-500">{fabric.fabricId}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Seleccionar tela..."
+              className={fabricErrors.length > 0 ? 'border-red-500' : ''}
+              disabled={isLoading}
+            />
             {fabricErrors.map((error, index) => (
               <div key={index} className="text-sm text-red-600 flex items-center">
                 <AlertTriangle className="h-3 w-3 mr-1" />
