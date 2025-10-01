@@ -438,15 +438,58 @@ const PedidosDashboard: React.FC = () => {
     };
   }, []);
 
+  const parseNumericValue = (value: string | number | null | undefined): number => {
+    if (typeof value === "number") return value;
+    if (!value) return 0;
+
+    // Convert to string and handle comma-separated values
+    const stringValue = String(value);
+    if (stringValue.includes(",")) {
+      // Remove commas from string values before parsing
+      const cleanedValue = stringValue.replace(/,/g, "");
+      const parsed = parseFloat(cleanedValue);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+
+    const parsed = parseFloat(stringValue);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const calculateTotals = useCallback(
     (filteredRows: PedidoData[]) => {
+      // Primero calcular los grupos de orden de compra (igual que en OrdersCard)
+      const ordenGroups: Record<string, { totalMxpSum: number }> = {};
+      filteredRows.forEach((r) => {
+        const oc = r.orden_de_compra || "";
+        const tf = Number(r.total_factura) || 0;
+        const tc = Number(r.tipo_de_cambio) || 0;
+        const tm = tf * tc;
+        if (!ordenGroups[oc]) {
+          ordenGroups[oc] = { totalMxpSum: 0 };
+        }
+        ordenGroups[oc].totalMxpSum += isNaN(tm) ? 0 : tm;
+      });
+
+      // Calcular totales usando la misma lógica que OrdersCard
       const totals = filteredRows.reduce(
         (acc: TotalsData, row) => {
-          acc.totalFactura += Number(row.total_factura) || 0;
-          acc.totalMxp += Number(row.total_mxp) || 0;
-          acc.gastosMxp += Number(row.gastos_mxp) || 0;
-          acc.ddpTotalMxp += Number(row.ddp_total_mxp) || 0;
-          return acc;
+          const ordenDeCompra = row.orden_de_compra || "";
+          const totalFactura = Number(row.total_factura) || 0;
+          const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+          const totalGastos = parseNumericValue(row.total_gastos);
+
+          const totalMxp = totalFactura * tipoDeCambio;
+          const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1;
+          const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
+          const gastosMxp = tCambio * totalGastos;
+          const ddpTotalMxp = gastosMxp + totalMxp;
+
+          return {
+            totalFactura: acc.totalFactura + totalFactura,
+            totalMxp: acc.totalMxp + (isNaN(totalMxp) ? 0 : totalMxp),
+            gastosMxp: acc.gastosMxp + (isNaN(gastosMxp) ? 0 : gastosMxp),
+            ddpTotalMxp: acc.ddpTotalMxp + (isNaN(ddpTotalMxp) ? 0 : ddpTotalMxp),
+          };
         },
         {
           totalFactura: 0,

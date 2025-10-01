@@ -393,6 +393,15 @@ const OrdersTable: React.FC<{
   currentPage: number;
   totalPages: number;
   goToPage: (page: number) => void;
+  totals: {
+    mPedidos: number;
+    totalFactura: number;
+    mFactura: number;
+    totalMxp: number;
+    totalGastos: number;
+    gastosMxp: number;
+    ddpTotalMxp: number;
+  };
 }> = ({
   filteredData,
   paginatedData,
@@ -401,6 +410,7 @@ const OrdersTable: React.FC<{
   currentPage,
   totalPages,
   goToPage,
+  totals,
 }) => {
   const getPageNumbers = () => {
     const pages = [];
@@ -705,6 +715,37 @@ const OrdersTable: React.FC<{
                 })
               )}
             </tbody>
+            <tfoot className="bg-muted sticky bottom-0 z-10">
+              <tr>
+                <td colSpan={10} className="p-2 align-middle font-bold">
+                  Total:
+                </td>
+                <td className="p-2 align-middle font-bold">
+                  {formatCurrency(totals.mPedidos)}
+                </td>
+                <td className="p-2 align-middle"></td>
+                <td className="p-2 align-middle"></td>
+                <td className="p-2 align-middle font-bold">
+                  ${formatCurrency(totals.totalFactura)}
+                </td>
+                <td className="p-2 align-middle font-bold">
+                  {formatCurrency(totals.mFactura)}
+                </td>
+                <td className="p-2 align-middle"></td>
+                <td className="p-2 align-middle font-bold">
+                  $MXN {formatCurrency(totals.totalMxp)}
+                </td>
+                <td className="p-2 align-middle"></td>
+                <td className="p-2 align-middle"></td>
+                <td className="p-2 align-middle font-bold">
+                  $MXN {formatCurrency(totals.gastosMxp)}
+                </td>
+                <td className="p-2 align-middle font-bold">
+                  $MXN {formatCurrency(totals.ddpTotalMxp)}
+                </td>
+                <td colSpan={10} className="p-2 align-middle"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -1148,6 +1189,57 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     ubicacionFilter,
   ]);
 
+  const totals = useMemo(() => {
+    // Primero calcular los grupos de orden de compra
+    const ordenGroups: Record<string, { totalMxpSum: number }> = {};
+    filteredData.forEach((r) => {
+      const oc = r.orden_de_compra || "";
+      const tf = Number(r.total_factura) || 0;
+      const tc = Number(r.tipo_de_cambio) || 0;
+      const tm = tf * tc;
+      if (!ordenGroups[oc]) {
+        ordenGroups[oc] = { totalMxpSum: 0 };
+      }
+      ordenGroups[oc].totalMxpSum += isNaN(tm) ? 0 : tm;
+    });
+
+    const initialTotals = {
+      mPedidos: 0,
+      totalFactura: 0,
+      mFactura: 0,
+      totalMxp: 0,
+      totalGastos: 0,
+      gastosMxp: 0,
+      ddpTotalMxp: 0,
+    };
+
+    return filteredData.reduce(
+      (acc, row) => {
+        const ordenDeCompra = row.orden_de_compra || "";
+        const totalFactura = Number(row.total_factura) || 0;
+        const tipoDeCambio = Number(row.tipo_de_cambio) || 0;
+        const totalGastos = parseNumericValue(row.total_gastos);
+
+        const totalMxp = totalFactura * tipoDeCambio;
+        const totalMxpSum = ordenGroups[ordenDeCompra]?.totalMxpSum || 1;
+        const tCambio = totalMxpSum > 0 ? totalMxp / totalMxpSum : 0;
+        const gastosMxp = tCambio * totalGastos;
+        const ddpTotalMxp = gastosMxp + totalMxp;
+
+        return {
+          mPedidos: acc.mPedidos + (Number(row["pedido_cliente.total_m_pedidos"]) || 0),
+          totalFactura: acc.totalFactura + (Number(row.total_factura) || 0),
+          mFactura: acc.mFactura + (Number(row.m_factura) || 0),
+          totalMxp: acc.totalMxp + (isNaN(totalMxp) ? 0 : totalMxp),
+          totalGastos: acc.totalGastos + (isNaN(totalGastos) ? 0 : totalGastos),
+          gastosMxp: acc.gastosMxp + (isNaN(gastosMxp) ? 0 : gastosMxp),
+          ddpTotalMxp: acc.ddpTotalMxp + (isNaN(ddpTotalMxp) ? 0 : ddpTotalMxp),
+        };
+      },
+      initialTotals
+    );
+  }, [filteredData]);
+
   const calculateRowData = (row: PedidoData) => {
     const ordenDeCompra = row.orden_de_compra || "";
     const totalFactura = row.total_factura || 0;
@@ -1314,6 +1406,19 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           ],
         ],
         body: tableData,
+        foot: [
+          [
+            { content: "TOTALES:", colSpan: 5, styles: { fontStyle: "bold", fillColor: [220, 220, 220] } },
+            { content: formatCurrency(totals.mPedidos), styles: { fontStyle: "bold", fillColor: [220, 220, 220] } },
+            { content: "", styles: { fillColor: [220, 220, 220] } },
+            { content: "", styles: { fillColor: [220, 220, 220] } },
+            { content: `$${formatCurrency(totals.totalFactura)}`, styles: { fontStyle: "bold", fillColor: [220, 220, 220] } },
+            { content: "", styles: { fillColor: [220, 220, 220] } },
+            { content: `$MXN ${formatCurrency(totals.totalMxp)}`, styles: { fontStyle: "bold", fillColor: [220, 220, 220] } },
+            { content: `$MXN ${formatCurrency(totals.ddpTotalMxp)}`, styles: { fontStyle: "bold", fillColor: [220, 220, 220] } },
+            { content: "", colSpan: 3, styles: { fillColor: [220, 220, 220] } },
+          ],
+        ],
         startY: 35,
         styles: {
           fontSize: 6,
@@ -1322,6 +1427,12 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         headStyles: {
           fillColor: [41, 128, 185],
           textColor: 255,
+          fontSize: 7,
+          fontStyle: "bold",
+        },
+        footStyles: {
+          fillColor: [220, 220, 220],
+          textColor: 0,
           fontSize: 7,
           fontStyle: "bold",
         },
@@ -1612,6 +1723,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
                   currentPage={currentPage}
                   totalPages={totalPages}
                   goToPage={goToPage}
+                  totals={totals}
                 />
               </CardContent>
             </>

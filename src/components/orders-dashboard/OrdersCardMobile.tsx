@@ -601,7 +601,7 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
                             <div className="bg-gray-50 rounded-lg p-3 border-l-4 border-gray-400">
                               <div className="text-xs text-gray-600 mb-1 font-medium uppercase tracking-wide">Cantidad</div>
                               <div className="font-semibold text-gray-800">
-                                {formatCurrency(Number(order["pedido_cliente.total_m_pedidos"]) || 0)} {order["pedido_cliente.unidad"] || "m"}
+                                {formatCurrency(Number(order.m_factura) || 0)} {order["pedido_cliente.unidad"] || "m"}
                               </div>
                             </div>
                             <div className="bg-gray-50 rounded-lg p-3 border-l-4 border-gray-400">
