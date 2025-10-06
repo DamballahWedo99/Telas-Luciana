@@ -438,6 +438,11 @@ const PedidosDashboard: React.FC = () => {
     };
   }, []);
 
+  const normalizeTextField = (value: string | number | null | undefined): string => {
+    if (!value) return "";
+    return String(value).trim().toUpperCase();
+  };
+
   const parseNumericValue = (value: string | number | null | undefined): number => {
     if (typeof value === "number") return value;
     if (!value) return 0;
@@ -572,11 +577,29 @@ const PedidosDashboard: React.FC = () => {
                   row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
               }
 
-              return {
+              // Normalizar campos de texto críticos a mayúsculas
+              const normalized: PedidoData = {
                 ...row,
                 total_mxp: totalMxp,
                 llega_a_mexico: llegaAMexico,
               };
+
+              // Normalizar tipo de tela
+              if (row["pedido_cliente.tipo_tela"]) {
+                normalized["pedido_cliente.tipo_tela"] = normalizeTextField(row["pedido_cliente.tipo_tela"]);
+              }
+
+              // Normalizar color
+              if (row["pedido_cliente.color"]) {
+                normalized["pedido_cliente.color"] = normalizeTextField(row["pedido_cliente.color"]);
+              }
+
+              // Normalizar orden de compra para consistencia
+              if (row.orden_de_compra) {
+                normalized.orden_de_compra = normalizeTextField(row.orden_de_compra);
+              }
+
+              return normalized;
             });
 
           const ordenGroups: Record<string, { totalMxpSum: number }> = {};
@@ -818,11 +841,29 @@ const PedidosDashboard: React.FC = () => {
               llegaAMexico = row.llega_a_Lazaro || row.llega_a_Manzanillo || "";
             }
 
-            return {
+            // Normalizar campos de texto críticos a mayúsculas
+            const normalized: PedidoData = {
               ...row,
               total_mxp: totalMxp,
               llega_a_mexico: llegaAMexico,
             };
+
+            // Normalizar tipo de tela
+            if (row["pedido_cliente.tipo_tela"]) {
+              normalized["pedido_cliente.tipo_tela"] = normalizeTextField(row["pedido_cliente.tipo_tela"]);
+            }
+
+            // Normalizar color
+            if (row["pedido_cliente.color"]) {
+              normalized["pedido_cliente.color"] = normalizeTextField(row["pedido_cliente.color"]);
+            }
+
+            // Normalizar orden de compra para consistencia
+            if (row.orden_de_compra) {
+              normalized.orden_de_compra = normalizeTextField(row.orden_de_compra);
+            }
+
+            return normalized;
           });
 
         // Calcular campos DDP igual que en el useEffect original
