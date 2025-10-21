@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +17,35 @@ export function ContactSection() {
     message: "",
   });
 
+  // Anti-bot mechanisms
+  const [honeypot, setHoneypot] = useState("");
+  const [formStartTime, setFormStartTime] = useState<number>(0);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Initialize form start time on mount
+  useEffect(() => {
+    setFormStartTime(Date.now());
+  }, []);
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+
+    // Track legitimate user interaction
+    if (!hasInteracted && name !== "website") {
+      setHasInteracted(true);
+    }
+
     setFormData((prevState) => ({
       ...prevState,
       [name]: value,
     }));
+  };
+
+  const handleHoneypotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setHoneypot(e.target.value);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -32,21 +53,32 @@ export function ContactSection() {
     setIsLoading(true);
 
     try {
+      const submissionTime = Date.now();
+
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          website: honeypot, // Honeypot field
+          _timestamp: formStartTime, // Form render time
+          _submitted: submissionTime, // Submission time
+          _interacted: hasInteracted, // User interaction flag
+        }),
       });
 
       if (response.ok) {
         toast.success("Mensaje enviado exitosamente");
         setFormData({ name: "", email: "", subject: "", message: "" });
+        setHoneypot("");
+        setHasInteracted(false);
+        setFormStartTime(Date.now());
       } else {
         const errorData = await response.json();
         console.error("Error al enviar el correo:", errorData);
-        toast.error("Error al enviar el mensaje");
+        toast.error(errorData.message || "Error al enviar el mensaje");
       }
     } catch (error) {
       console.error("Error de red al enviar el mensaje:", error);
@@ -68,9 +100,29 @@ export function ContactSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-[8vw] lg:gap-[4vw]">
           <div>
             <form
+              ref={formRef}
               onSubmit={handleSubmit}
               className="flex flex-col h-full space-y-[2vh]"
             >
+              {/* Honeypot field - hidden from users, visible to bots */}
+              <input
+                type="text"
+                name="website"
+                value={honeypot}
+                onChange={handleHoneypotChange}
+                autoComplete="off"
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  left: "-9999px",
+                  width: "1px",
+                  height: "1px",
+                  opacity: 0,
+                  pointerEvents: "none",
+                }}
+              />
+
               <Input
                 type="text"
                 name="name"
