@@ -168,6 +168,7 @@ const PedidosDashboard: React.FC = () => {
   const [tipoTelaFilter, setTipoTelaFilter] = useState<string>("all");
   const [colorFilter, setColorFilter] = useState<string>("all");
   const [ubicacionFilter, setUbicacionFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState<string>("all");
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const recordsPerPage = 100;
@@ -718,6 +719,10 @@ const PedidosDashboard: React.FC = () => {
       });
     }
 
+    if (yearFilter && yearFilter !== "all") {
+      filtered = filtered.filter((row) => row.Year === parseInt(yearFilter));
+    }
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((row) => {
@@ -772,6 +777,7 @@ const PedidosDashboard: React.FC = () => {
     tipoTelaFilter,
     colorFilter,
     ubicacionFilter,
+    yearFilter,
     searchQuery,
     calculateTotals,
   ]);
@@ -786,6 +792,7 @@ const PedidosDashboard: React.FC = () => {
     setTipoTelaFilter("all");
     setColorFilter("all");
     setUbicacionFilter("all");
+    setYearFilter("all");
   };
 
   // Función para refrescar datos después de una actualización
@@ -1029,6 +1036,8 @@ const PedidosDashboard: React.FC = () => {
             setColorFilter={setColorFilter}
             ubicacionFilter={ubicacionFilter}
             setUbicacionFilter={setUbicacionFilter}
+            yearFilter={yearFilter}
+            setYearFilter={setYearFilter}
             resetFilters={resetFilters}
             formatDate={formatDate}
             formatCurrency={formatCurrency}

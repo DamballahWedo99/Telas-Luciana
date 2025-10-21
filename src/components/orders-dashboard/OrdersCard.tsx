@@ -138,9 +138,12 @@ interface OrdersFilterSectionProps {
   setColorFilter: React.Dispatch<React.SetStateAction<string>>;
   ubicacionFilter: string;
   setUbicacionFilter: React.Dispatch<React.SetStateAction<string>>;
+  yearFilter: string;
+  setYearFilter: React.Dispatch<React.SetStateAction<string>>;
   ordenDeCompraOptions: string[];
   tipoTelaOptions: string[];
   colorOptions: string[];
+  yearOptions: string[];
   resetFilters: () => void;
 }
 
@@ -155,13 +158,17 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
   setColorFilter,
   ubicacionFilter,
   setUbicacionFilter,
+  yearFilter,
+  setYearFilter,
   ordenDeCompraOptions,
   tipoTelaOptions,
   colorOptions,
+  yearOptions,
 }) => {
   const hasOrdenDeCompraOptions = ordenDeCompraOptions.length > 0;
   const hasTipoTelaOptions = tipoTelaOptions.length > 0;
   const hasColorOptions = colorOptions.length > 0;
+  const hasYearOptions = yearOptions.length > 0;
 
   useEffect(() => {
     if (
@@ -183,6 +190,12 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
       setColorFilter("all");
     }
   }, [colorOptions, colorFilter, setColorFilter]);
+
+  useEffect(() => {
+    if (yearFilter !== "all" && !yearOptions.includes(yearFilter)) {
+      setYearFilter("all");
+    }
+  }, [yearOptions, yearFilter, setYearFilter]);
 
   return (
     <div className="pt-0 pb-4">
@@ -343,6 +356,44 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
             </Select>
           </div>
         </div>
+
+        <div className="min-w-[150px] max-w-[150px]">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="year-filter">Año</Label>
+              {!hasYearOptions && yearFilter !== "all" && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <AlertCircle size={14} className="text-amber-500" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>No hay años disponibles con los filtros actuales</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+            <Select value={yearFilter} onValueChange={setYearFilter}>
+              <SelectTrigger id="year-filter" className="w-full truncate">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {yearOptions
+                  .slice()
+                  .sort((a, b) => parseInt(b) - parseInt(a))
+                  .map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 text-sm">
@@ -369,6 +420,11 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
               Ubicación: {ubicacionFilter}
             </span>
           )}
+          {yearFilter && yearFilter !== "all" && (
+            <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+              Año: {yearFilter}
+            </span>
+          )}
           {searchQuery && (
             <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
               Búsqueda: {searchQuery}
@@ -378,6 +434,7 @@ const OrdersFilterSection: React.FC<OrdersFilterSectionProps> = ({
             (!tipoTelaFilter || tipoTelaFilter === "all") &&
             (!colorFilter || colorFilter === "all") &&
             (!ubicacionFilter || ubicacionFilter === "all") &&
+            (!yearFilter || yearFilter === "all") &&
             !searchQuery && <span className="text-gray-500">Ninguno</span>}
         </div>
       </div>
@@ -823,6 +880,8 @@ interface OrdersCardProps {
   setColorFilter: React.Dispatch<React.SetStateAction<string>>;
   ubicacionFilter: string;
   setUbicacionFilter: React.Dispatch<React.SetStateAction<string>>;
+  yearFilter: string;
+  setYearFilter: React.Dispatch<React.SetStateAction<string>>;
   resetFilters: () => void;
   formatDate: (dateString?: string) => string;
   formatCurrency: (value: number, decimals?: number) => string;
@@ -870,6 +929,8 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   setColorFilter,
   ubicacionFilter,
   setUbicacionFilter,
+  yearFilter,
+  setYearFilter,
   resetFilters,
   formatDate,
   formatCurrency,
@@ -1027,7 +1088,8 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     ordenDeCompraFilter !== "all" ||
     tipoTelaFilter !== "all" ||
     colorFilter !== "all" ||
-    ubicacionFilter !== "all";
+    ubicacionFilter !== "all" ||
+    yearFilter !== "all";
 
   const filteredOptions = useMemo(() => {
     const getFilteredOrdenDeCompraOptions = (): string[] => {
@@ -1070,6 +1132,10 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
               : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
+      }
+
+      if (yearFilter && yearFilter !== "all") {
+        filtered = filtered.filter((item) => item.Year === parseInt(yearFilter));
       }
 
       return [...new Set(filtered.map((item) => item.orden_de_compra))].filter(
@@ -1117,6 +1183,10 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
               : "fecha_pedido";
 
         filtered = filtered.filter((item) => item[ubicacionField]);
+      }
+
+      if (yearFilter && yearFilter !== "all") {
+        filtered = filtered.filter((item) => item.Year === parseInt(yearFilter));
       }
 
       return [
@@ -1168,6 +1238,10 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         filtered = filtered.filter((item) => item[ubicacionField]);
       }
 
+      if (yearFilter && yearFilter !== "all") {
+        filtered = filtered.filter((item) => item.Year === parseInt(yearFilter));
+      }
+
       return [
         ...new Set(filtered.map((item) => item["pedido_cliente.color"])),
       ].filter(
@@ -1175,10 +1249,64 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       );
     };
 
+    const getFilteredYearOptions = (): string[] => {
+      let filtered = [...data];
+
+      // Aplicar filtro de búsqueda primero
+      if (searchQuery) {
+        filtered = filtered.filter(
+          (item) =>
+            item.orden_de_compra
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.tipo_tela"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            item["pedido_cliente.color"]
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase())
+        );
+      }
+
+      if (ordenDeCompraFilter && ordenDeCompraFilter !== "all") {
+        filtered = filtered.filter(
+          (item) => item.orden_de_compra === ordenDeCompraFilter
+        );
+      }
+
+      if (tipoTelaFilter && tipoTelaFilter !== "all") {
+        filtered = filtered.filter(
+          (item) => item["pedido_cliente.tipo_tela"] === tipoTelaFilter
+        );
+      }
+
+      if (colorFilter && colorFilter !== "all") {
+        filtered = filtered.filter(
+          (item) => item["pedido_cliente.color"] === colorFilter
+        );
+      }
+
+      if (ubicacionFilter && ubicacionFilter !== "all") {
+        const ubicacionField =
+          ubicacionFilter === "almacen"
+            ? "llega_almacen_proveedor"
+            : ubicacionFilter === "transito"
+              ? "llega_a_Lazaro"
+              : "fecha_pedido";
+
+        filtered = filtered.filter((item) => item[ubicacionField]);
+      }
+
+      return [...new Set(filtered.map((item) => item.Year?.toString()))].filter(
+        (value): value is string => typeof value === "string" && value !== "" && value !== "undefined"
+      );
+    };
+
     return {
       ordenDeCompraOptions: getFilteredOrdenDeCompraOptions(),
       tipoTelaOptions: getFilteredTipoTelaOptions(),
       colorOptions: getFilteredColorOptions(),
+      yearOptions: getFilteredYearOptions(),
     };
   }, [
     data,
@@ -1187,6 +1315,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
     tipoTelaFilter,
     colorFilter,
     ubicacionFilter,
+    yearFilter,
   ]);
 
   const totals = useMemo(() => {
@@ -1484,9 +1613,12 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           setColorFilter={setColorFilter}
           ubicacionFilter={ubicacionFilter}
           setUbicacionFilter={setUbicacionFilter}
+          yearFilter={yearFilter}
+          setYearFilter={setYearFilter}
           ordenDeCompraOptions={filteredOptions.ordenDeCompraOptions}
           tipoTelaOptions={filteredOptions.tipoTelaOptions}
           colorOptions={filteredOptions.colorOptions}
+          yearOptions={filteredOptions.yearOptions}
           resetFilters={resetFilters}
           handleExportPDF={handleExportPDF}
           isExporting={isExporting}
@@ -1706,9 +1838,12 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
                     setColorFilter={setColorFilter}
                     ubicacionFilter={ubicacionFilter}
                     setUbicacionFilter={setUbicacionFilter}
+                    yearFilter={yearFilter}
+                    setYearFilter={setYearFilter}
                     ordenDeCompraOptions={filteredOptions.ordenDeCompraOptions}
                     tipoTelaOptions={filteredOptions.tipoTelaOptions}
                     colorOptions={filteredOptions.colorOptions}
+                    yearOptions={filteredOptions.yearOptions}
                     resetFilters={resetFilters}
                   />
                 ) : null}

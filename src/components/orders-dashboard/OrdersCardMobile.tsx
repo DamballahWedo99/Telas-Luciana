@@ -114,9 +114,12 @@ interface OrdersCardMobileProps {
   setColorFilter: React.Dispatch<React.SetStateAction<string>>;
   ubicacionFilter: string;
   setUbicacionFilter: React.Dispatch<React.SetStateAction<string>>;
+  yearFilter: string;
+  setYearFilter: React.Dispatch<React.SetStateAction<string>>;
   ordenDeCompraOptions: string[];
   tipoTelaOptions: string[];
   colorOptions: string[];
+  yearOptions: string[];
   resetFilters: () => void;
   handleExportPDF: () => void;
   isExporting: boolean;
@@ -143,9 +146,12 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
   setColorFilter,
   ubicacionFilter,
   setUbicacionFilter,
+  yearFilter,
+  setYearFilter,
   ordenDeCompraOptions,
   tipoTelaOptions,
   colorOptions,
+  yearOptions,
   resetFilters,
   handleExportPDF,
   isExporting,
@@ -160,13 +166,15 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
   const hasOrdenDeCompraOptions = ordenDeCompraOptions.length > 0;
   const hasTipoTelaOptions = tipoTelaOptions.length > 0;
   const hasColorOptions = colorOptions.length > 0;
+  const hasYearOptions = yearOptions.length > 0;
 
   // Verificar si hay filtros activos
-  const hasActiveFilters = searchQuery || 
+  const hasActiveFilters = searchQuery ||
     (ordenDeCompraFilter && ordenDeCompraFilter !== "all") ||
     (tipoTelaFilter && tipoTelaFilter !== "all") ||
     (colorFilter && colorFilter !== "all") ||
-    (ubicacionFilter && ubicacionFilter !== "all");
+    (ubicacionFilter && ubicacionFilter !== "all") ||
+    (yearFilter && yearFilter !== "all");
 
   // Agrupar órdenes por orden_de_compra para mostrar una sola card por orden
   const groupedOrders = useMemo(() => {
@@ -192,7 +200,7 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
             <span className="font-medium text-gray-800">Filtros</span>
             {hasActiveFilters && (
               <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-medium">
-                {[searchQuery, ordenDeCompraFilter !== "all" ? "OC" : "", tipoTelaFilter !== "all" ? "Tela" : "", colorFilter !== "all" ? "Color" : "", ubicacionFilter !== "all" ? "Ubicación" : ""].filter(Boolean).length}
+                {[searchQuery, ordenDeCompraFilter !== "all" ? "OC" : "", tipoTelaFilter !== "all" ? "Tela" : "", colorFilter !== "all" ? "Color" : "", ubicacionFilter !== "all" ? "Ubicación" : "", yearFilter !== "all" ? "Año" : ""].filter(Boolean).length}
               </span>
             )}
           </div>
@@ -359,7 +367,9 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
 
           {/* Ubicación */}
           <div className="space-y-2">
-            <Label htmlFor="ubicacion-filter-mobile">Ubicación</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="ubicacion-filter-mobile">Ubicación</Label>
+            </div>
             <Select value={ubicacionFilter} onValueChange={setUbicacionFilter}>
               <SelectTrigger id="ubicacion-filter-mobile" className="w-full text-xs">
                 <SelectValue placeholder="Todas" />
@@ -369,6 +379,43 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
                 <SelectItem value="almacen">Almacén</SelectItem>
                 <SelectItem value="transito">En Tránsito</SelectItem>
                 <SelectItem value="proveedor">Proveedor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Año */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="year-filter-mobile">Año</Label>
+              {!hasYearOptions && yearFilter !== "all" && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <AlertCircle size={14} className="text-amber-500" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>No hay años disponibles</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+            <Select value={yearFilter} onValueChange={setYearFilter}>
+              <SelectTrigger id="year-filter-mobile" className="w-full text-xs">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {yearOptions
+                  .slice()
+                  .sort((a, b) => parseInt(b) - parseInt(a))
+                  .map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -400,6 +447,11 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
                   Ubicación: {ubicacionFilter}
                 </span>
               )}
+              {yearFilter && yearFilter !== "all" && (
+                <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                  Año: {yearFilter}
+                </span>
+              )}
               {searchQuery && (
                 <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
                   Búsqueda: {searchQuery}
@@ -409,6 +461,7 @@ export const OrdersCardMobile: React.FC<OrdersCardMobileProps> = ({
                 (!tipoTelaFilter || tipoTelaFilter === "all") &&
                 (!colorFilter || colorFilter === "all") &&
                 (!ubicacionFilter || ubicacionFilter === "all") &&
+                (!yearFilter || yearFilter === "all") &&
                 !searchQuery && <span className="text-gray-500">Ninguno</span>}
             </div>
             {/* Botón para limpiar filtros */}
