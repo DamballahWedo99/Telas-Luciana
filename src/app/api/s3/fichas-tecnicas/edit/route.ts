@@ -106,7 +106,7 @@ export async function PUT(request: NextRequest) {
         await s3Client.send(
           new CopyObjectCommand({
             Bucket: "telas-luciana",
-            CopySource: encodeURIComponent(`telas-luciana/${key}`),
+            CopySource: `telas-luciana/${key}`,
             Key: newKey,
             Metadata: updatedMetadata,
             MetadataDirective: "REPLACE",
@@ -119,30 +119,9 @@ export async function PUT(request: NextRequest) {
             Bucket: "telas-luciana",
             Key: key,
           })
-        );
+        );        await invalidateAndWarmFichasTecnicas();
 
-        console.log(
-          "🔥 [FICHAS-TECNICAS] Invalidando cache e iniciando warming después de edit..."
-        );
-        await invalidateAndWarmFichasTecnicas();
-
-        const duration = Date.now() - startTime;
-
-        console.log(
-          `[FICHAS-TECNICAS] User ${session.user.email} edited ficha:`,
-          {
-            originalKey: key,
-            newKey: newKey,
-            originalFileName: newFileName,
-            sanitizedFileName: sanitizedFileName,
-            allowedRoles: allowedRoles,
-            userRole: userRole,
-            updatedMetadata: updatedMetadata,
-            duration: `${duration}ms`,
-          }
-        );
-
-        return NextResponse.json({
+        const duration = Date.now() - startTime;        return NextResponse.json({
           message: "Ficha técnica editada exitosamente",
           newKey: newKey,
           duration: `${duration}ms`,
@@ -167,35 +146,15 @@ export async function PUT(request: NextRequest) {
         await s3Client.send(
           new CopyObjectCommand({
             Bucket: "telas-luciana",
-            CopySource: encodeURIComponent(`telas-luciana/${key}`),
+            CopySource: `telas-luciana/${key}`,
             Key: key,
             Metadata: updatedMetadata,
             MetadataDirective: "REPLACE",
             ContentType: contentType,
           })
-        );
+        );        await invalidateAndWarmFichasTecnicas();
 
-        console.log(
-          "🔥 [FICHAS-TECNICAS] Invalidando cache e iniciando warming después de metadata update..."
-        );
-        await invalidateAndWarmFichasTecnicas();
-
-        const duration = Date.now() - startTime;
-
-        console.log(
-          `[FICHAS-TECNICAS] User ${session.user.email} updated metadata for:`,
-          {
-            key: key,
-            originalFileName: newFileName,
-            sanitizedFileName: sanitizedFileName,
-            allowedRoles: allowedRoles,
-            userRole: userRole,
-            updatedMetadata: updatedMetadata,
-            duration: `${duration}ms`,
-          }
-        );
-
-        return NextResponse.json({
+        const duration = Date.now() - startTime;        return NextResponse.json({
           message: "Permisos actualizados exitosamente",
           newKey: key,
           duration: `${duration}ms`,

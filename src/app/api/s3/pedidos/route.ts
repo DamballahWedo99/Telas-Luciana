@@ -3,6 +3,8 @@ import {
   S3Client,
   GetObjectCommand,
   ListObjectsV2Command,
+  PutObjectCommand,
+  HeadObjectCommand,
   _Object,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
@@ -99,8 +101,6 @@ const fixInvalidJSON = (content: string): string => {
 
 async function loadHistoricalDataFromS3(): Promise<PedidoData[]> {
   const currentYear = new Date().getFullYear();
-  console.log(`📁 Cargando datos históricos consolidados (2015-${currentYear-1}) desde S3 usando estructura de carpetas...`);
-  
   // Solo carpetas de años históricos (no incluir archivos base ni año actual)
   const historicalYearFolders: string[] = [];
   for (let year = 2015; year < currentYear; year++) {
@@ -147,10 +147,17 @@ async function loadHistoricalDataFromS3(): Promise<PedidoData[]> {
                 const newStructure = data as unknown as NewOrderStructure;
                 fileData = newStructure.items.map((item: PedidoData) => ({
                   ...item,
-                  orden_de_compra: newStructure.orden_de_compra
+                  orden_de_compra: newStructure.orden_de_compra,
+                  // Normalizar transportista a mayúsculas
+                  transportista: item.transportista?.toUpperCase()
                 }));
               } else {
-                fileData = [data as PedidoData];
+                const singleData = data as PedidoData;
+                fileData = [{
+                  ...singleData,
+                  // Normalizar transportista a mayúsculas
+                  transportista: singleData.transportista?.toUpperCase()
+                }];
               }
             }
             
@@ -161,19 +168,12 @@ async function loadHistoricalDataFromS3(): Promise<PedidoData[]> {
           console.error(`❌ Error procesando archivo ${fileKey}:`, error);
         }
       }
-    } catch {
-      console.log(`📁 Carpeta ${folderPrefix} no existe o está vacía`);
-    }
-  }
-  
-  console.log(`📁 Cargados ${allHistoricalData.length} pedidos históricos desde carpetas de años`);
-  return allHistoricalData;
+    } catch {    }
+  }  return allHistoricalData;
 }
 
 async function loadCurrentYearDataFromS3(): Promise<PedidoData[]> {
   const currentYear = new Date().getFullYear();
-  console.log(`📁 Cargando datos del año actual (${currentYear}) desde S3 usando estructura de carpetas...`);
-  
   const currentYearFolders = [
     "Pedidos/json/",  // Archivos base (probablemente del año actual)
     `Pedidos/json/${currentYear}/`,  // Carpeta del año actual específico
@@ -220,24 +220,38 @@ async function loadCurrentYearDataFromS3(): Promise<PedidoData[]> {
             
             const jsonData: unknown = JSON.parse(fileContent);
             let fileData: PedidoData[] = [];
-            
+
             if (Array.isArray(jsonData)) {
-              fileData = jsonData as PedidoData[];
+              fileData = (jsonData as PedidoData[]).map(item => ({
+                ...item,
+                // Normalizar transportista y agente_aduanal a mayúsculas
+                transportista: item.transportista?.toUpperCase(),
+                agente_aduanal: item.agente_aduanal?.toUpperCase()
+              }));
             } else {
               const data = jsonData as Record<string, unknown>;
-              
+
               // Verificar si es la nueva estructura con items array
               if (data.orden_de_compra && Array.isArray(data.items)) {
                 const newStructure = data as unknown as NewOrderStructure;
                 fileData = newStructure.items.map((item: PedidoData) => ({
                   ...item,
-                  orden_de_compra: newStructure.orden_de_compra
+                  orden_de_compra: newStructure.orden_de_compra,
+                  // Normalizar transportista y agente_aduanal a mayúsculas
+                  transportista: item.transportista?.toUpperCase(),
+                  agente_aduanal: item.agente_aduanal?.toUpperCase()
                 }));
               } else {
-                fileData = [data as PedidoData];
+                const singleData = data as PedidoData;
+                fileData = [{
+                  ...singleData,
+                  // Normalizar transportista y agente_aduanal a mayúsculas
+                  transportista: singleData.transportista?.toUpperCase(),
+                  agente_aduanal: singleData.agente_aduanal?.toUpperCase()
+                }];
               }
             }
-            
+
             // Si está en carpeta del año actual, incluir todos
             if (folderPrefix === `Pedidos/json/${currentYear}/`) {
               currentYearData.push(...fileData);
@@ -265,13 +279,8 @@ async function loadCurrentYearDataFromS3(): Promise<PedidoData[]> {
           console.error(`❌ Error procesando archivo ${fileKey}:`, error);
         }
       }
-    } catch {
-      console.log(`📁 Carpeta ${folderPrefix} no existe o está vacía`);
-    }
-  }
-  
-  console.log(`📁 Cargados ${currentYearData.length} pedidos del año actual desde carpetas`);
-  return currentYearData;
+    } catch {    }
+  }  return currentYearData;
 }
 
 
@@ -279,16 +288,12 @@ async function loadAllYearsOptimized(): Promise<PedidoData[]> {
   const currentYear = new Date().getFullYear();
   const allData: PedidoData[] = [];
   
-  console.log(`🚀 Iniciando carga optimizada consolidada (${currentYear} actual)`);
-  
   // 1. Cargar datos históricos consolidados (2015 hasta año anterior)
   const cachedHistoricalData = await getCachedHistoricalData();
   
   if (cachedHistoricalData) {
     // Desde cache consolidado ⚡
-    allData.push(...(cachedHistoricalData as PedidoData[]));
-    console.log(`🧊 Datos históricos servidos desde cache consolidado`);
-  } else {
+    allData.push(...(cachedHistoricalData as PedidoData[]));  } else {
     // Desde S3 y luego cachear consolidado 📁
     const historicalData = await loadHistoricalDataFromS3();
     allData.push(...historicalData);
@@ -310,11 +315,7 @@ async function loadAllYearsOptimized(): Promise<PedidoData[]> {
     
     // Cachear año actual con TTL más corto
     await setCachedCurrentYearData(currentYearData);
-  }
-  
-  console.log(`🎯 Cache optimizado completado: ${allData.length} pedidos cargados`);
-  
-  return allData;
+  }  return allData;
 }
 
 async function getPedidosData(request: NextRequest) {
@@ -330,34 +331,16 @@ async function getPedidosData(request: NextRequest) {
 
   const isInternalRequest = isInternalCronRequest(request);
 
-  if (isInternalRequest) {
-    console.log(
-      "🔓 Acceso autorizado para solicitud interna de cron en /api/s3/pedidos"
-    );
-  } else {
+  if (isInternalRequest) {  } else {
     const session = await auth();
 
     if (!session || !session.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
-
-    console.log(
-      "🔓 Acceso autorizado para usuario autenticado:",
-      session.user.email
-    );
-  }
-
-  console.log("🚀 Obteniendo datos de pedidos con cache optimizado por años");
-
-  try {
+    }  }  try {
     // Usar función optimizada con cache por años
     const pedidosData = await loadAllYearsOptimized();
 
     if (pedidosData.length > 0) {
-      console.log(
-        `✅ Pedidos obtenidos exitosamente: ${pedidosData.length} items (cache optimizado por años)`
-      );
-
       return NextResponse.json({
         data: pedidosData,
         debug: {
@@ -390,8 +373,6 @@ async function getPedidosData(request: NextRequest) {
 // No necesitamos el middleware withCache tradicional
 const getCachedPedidos = getPedidosData;
 
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-
 async function updatePedidoData(request: NextRequest) {
   const rateLimitResult = await rateLimit(request, {
     type: "api",
@@ -422,7 +403,7 @@ async function updatePedidoData(request: NextRequest) {
 
     // Manejar tanto formato individual como batch
     const ordersToUpdate = updatedOrders || (updatedOrder ? [updatedOrder] : []);
-    
+
     if (!ordersToUpdate.length || !ordersToUpdate[0]?.orden_de_compra) {
       return NextResponse.json(
         { error: "Datos de pedido inválidos" },
@@ -430,27 +411,38 @@ async function updatePedidoData(request: NextRequest) {
       );
     }
 
+    // Normalizar transportista y agente_aduanal a mayúsculas
+    ordersToUpdate.forEach((order: PedidoData) => {
+      if (order.transportista) {
+        order.transportista = order.transportista.toUpperCase();
+      }
+      if (order.agente_aduanal) {
+        order.agente_aduanal = order.agente_aduanal.toUpperCase();
+      }
+    });
+
     const orderName = ordersToUpdate[0].orden_de_compra;
 
-    console.log(`🔄 Actualizando pedido: ${orderName} (${ordersToUpdate.length} telas)`);
-
-    // Intentar buscar directamente por nombre de archivo primero
-    console.log(`🔍 Buscando archivo directo para ${orderName}...`);
-    // Generar rutas dinámicamente priorizando el año actual
+    // Intentar buscar directamente por nombre de archivo primero    // Generar rutas dinámicamente priorizando el año actual
     const currentYear = new Date().getFullYear();
     const possibleFilePaths: string[] = [
       // Primero intentar la ruta sin año (más común para archivos nuevos)
-      `Pedidos/json/orden_${orderName}.json`,
+      `Pedidos/json/${orderName}.json`,
       // Luego el año actual (más probable para órdenes recientes)
-      `Pedidos/json/${currentYear}/orden_${orderName}.json`,
+      `Pedidos/json/${currentYear}/${orderName}.json`,
     ];
 
     // Agregar años anteriores en orden descendente (más recientes primero)
     for (let year = currentYear - 1; year >= 2015; year--) {
-      possibleFilePaths.push(`Pedidos/json/${year}/orden_${orderName}.json`);
+      possibleFilePaths.push(`Pedidos/json/${year}/${orderName}.json`);
+    }    // Verificar configuración del S3Client antes de buscar    // Primero intentar HeadObject para el path más probable (año actual)
+    const mostLikelyPath = `Pedidos/json/${currentYear}/${orderName}.json`;
+    try {      const headCommand = new HeadObjectCommand({
+        Bucket: "telas-luciana",
+        Key: mostLikelyPath,
+      });
+      const headResponse = await s3Client.send(headCommand);    } catch (headError) {      if (headError instanceof Error) {      }
     }
-
-    console.log(`🔍 Buscando orden ${orderName} en ${possibleFilePaths.length} ubicaciones posibles, priorizando año actual ${currentYear}`);
 
     let filesUpdated = 0;
     const updatedFiles: string[] = [];
@@ -459,58 +451,76 @@ async function updatePedidoData(request: NextRequest) {
     // Intentar encontrar el archivo directamente por nombre (se detiene al encontrar el primero)
     for (const filePath of possibleFilePaths) {
       try {
-        console.log(`🔍 Intentando: ${filePath}`);
         const getCommand = new GetObjectCommand({
           Bucket: "telas-luciana",
           Key: filePath,
         });
 
-        const fileResponse = await s3Client.send(getCommand);
-        
-        if (fileResponse.Body) {
-          let fileContent = await fileResponse.Body.transformToString();
-          fileContent = fixInvalidJSON(fileContent);
-
-          const jsonData: unknown = JSON.parse(fileContent);
-          let fileData: PedidoData[] = [];
+        const fileResponse = await s3Client.send(getCommand);        if (fileResponse.Body) {          let fileContent = await fileResponse.Body.transformToString();
+          fileContent = fixInvalidJSON(fileContent);          const jsonData: unknown = JSON.parse(fileContent);          let fileData: PedidoData[] = [];
           let isNewStructure = false;
           let originalStructure: NewOrderStructure | null = null;
 
           // Normalizar datos a array y detectar estructura
           if (Array.isArray(jsonData)) {
-            fileData = jsonData as PedidoData[];
-          } else {
+            fileData = (jsonData as PedidoData[]).map(item => ({
+              ...item,
+              // Normalizar transportista y agente_aduanal a mayúsculas
+              transportista: item.transportista?.toUpperCase(),
+              agente_aduanal: item.agente_aduanal?.toUpperCase()
+            }));          } else {
             const data = jsonData as Record<string, unknown>;
-            
+
             // Verificar si es la nueva estructura con items array
             if (data.orden_de_compra && Array.isArray(data.items)) {
               isNewStructure = true;
               originalStructure = data as unknown as NewOrderStructure;
               fileData = originalStructure.items.map((item: PedidoData) => ({
                 ...item,
-                orden_de_compra: originalStructure!.orden_de_compra
-              }));
-            } else {
-              fileData = [data as PedidoData];
-            }
+                orden_de_compra: originalStructure!.orden_de_compra,
+                // Normalizar transportista y agente_aduanal a mayúsculas
+                transportista: item.transportista?.toUpperCase(),
+                agente_aduanal: item.agente_aduanal?.toUpperCase()
+              }));            } else {
+              const singleData = data as PedidoData;
+              fileData = [{
+                ...singleData,
+                // Normalizar transportista y agente_aduanal a mayúsculas
+                transportista: singleData.transportista?.toUpperCase(),
+                agente_aduanal: singleData.agente_aduanal?.toUpperCase()
+              }];            }
           }
-
           // Verificar si este archivo contiene alguna de las telas a actualizar
-          const hasTargetOrder = fileData.some(item => 
+          const hasTargetOrder = fileData.some(item =>
             ordersToUpdate.some((orderToUpdate: PedidoData) =>
               item.orden_de_compra === orderToUpdate.orden_de_compra &&
-              item["pedido_cliente.tipo_tela"] === orderToUpdate["pedido_cliente.tipo_tela"] &&
-              item["pedido_cliente.color"] === orderToUpdate["pedido_cliente.color"]
+              item["pedido_cliente.tipo_tela"]?.toLowerCase() === orderToUpdate["pedido_cliente.tipo_tela"]?.toLowerCase() &&
+              item["pedido_cliente.color"]?.toLowerCase() === orderToUpdate["pedido_cliente.color"]?.toLowerCase()
             )
-          );
+          );          // Debug detallado si no hay match
+          if (!hasTargetOrder) {            fileData.forEach((fileItem, idx) => {              const match = ordersToUpdate.find((orderToUpdate: PedidoData) =>
+                fileItem.orden_de_compra === orderToUpdate.orden_de_compra &&
+                fileItem["pedido_cliente.tipo_tela"]?.toLowerCase() === orderToUpdate["pedido_cliente.tipo_tela"]?.toLowerCase() &&
+                fileItem["pedido_cliente.color"]?.toLowerCase() === orderToUpdate["pedido_cliente.color"]?.toLowerCase()
+              );
 
-          if (hasTargetOrder) {
-            // Actualizar todas las telas que coincidan
+              if (match) {              } else {                ordersToUpdate.forEach((orderToUpdate: PedidoData, updateIdx: number) => {
+                  const ordenMatch = fileItem.orden_de_compra === orderToUpdate.orden_de_compra;
+                  const tipoMatch = fileItem["pedido_cliente.tipo_tela"]?.toLowerCase() === orderToUpdate["pedido_cliente.tipo_tela"]?.toLowerCase();
+                  const colorMatch = fileItem["pedido_cliente.color"]?.toLowerCase() === orderToUpdate["pedido_cliente.color"]?.toLowerCase();
+
+                  if (ordenMatch && (!tipoMatch || !colorMatch)) {                  }
+                });
+              }
+            });
+          }
+
+          if (hasTargetOrder) {            // Actualizar todas las telas que coincidan
             const updatedFileData = fileData.map(item => {
               const matchingUpdate = ordersToUpdate.find((orderToUpdate: PedidoData) =>
                 item.orden_de_compra === orderToUpdate.orden_de_compra &&
-                item["pedido_cliente.tipo_tela"] === orderToUpdate["pedido_cliente.tipo_tela"] &&
-                item["pedido_cliente.color"] === orderToUpdate["pedido_cliente.color"]
+                item["pedido_cliente.tipo_tela"]?.toLowerCase() === orderToUpdate["pedido_cliente.tipo_tela"]?.toLowerCase() &&
+                item["pedido_cliente.color"]?.toLowerCase() === orderToUpdate["pedido_cliente.color"]?.toLowerCase()
               );
               
               if (matchingUpdate) {
@@ -548,26 +558,22 @@ async function updatePedidoData(request: NextRequest) {
             
             filesUpdated++;
             updatedFiles.push(filePath);
-            foundDirectMatch = true;
-            console.log(`✅ Archivo actualizado directamente: ${filePath}`);
-            break; // Encontramos el archivo, no necesitamos seguir buscando
-          }
-        }
+            foundDirectMatch = true;            break; // Encontramos el archivo, no necesitamos seguir buscando
+          } else {          }
+        } else {        }
       } catch (error) {
-        // Silenciar completamente los errores NoSuchKey durante búsqueda directa (es esperado)
-        if (error instanceof Error && !error.message.includes('NoSuchKey') && !error.message.includes('The specified key does not exist')) {
-          console.error(`❌ Error procesando archivo ${filePath}:`, error);
-        }
+        // Log detallado de TODOS los errores durante búsqueda para debugging        if (error instanceof Error) {          if ('$metadata' in error) {
+          }
+          if ('Code' in error) {
+          }
+          // Log S3 client state at time of error        } else {        }
         // Continuar con la siguiente ruta posible
         continue;
       }
     }
 
     // Si no encontramos el archivo por búsqueda directa, hacer búsqueda exhaustiva como fallback
-    if (!foundDirectMatch) {
-      console.log(`⚠️ No se encontró archivo directo para ${orderName}, realizando búsqueda exhaustiva...`);
-      
-      // Obtener lista de archivos JSON en S3
+    if (!foundDirectMatch) {      // Obtener lista de archivos JSON en S3
       const folderPrefix = "Pedidos/json/";
       const listCommand = new ListObjectsV2Command({
         Bucket: "telas-luciana",
@@ -600,20 +606,34 @@ async function updatePedidoData(request: NextRequest) {
 
             // Normalizar datos a array y detectar estructura
             if (Array.isArray(jsonData)) {
-              fileData = jsonData as PedidoData[];
+              fileData = (jsonData as PedidoData[]).map(item => ({
+                ...item,
+                // Normalizar transportista y agente_aduanal a mayúsculas
+                transportista: item.transportista?.toUpperCase(),
+                agente_aduanal: item.agente_aduanal?.toUpperCase()
+              }));
             } else {
               const data = jsonData as Record<string, unknown>;
-              
+
               // Verificar si es la nueva estructura con items array
               if (data.orden_de_compra && Array.isArray(data.items)) {
                 isNewStructure = true;
                 originalStructure = data as unknown as NewOrderStructure;
                 fileData = originalStructure.items.map((item: PedidoData) => ({
                   ...item,
-                  orden_de_compra: originalStructure!.orden_de_compra
+                  orden_de_compra: originalStructure!.orden_de_compra,
+                  // Normalizar transportista y agente_aduanal a mayúsculas
+                  transportista: item.transportista?.toUpperCase(),
+                  agente_aduanal: item.agente_aduanal?.toUpperCase()
                 }));
               } else {
-                fileData = [data as PedidoData];
+                const singleData = data as PedidoData;
+                fileData = [{
+                  ...singleData,
+                  // Normalizar transportista y agente_aduanal a mayúsculas
+                  transportista: singleData.transportista?.toUpperCase(),
+                  agente_aduanal: singleData.agente_aduanal?.toUpperCase()
+                }];
               }
             }
 
@@ -670,7 +690,6 @@ async function updatePedidoData(request: NextRequest) {
               
               filesUpdated++;
               updatedFiles.push(fileKey);
-              console.log(`✅ Archivo actualizado (fallback): ${fileKey}`);
             }
           }
         } catch (error) {
@@ -687,13 +706,9 @@ async function updatePedidoData(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Pedido actualizado en ${filesUpdated} archivo(s): ${orderName} (${ordersToUpdate.length} telas)`);
-
     // Invalidar cache inteligentemente según el año del pedido
     try {
-      const invalidatedCount = await invalidateCacheForOrderYear(ordersToUpdate[0]);
-      console.log(`🎯 Cache invalidado inteligentemente: ${invalidatedCount} entradas eliminadas`);
-    } catch (error) {
+      const invalidatedCount = await invalidateCacheForOrderYear(ordersToUpdate[0]);    } catch (error) {
       console.error("Error invalidando cache:", error);
     }
 

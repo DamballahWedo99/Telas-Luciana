@@ -97,10 +97,13 @@ export async function GET(request: NextRequest) {
     const bytes = await response.Body.transformToByteArray();
     const duration = Date.now() - startTime;
 
+    const filename = key.split("/").pop() || "ficha-tecnica.pdf";
+    const encodedFilename = encodeURIComponent(filename);
+
     return new NextResponse(bytes, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${key.split("/").pop()}"`,
+        "Content-Disposition": `attachment; filename="document.pdf"; filename*=UTF-8''${encodedFilename}`,
         "X-Download-Duration": `${duration}ms`,
       },
     });

@@ -172,9 +172,6 @@ export async function invalidateCachePattern(pattern: string) {
 
     if (keys.length > 0) {
       await cacheRedis.del(...keys);
-      console.log(
-        `🗑️ Invalidated ${keys.length} cache entries matching: ${pattern}`
-      );
       return keys.length;
     }
 
@@ -317,23 +314,33 @@ export async function invalidateCurrentYearOnly(): Promise<number> {
   }
 }
 
-export async function invalidateCacheForOrderYear(orderData: { fecha_pedido?: string }): Promise<number> {
+export async function invalidateCacheForOrderYear(orderData: { fecha_pedido?: string; orden_de_compra?: string }): Promise<number> {
   try {
     const currentYear = new Date().getFullYear();
     const cacheKeys = getYearCacheKeys();
-    
+
     let totalInvalidated = 0;
-    
-    // Determinar el año del pedido
+
+    // Determinar el año del pedido desde el nombre de la orden (formato: DR-{mes}-{año}-...)
     let orderYear = currentYear; // Por defecto asumir año actual
-    
-    if (orderData.fecha_pedido) {
+
+    if (orderData.orden_de_compra) {
       try {
-        orderYear = new Date(orderData.fecha_pedido).getFullYear();
-      } catch {
+        // Extraer año del nombre de la orden: DR-04-25-... → "25"
+        const yearMatch = orderData.orden_de_compra.match(/^[A-Z]+-\d+-(\d{2})-/);
+        if (yearMatch) {
+          const yearShort = parseInt(yearMatch[1], 10);
+          // Convertir año corto a año completo (25 → 2025)
+          orderYear = yearShort >= 0 && yearShort <= 99
+            ? (yearShort < 50 ? 2000 + yearShort : 1900 + yearShort)
+            : currentYear;
+        } else {
+        }
+      } catch (parseError) {
       }
+    } else {
     }
-    
+
     if (orderYear === currentYear) {
       // Es del año actual - invalidar solo año actual
       totalInvalidated += await invalidateCachePattern(`${cacheKeys.currentYear}*`);
@@ -341,11 +348,11 @@ export async function invalidateCacheForOrderYear(orderData: { fecha_pedido?: st
       // Es histórico - invalidar cache histórico consolidado
       totalInvalidated += await invalidateCachePattern(`${cacheKeys.historicalConsolidated}*`);
     }
-    
+
     // Siempre invalidar cache combinado
     totalInvalidated += await invalidateCachePattern(`${cacheKeys.combined}*`);
-    
-    
+
+
     return totalInvalidated;
   } catch (error) {
     console.error("Error invalidating cache for order year:", error);
