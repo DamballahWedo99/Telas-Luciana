@@ -285,7 +285,6 @@ async function loadCurrentYearDataFromS3(): Promise<PedidoData[]> {
 
 
 async function loadAllYearsOptimized(): Promise<PedidoData[]> {
-  const currentYear = new Date().getFullYear();
   const allData: PedidoData[] = [];
   
   // 1. Cargar datos históricos consolidados (2015 hasta año anterior)
@@ -423,7 +422,7 @@ async function updatePedidoData(request: NextRequest) {
 
     const orderName = ordersToUpdate[0].orden_de_compra;
 
-    // Intentar buscar directamente por nombre de archivo primero    // Generar rutas dinámicamente priorizando el año actual
+    // Generar rutas dinámicamente priorizando el año actual
     const currentYear = new Date().getFullYear();
     const possibleFilePaths: string[] = [
       // Primero intentar la ruta sin año (más común para archivos nuevos)
@@ -435,13 +434,18 @@ async function updatePedidoData(request: NextRequest) {
     // Agregar años anteriores en orden descendente (más recientes primero)
     for (let year = currentYear - 1; year >= 2015; year--) {
       possibleFilePaths.push(`Pedidos/json/${year}/${orderName}.json`);
-    }    // Verificar configuración del S3Client antes de buscar    // Primero intentar HeadObject para el path más probable (año actual)
+    }
+
+    // Primero intentar HeadObject para el path más probable (año actual)
     const mostLikelyPath = `Pedidos/json/${currentYear}/${orderName}.json`;
-    try {      const headCommand = new HeadObjectCommand({
+    try {
+      const headCommand = new HeadObjectCommand({
         Bucket: "telas-luciana",
         Key: mostLikelyPath,
       });
-      const headResponse = await s3Client.send(headCommand);    } catch (headError) {      if (headError instanceof Error) {      }
+      await s3Client.send(headCommand);
+    } catch {
+      // Silently continue if file doesn't exist
     }
 
     let filesUpdated = 0;
@@ -456,8 +460,14 @@ async function updatePedidoData(request: NextRequest) {
           Key: filePath,
         });
 
-        const fileResponse = await s3Client.send(getCommand);        if (fileResponse.Body) {          let fileContent = await fileResponse.Body.transformToString();
-          fileContent = fixInvalidJSON(fileContent);          const jsonData: unknown = JSON.parse(fileContent);          let fileData: PedidoData[] = [];
+        const fileResponse = await s3Client.send(getCommand);
+
+        if (fileResponse.Body) {
+          let fileContent = await fileResponse.Body.transformToString();
+          fileContent = fixInvalidJSON(fileContent);
+
+          const jsonData: unknown = JSON.parse(fileContent);
+          let fileData: PedidoData[] = [];
           let isNewStructure = false;
           let originalStructure: NewOrderStructure | null = null;
 
@@ -468,7 +478,8 @@ async function updatePedidoData(request: NextRequest) {
               // Normalizar transportista y agente_aduanal a mayúsculas
               transportista: item.transportista?.toUpperCase(),
               agente_aduanal: item.agente_aduanal?.toUpperCase()
-            }));          } else {
+            }));
+          } else {
             const data = jsonData as Record<string, unknown>;
 
             // Verificar si es la nueva estructura con items array
@@ -481,14 +492,16 @@ async function updatePedidoData(request: NextRequest) {
                 // Normalizar transportista y agente_aduanal a mayúsculas
                 transportista: item.transportista?.toUpperCase(),
                 agente_aduanal: item.agente_aduanal?.toUpperCase()
-              }));            } else {
+              }));
+            } else {
               const singleData = data as PedidoData;
               fileData = [{
                 ...singleData,
                 // Normalizar transportista y agente_aduanal a mayúsculas
                 transportista: singleData.transportista?.toUpperCase(),
                 agente_aduanal: singleData.agente_aduanal?.toUpperCase()
-              }];            }
+              }];
+            }
           }
           // Verificar si este archivo contiene alguna de las telas a actualizar
           const hasTargetOrder = fileData.some(item =>
@@ -497,25 +510,33 @@ async function updatePedidoData(request: NextRequest) {
               item["pedido_cliente.tipo_tela"]?.toLowerCase() === orderToUpdate["pedido_cliente.tipo_tela"]?.toLowerCase() &&
               item["pedido_cliente.color"]?.toLowerCase() === orderToUpdate["pedido_cliente.color"]?.toLowerCase()
             )
-          );          // Debug detallado si no hay match
-          if (!hasTargetOrder) {            fileData.forEach((fileItem, idx) => {              const match = ordersToUpdate.find((orderToUpdate: PedidoData) =>
+          );
+
+          // Debug detallado si no hay match
+          if (!hasTargetOrder) {
+            fileData.forEach((fileItem) => {
+              const match = ordersToUpdate.find((orderToUpdate: PedidoData) =>
                 fileItem.orden_de_compra === orderToUpdate.orden_de_compra &&
                 fileItem["pedido_cliente.tipo_tela"]?.toLowerCase() === orderToUpdate["pedido_cliente.tipo_tela"]?.toLowerCase() &&
                 fileItem["pedido_cliente.color"]?.toLowerCase() === orderToUpdate["pedido_cliente.color"]?.toLowerCase()
               );
 
-              if (match) {              } else {                ordersToUpdate.forEach((orderToUpdate: PedidoData, updateIdx: number) => {
+              if (!match) {
+                ordersToUpdate.forEach((orderToUpdate: PedidoData) => {
                   const ordenMatch = fileItem.orden_de_compra === orderToUpdate.orden_de_compra;
                   const tipoMatch = fileItem["pedido_cliente.tipo_tela"]?.toLowerCase() === orderToUpdate["pedido_cliente.tipo_tela"]?.toLowerCase();
                   const colorMatch = fileItem["pedido_cliente.color"]?.toLowerCase() === orderToUpdate["pedido_cliente.color"]?.toLowerCase();
 
-                  if (ordenMatch && (!tipoMatch || !colorMatch)) {                  }
+                  if (ordenMatch && (!tipoMatch || !colorMatch)) {
+                    // Debug info could be logged here if needed
+                  }
                 });
               }
             });
           }
 
-          if (hasTargetOrder) {            // Actualizar todas las telas que coincidan
+          if (hasTargetOrder) {
+            // Actualizar todas las telas que coincidan
             const updatedFileData = fileData.map(item => {
               const matchingUpdate = ordersToUpdate.find((orderToUpdate: PedidoData) =>
                 item.orden_de_compra === orderToUpdate.orden_de_compra &&
@@ -558,22 +579,19 @@ async function updatePedidoData(request: NextRequest) {
             
             filesUpdated++;
             updatedFiles.push(filePath);
-            foundDirectMatch = true;            break; // Encontramos el archivo, no necesitamos seguir buscando
-          } else {          }
-        } else {        }
-      } catch (error) {
-        // Log detallado de TODOS los errores durante búsqueda para debugging        if (error instanceof Error) {          if ('$metadata' in error) {
+            foundDirectMatch = true;
+            break; // Encontramos el archivo, no necesitamos seguir buscando
           }
-          if ('Code' in error) {
-          }
-          // Log S3 client state at time of error        } else {        }
-        // Continuar con la siguiente ruta posible
+        }
+      } catch {
+        // Continuar con la siguiente ruta posible si hay error
         continue;
       }
     }
 
     // Si no encontramos el archivo por búsqueda directa, hacer búsqueda exhaustiva como fallback
-    if (!foundDirectMatch) {      // Obtener lista de archivos JSON en S3
+    if (!foundDirectMatch) {
+      // Obtener lista de archivos JSON en S3
       const folderPrefix = "Pedidos/json/";
       const listCommand = new ListObjectsV2Command({
         Bucket: "telas-luciana",
@@ -708,7 +726,8 @@ async function updatePedidoData(request: NextRequest) {
 
     // Invalidar cache inteligentemente según el año del pedido
     try {
-      const invalidatedCount = await invalidateCacheForOrderYear(ordersToUpdate[0]);    } catch (error) {
+      await invalidateCacheForOrderYear(ordersToUpdate[0]);
+    } catch (error) {
       console.error("Error invalidando cache:", error);
     }
 

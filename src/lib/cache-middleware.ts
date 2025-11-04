@@ -334,11 +334,10 @@ export async function invalidateCacheForOrderYear(orderData: { fecha_pedido?: st
           orderYear = yearShort >= 0 && yearShort <= 99
             ? (yearShort < 50 ? 2000 + yearShort : 1900 + yearShort)
             : currentYear;
-        } else {
         }
-      } catch (parseError) {
+      } catch {
+        // If parsing fails, use current year as fallback
       }
-    } else {
     }
 
     if (orderYear === currentYear) {
