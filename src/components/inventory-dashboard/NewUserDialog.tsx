@@ -118,9 +118,8 @@ export const NewUserDialog: React.FC<NewUserDialogProps> = ({
 
         toast.success(`Usuario creado exitosamente`);
       }
-    } catch (error) {
+    } catch {
       setUserError("Ocurrió un error al crear el usuario");
-      console.error(error);
     } finally {
       setIsCreatingUser(false);
       setTimeout(() => {

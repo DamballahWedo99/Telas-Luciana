@@ -368,8 +368,7 @@ const LockScreen: React.FC<LockScreenProps> = ({ inventory, isAdmin }) => {
       doc.save(`${filename}_${dateForFilename}.pdf`);
 
       toast.success("PDF exportado exitosamente");
-    } catch (error) {
-      console.error("Error al exportar a PDF:", error);
+    } catch {
       toast.error("Ocurrió un error al exportar a PDF");
     }
   };

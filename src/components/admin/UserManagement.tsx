@@ -137,8 +137,7 @@ export default function UserManagement() {
       const sortedUsers = sortUsersByLastLogin(data.users);
       setUsers(sortedUsers);
       setLastUpdate(new Date());
-    } catch (error) {
-      console.error("Error cargando usuarios:", error);
+    } catch {
       if (showLoading) {
         toast.error("No se pudieron cargar los usuarios");
       }
@@ -197,9 +196,8 @@ export default function UserManagement() {
         reset();
         setIsDialogOpen(false);
       }
-    } catch (error) {
+    } catch {
       setError("Ocurrió un error al crear el usuario");
-      console.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -260,8 +258,7 @@ export default function UserManagement() {
           isCurrentlyActive ? "desactivado" : "activado"
         } correctamente`
       );
-    } catch (error) {
-      console.error("Error:", error);
+    } catch {
       toast.error("Error al cambiar el estado del usuario");
     }
   };

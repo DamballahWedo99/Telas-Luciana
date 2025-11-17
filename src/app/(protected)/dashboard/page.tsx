@@ -34,29 +34,17 @@ export default function DashboardPage() {
   const canAccessPriceHistory = session?.user?.role === "admin" || session?.user?.role === "major_admin";
 
   useEffect(() => {
-    console.log("📊 [Dashboard] Estado actual:", {
-      status,
-      hasSession: !!session,
-      hasUserId: !!session?.user?.id,
-    });
-
     if (status === "loading") {
       return;
     }
 
     if (status === "unauthenticated") {
-      console.log("🚫 [Dashboard] No autenticado, redirigiendo a login");
       router.replace("/login");
       return;
     }
 
     if (status === "authenticated" && !session?.user?.id) {
-      console.log("⚠️ [Dashboard] Autenticado pero sin datos de usuario");
-
       const timeout = setTimeout(() => {
-        console.log(
-          "❌ [Dashboard] Timeout esperando datos de usuario, redirigiendo a login"
-        );
         router.replace("/login");
       }, 3000);
 
@@ -70,8 +58,7 @@ export default function DashboardPage() {
       sessionStorage.removeItem("lastLoginTime");
       sessionStorage.removeItem("loginAttempt");
       await signOut({ callbackUrl: "/login" });
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error);
+    } catch {
       toast.error("Error al cerrar sesión");
       setIsLoggingOut(false);
     }

@@ -252,8 +252,7 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
 
       const data = await response.json();
       setFichas(data.fichas || []);
-    } catch (error) {
-      console.error("Error loading fichas:", error);
+    } catch {
       toast.error("Error al cargar las fichas técnicas");
     } finally {
       setIsLoadingFichas(false);
@@ -306,7 +305,6 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
 
       toast.success("Ficha técnica descargada exitosamente");
     } catch (error) {
-      console.error("Error downloading ficha técnica:", error);
       toast.error(
         error instanceof Error
           ? error.message
@@ -351,7 +349,6 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
         removePointerEventsFromBody();
       }, 100);
     } catch (error) {
-      console.error("Error deleting ficha técnica:", error);
 
       revertOptimisticChange(originalFichas);
       setDeleteDialogOpen(true);
@@ -470,7 +467,6 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
         removePointerEventsFromBody();
       }, 100);
     } catch (error) {
-      console.error("Error editing ficha técnica:", error);
 
       revertOptimisticChange(originalFichas);
 
@@ -544,7 +540,6 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
 
       setShowUploadForm(false);
     } catch (error) {
-      console.error("Error uploading ficha técnica:", error);
 
       if (optimisticFicha) {
         removeFichaOptimistic(optimisticFicha);
@@ -586,7 +581,6 @@ const FichasTecnicasDialog: React.FC<FichasTecnicasDialogProps> = ({
       const url = window.URL.createObjectURL(blob);
       setPreviewUrl(url);
     } catch (error) {
-      console.error("Error loading preview:", error);
       toast.error(
         error instanceof Error
           ? error.message

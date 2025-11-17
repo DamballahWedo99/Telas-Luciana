@@ -480,8 +480,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
             throw new Error('Error guardando datos');
           }
 
-          const result = await response.json();
-          console.log('✅ Datos guardados sin cambiar status:', result);
+          await response.json();
           toast.success("Datos guardados exitosamente", {
             description: "Los datos se guardaron sin cambiar el status de la orden"
           });
@@ -491,7 +490,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
             onDataRefresh();
           }
         } catch (error) {
-          console.error('❌ Error guardando datos:', error);
           toast.error("Error al guardar datos", {
             description: "Hubo un problema al guardar los datos. Inténtalo de nuevo."
           });
@@ -518,8 +516,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
       
       // Cerrar el modal
       onClose();
-    } catch (error) {
-      console.error("Error saving order:", error);
+    } catch {
     } finally {
       setIsSaving(false);
     }
@@ -664,17 +661,10 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
           validationData.m_factura = Number(tela.m_factura);
         }
         
-        console.log(`🔍 Validando tela ${index}:`, validationData);
-        console.log(`🔍 Valores originales tela ${index}:`, {
-          precio_m_fob_usd: tela.precio_m_fob_usd,
-          venta: tela.venta,
-          m_factura: tela.m_factura
-        });
 
         const telaValidation = editTelaSchema.safeParse(validationData);
 
         if (!telaValidation.success) {
-          console.log(`❌ Error validación tela ${index}:`, telaValidation.error.errors);
           const indexErrors: Record<string, string> = {};
           telaValidation.error.errors.forEach((error) => {
             if (error.path.length > 0) {
@@ -692,7 +682,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
     if (Object.keys(errors).length > 0 || Object.keys(telasErrors).length > 0) {
       setValidationErrors(errors);
       setTelaValidationErrors(telasErrors);
-      console.log("Errores de validación:", { errors, telasErrors });
       return;
     }
 
@@ -757,20 +746,16 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
           throw new Error('Error completando orden');
         }
 
-        const result = await response.json();
-        console.log('✅ Orden completada:', result);
+        await response.json();
         toast.success("Orden completada exitosamente", {
           description: "La orden se marcó como completada y los datos se guardaron"
         });
         
         // Actualizar datos desde backend después de completar orden
         if (onDataRefresh) {
-          console.log('🔄 Actualizando datos del dashboard después de completar orden...');
           await onDataRefresh();
-          console.log('✅ Datos del dashboard actualizados exitosamente');
         }
       } catch (error) {
-        console.error('❌ Error completando orden:', error);
         toast.error("Error al completar orden", {
           description: "Hubo un problema al completar la orden. Inténtalo de nuevo."
         });
@@ -797,8 +782,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
       
       // Cerrar el modal
       onClose();
-    } catch (error) {
-      console.error("Error completing order:", error);
+    } catch {
     } finally {
       setIsCompletingOrder(false);
     }

@@ -77,11 +77,9 @@ export function ContactSection() {
         setFormStartTime(Date.now());
       } else {
         const errorData = await response.json();
-        console.error("Error al enviar el correo:", errorData);
         toast.error(errorData.message || "Error al enviar el mensaje");
       }
-    } catch (error) {
-      console.error("Error de red al enviar el mensaje:", error);
+    } catch {
       toast.error("Ocurrió un error al enviar el correo");
     } finally {
       setIsLoading(false);

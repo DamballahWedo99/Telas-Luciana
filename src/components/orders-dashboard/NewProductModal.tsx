@@ -54,8 +54,7 @@ export const NewProductModal: React.FC<NewProductModalProps> = ({
     resetForm,
   } = useNewProduct({
     existingFabricIds,
-    onSuccess: (response) => {
-      console.log('Product created successfully:', response);
+    onSuccess: () => {
       onProductCreated();
       handleClose();
     },
@@ -87,19 +86,16 @@ export const NewProductModal: React.FC<NewProductModalProps> = ({
       
       // Force immediate cleanup when manually closing
       setTimeout(() => {
-        console.log('🧹 NewProductModal: Force cleanup on manual close');
         // Remove any lingering overlays
         const overlays = document.querySelectorAll('[data-radix-dialog-overlay]');
         const contents = document.querySelectorAll('[data-radix-dialog-content]');
-        
-        overlays.forEach((overlay, index) => {
-          console.log(`🗑️ Manual cleanup - Removing overlay ${index}:`, overlay);
+
+        overlays.forEach((overlay) => {
           overlay.remove();
         });
-        
-        contents.forEach((content, index) => {
+
+        contents.forEach((content) => {
           if (!content.closest('[data-state="open"]')) {
-            console.log(`🗑️ Manual cleanup - Removing closed content ${index}:`, content);
             content.remove();
           }
         });
@@ -107,7 +103,6 @@ export const NewProductModal: React.FC<NewProductModalProps> = ({
         // Force body scroll restoration
         document.body.style.pointerEvents = '';
         document.body.style.overflow = '';
-        console.log('✅ Manual cleanup complete');
       }, 100);
     }
   };
@@ -115,22 +110,19 @@ export const NewProductModal: React.FC<NewProductModalProps> = ({
   // Cleanup effect when modal closes
   useEffect(() => {
     if (!open) {
-      console.log('🧹 NewProductModal: Modal closed, cleaning up DOM');
       
       // Delay cleanup to ensure modal animation completes
       const cleanup = setTimeout(() => {
         // Remove any lingering overlays
         const overlays = document.querySelectorAll('[data-radix-dialog-overlay]');
         const contents = document.querySelectorAll('[data-radix-dialog-content]');
-        
-        overlays.forEach((overlay, index) => {
-          console.log(`🗑️ NewProductModal: Removing overlay ${index}:`, overlay);
+
+        overlays.forEach((overlay) => {
           overlay.remove();
         });
-        
-        contents.forEach((content, index) => {
+
+        contents.forEach((content) => {
           if (!content.closest('[data-state="open"]')) {
-            console.log(`🗑️ NewProductModal: Removing closed content ${index}:`, content);
             content.remove();
           }
         });
@@ -158,7 +150,6 @@ export const NewProductModal: React.FC<NewProductModalProps> = ({
     <Dialog 
       open={open} 
       onOpenChange={(isOpen) => {
-        console.log('🔄 NewProductModal Dialog onOpenChange:', { isOpen, isLoading });
         if (!isOpen && !isLoading) {
           handleClose();
         }
@@ -168,13 +159,11 @@ export const NewProductModal: React.FC<NewProductModalProps> = ({
         className="sm:max-w-[500px] z-[9999]"
         onPointerDownOutside={(e) => {
           if (isLoading) {
-            console.log('🚫 NewProductModal: Prevented outside click during loading');
             e.preventDefault();
           }
         }}
         onEscapeKeyDown={(e) => {
           if (isLoading) {
-            console.log('🚫 NewProductModal: Prevented escape key during loading');
             e.preventDefault();
           }
         }}

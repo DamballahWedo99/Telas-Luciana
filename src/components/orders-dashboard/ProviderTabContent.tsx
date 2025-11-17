@@ -171,12 +171,6 @@ export const ProviderTabContent: React.FC<ProviderTabContentProps> = ({
                     key={entry.id}
                     entry={entry}
                     onUpdate={(data) => {
-                      console.log('🔗 ProviderTabContent.onUpdate called:', {
-                        provider,
-                        entryId: entry.id,
-                        data,
-                        timestamp: new Date().toISOString()
-                      });
                       onUpdateEntry(entry.id, data);
                     }}
                     onDelete={() => onDeleteEntry(entry.id)}

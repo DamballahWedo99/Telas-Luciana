@@ -313,8 +313,7 @@ export const OrdersChartsCard: React.FC<OrdersChartsCardProps> = ({
 
       // Actualizar notificación con éxito
       toast.success("PDF descargado correctamente", { id: toastId });
-    } catch (error) {
-      console.error("Error al generar el PDF:", error);
+    } catch {
       // Mostrar notificación de error con Sonner
       toast.error("Error al generar el PDF");
     }

@@ -77,7 +77,6 @@ export function usePriceHistory(
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
       setError(errorMessage);
-      console.error('Error fetching price history:', err);
     } finally {
       setLoading(false);
     }
@@ -102,8 +101,7 @@ export function usePriceHistory(
       }
 
       return result;
-    } catch (err) {
-      console.error(`Error fetching history for fabric ${fabricId}:`, err);
+    } catch {
       return null;
     }
   }, []);

@@ -37,7 +37,6 @@ export const useLogisticsPDF = (): UseLogisticsPDFReturn => {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al generar el PDF';
       setError(errorMessage);
-      console.error('Error generating PDF:', err);
     } finally {
       setIsGenerating(false);
     }

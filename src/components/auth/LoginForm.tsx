@@ -88,14 +88,13 @@ function LoginFormContent() {
       } else {
         window.location.href = callbackUrl;
       }
-    } catch (error) {
+    } catch {
       sessionStorage.removeItem("lastLoginTime");
       sessionStorage.removeItem("loginAttempt");
 
       toast.error("Error de conexión", {
         duration: 4000,
       });
-      console.error(error);
 
       setIsLoading(false);
     }

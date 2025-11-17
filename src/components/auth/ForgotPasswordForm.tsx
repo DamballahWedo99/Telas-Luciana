@@ -57,8 +57,7 @@ export default function ForgotPasswordForm() {
 
       setUserEmail(values.email);
       setIsSubmitted(true);
-    } catch (error) {
-      console.error("Error:", error);
+    } catch {
       setError("Ocurrió un error al procesar la solicitud");
     } finally {
       setIsLoading(false);

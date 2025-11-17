@@ -312,16 +312,8 @@ function processInventoryData(data: unknown[]): InventoryItem[] {
     const cantidad = safeParseNumeric(typedItem.Cantidad);
 
     if (isNaN(costo)) {
-      console.warn(
-        "⚠️ [InventoryCard] Valor de costo inválido:",
-        typedItem.Costo
-      );
     }
     if (isNaN(cantidad)) {
-      console.warn(
-        "⚠️ [InventoryCard] Valor de cantidad inválido:",
-        typedItem.Cantidad
-      );
     }
 
     let ubicacion = "";
@@ -562,7 +554,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const [availableTransferRolls, setAvailableTransferRolls] = useState<Roll[]>(
     []
   );
-  const [transferDestination, setTransferDestination] = useState<"MID" | "CONPARTEX">("MID");
+  const [transferDestination, setTransferDestination] = useState<"CDMX" | "MID" | "CONPARTEX">("MID");
   const [selectedLot, setSelectedLot] = useState<number | null>(null);
   const [availableLots, setAvailableLots] = useState<number[]>([]);
   const [rollsGroupedByLot, setRollsGroupedByLot] = useState<
@@ -711,7 +703,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         setAvailableLotsForReturns(lotsForFirstOC);
       }
     } catch (error) {
-      console.error("❌ [RETURNS] Error cargando rollos vendidos:", error);
       toast.error(
         `Error al cargar rollos vendidos: ${
           error instanceof Error ? error.message : "Error desconocido"
@@ -973,7 +964,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         );
       }
     } catch (error) {
-      console.error("❌ [RETURNS] Error procesando devoluciones:", error);
       toast.error(
         `Error al procesar devoluciones: ${
           error instanceof Error ? error.message : "Error desconocido"
@@ -1051,7 +1041,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("❌ [EDIT] Error response:", errorData);
 
           setInventory(inventory);
 
@@ -1060,7 +1049,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
         toast.success("Producto actualizado correctamente");
       } catch (error) {
-        console.error("❌ [EDIT] Error al actualizar inventario:", error);
 
         setInventory(inventory);
 
@@ -1195,7 +1183,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
       window.dispatchEvent(event);
     } catch (error) {
-      console.error("Error al subir PACKING LIST:", error);
       toast.error(
         typeof error === "object" && error !== null && "message" in error
           ? (error as Error).message
@@ -1314,7 +1301,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       handleCloseInventoryDialog();
       handleReloadInventory();
     } catch (error) {
-      console.error("❌ [NEW-ROW] Error:", error);
       toast.error(
         error instanceof Error ? error.message : "Error al crear la nueva row"
       );
@@ -1345,8 +1331,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         setCurrentViewingMonth(currentMonth);
         toast.success("Inventario actualizado con éxito");
       }
-    } catch (error) {
-      console.error("Error reloading inventory:", error);
+    } catch {
       toast.error("Error recargando inventario");
     } finally {
       if (onLoadingChange) {
@@ -1481,8 +1466,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         setAvailableLots([]);
         setRollsGroupedByLot(new Map());
       }
-    } catch (error) {
-      console.error("Error al cargar packing list:", error);
+    } catch {
       toast.info(
         `No se encontraron rollos de packing list para ${tela} ${color}`
       );
@@ -1496,7 +1480,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     }
   };
 
-  const loadTransferPackingListData = async (tela: string, color: string, oc?: string) => {
+  const loadTransferPackingListData = async (tela: string, color: string, sourceLocation: string, oc?: string) => {
+
     setIsLoadingTransferList(true);
     try {
 
@@ -1512,9 +1497,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
       const data: PackingListEntry[] | { data: PackingListEntry[] } | Record<string, PackingListEntry> = await response.json();
 
-      
+
       let normalizedData: PackingListEntry[];
-      
+
       // Check if data has the structure {data: [...], _cache: {...}}
       if (data && typeof data === "object" && "data" in data && Array.isArray((data as {data: PackingListEntry[]}).data)) {
         normalizedData = (data as {data: PackingListEntry[]}).data;
@@ -1530,8 +1515,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       } else {
         normalizedData = [];
       }
-      
-      
+
+
       if (normalizedData.length > 0) {
       }
 
@@ -1539,13 +1524,14 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
         (entry) => entry.fabric_type === tela && entry.color === color
       );
 
-      
+
       if (matchingEntries.length > 0) {
       }
 
       if (matchingEntries.length > 0) {
         const groupedByLot = new Map<number, Roll[]>();
         const lots: number[] = [];
+
 
         matchingEntries.forEach((entry) => {
           const lotNumber =
@@ -1556,18 +1542,21 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           }
 
           const allRolls = (entry.rolls as unknown as PackingListRollData[]);
-          
-          const cdmxRolls = allRolls
+
+          const locationRolls = allRolls
             .filter((roll) => {
-              // Permitir rollos con almacen = "CDMX" o undefined/null (asumiendo que son de CDMX por defecto)
-              const shouldInclude = !roll.almacen || roll.almacen === LOCATIONS.CDMX || roll.almacen === "" || 
-                     (typeof roll.almacen === 'string' && roll.almacen.toUpperCase().includes('CDMX'));
-              return shouldInclude;
+              // Filter rolls by the source location
+              // Handle undefined/null almacen - default to CDMX for backwards compatibility
+              const rollLocation = roll.almacen || LOCATIONS.CDMX;
+              // Convert display name to API code for comparison
+              const sourceLocationCode = LOCATION_API_MAP[sourceLocation as keyof typeof LOCATION_API_MAP] || sourceLocation;
+              const matches = rollLocation === sourceLocationCode;
+              return matches;
             })
             .map((roll: PackingListRollData) => {
               const mappedRoll: Roll = {
                 roll_number: roll.roll_number,
-                almacen: roll.almacen || LOCATIONS.CDMX, // Por defecto asignar CDMX si no está definido
+                almacen: roll.almacen || LOCATIONS.CDMX,
               };
 
               if (roll.unidad === "KG" || roll.unidad === "KGS") {
@@ -1579,29 +1568,32 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               return mappedRoll;
             });
 
-          if (cdmxRolls.length > 0) {
+
+          if (locationRolls.length > 0) {
             const existingRolls = groupedByLot.get(lotNumber) || [];
-            groupedByLot.set(lotNumber, [...existingRolls, ...cdmxRolls]);
+            groupedByLot.set(lotNumber, [...existingRolls, ...locationRolls]);
           }
         });
 
-        const lotsWithCdmxRolls = lots.filter((lot) => {
+        const lotsWithRolls = lots.filter((lot) => {
           const rollsInLot = groupedByLot.get(lot) || [];
           return rollsInLot.length > 0;
         });
 
-        setAvailableLots(lotsWithCdmxRolls.sort((a, b) => a - b));
+
+        setAvailableLots(lotsWithRolls.sort((a, b) => a - b));
         setRollsGroupedByLot(groupedByLot);
 
-        if (lotsWithCdmxRolls.length > 0) {
-          setSelectedLot(lotsWithCdmxRolls[0]);
+        if (lotsWithRolls.length > 0) {
+          setSelectedLot(lotsWithRolls[0]);
           setAvailableTransferRolls(
-            groupedByLot.get(lotsWithCdmxRolls[0]) || []
+            groupedByLot.get(lotsWithRolls[0]) || []
           );
+        } else {
         }
+      } else {
       }
-    } catch (error) {
-      console.error("Error al cargar packing list para traslado:", error);
+    } catch {
       toast.error("Error al cargar los datos de los rollos para traslado");
     } finally {
       setIsLoadingTransferList(false);
@@ -1615,13 +1607,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   };
 
   const handleLotChangeForTransfer = (lot: number) => {
+
     setSelectedLot(lot);
-    const cdmxRolls =
-      rollsGroupedByLot.get(lot)?.filter((roll) => 
-        !roll.almacen || roll.almacen === LOCATIONS.CDMX || roll.almacen === "" || 
-        (typeof roll.almacen === 'string' && roll.almacen.toUpperCase().includes('CDMX'))
-      ) || [];
-    setAvailableTransferRolls(cdmxRolls);
+    // Get rolls for the selected lot (already filtered by source location in loadTransferPackingListData)
+    const lotRolls = rollsGroupedByLot.get(lot) || [];
+
+    setAvailableTransferRolls(lotRolls);
     setSelectedTransferRolls([]);
   };
 
@@ -1686,6 +1677,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   };
 
   const handleOpenTransferDialog = (item: InventoryItem) => {
+
     const originalIndex = inventory.findIndex(
       (originalItem) =>
         originalItem.OC === item.OC &&
@@ -1707,9 +1699,22 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
     setSelectedTransferRolls([]);
     setAvailableTransferRolls([]);
     setSelectedLot(null);
+
+    // Set default transfer destination to a location different from current location
+    const currentLocation = item.Ubicacion || LOCATIONS.CDMX;
+
+    if (currentLocation === LOCATIONS.CDMX) {
+      setTransferDestination("MID"); // Default to Mérida when transferring from CDMX
+    } else if (currentLocation === LOCATIONS.MERIDA) {
+      setTransferDestination("CDMX"); // Default to CDMX when transferring from Mérida
+    } else {
+      setTransferDestination("CDMX"); // Default to CDMX when transferring from CONPARTEX
+    }
+
     setOpenTransferDialog(true);
 
-    loadTransferPackingListData(item.Tela, item.Color, item.OC);
+
+    loadTransferPackingListData(item.Tela, item.Color, item.Ubicacion || LOCATIONS.CDMX, item.OC);
   };
 
   const handleSellItem = async () => {
@@ -1771,7 +1776,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
         if (!inventoryUpdateResponse.ok) {
           const errorData = await inventoryUpdateResponse.json();
-          console.error("❌ [SELL] Error respuesta S3:", errorData);
           throw new Error(
             errorData.error || "Error al actualizar inventario en S3"
           );
@@ -1859,7 +1863,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
             if (!salesResponse.ok) {
               const salesError = await salesResponse.json();
-              console.error("❌ [SELL] Error en historial:", salesError);
               throw new Error(
                 salesError.error || "Error al guardar historial de ventas"
               );
@@ -1896,7 +1899,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
             toast.success("Venta completada con éxito");
           }
         } catch (error) {
-          console.error("❌ [SELL] Error en procesos secundarios:", error);
           toast.warning(
             `Inventario actualizado, pero error en: ${
               error instanceof Error ? error.message : "proceso secundario"
@@ -1906,7 +1908,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
         setOpenSellDialog(false);
       } catch (error) {
-        console.error("❌ [SELL] Error general:", error);
         toast.error(
           `Error en la venta: ${
             error instanceof Error ? error.message : "Error desconocido"
@@ -1940,12 +1941,6 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
   const handleTransferItem = async () => {
     if (selectedItemIndex !== null) {
       const item = inventory[selectedItemIndex];
-
-
-      if (item.Ubicacion !== LOCATIONS.CDMX) {
-        toast.error("Solo se pueden trasladar productos que están en CDMX");
-        return;
-      }
 
       let quantityToTransfer = 0;
 
@@ -1982,8 +1977,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       };
 
       // Determine destination location based on transferDestination state
-      const destinationLocation = transferDestination === "MID" ? LOCATIONS.MERIDA : LOCATIONS.CONPARTEX;
-      const destinationApiLocation = transferDestination; // MID or CONPARTEX
+      const destinationLocation =
+        transferDestination === "MID" ? LOCATIONS.MERIDA :
+        transferDestination === "CONPARTEX" ? LOCATIONS.CONPARTEX :
+        LOCATIONS.CDMX;
+      const destinationApiLocation = transferDestination; // CDMX, MID, or CONPARTEX
 
       const existingDestinationItem = inventory.find(
         (invItem) =>
@@ -2113,14 +2111,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           if (inventoryResponseData.operation === "consolidate") {
             toast.success("Traslado realizado exitosamente");
           } else if (inventoryResponseData.operation === "create") {
-            const destinationName = transferDestination === "MID" ? "Mérida" : "CEDIS CONPARTEX";
+            const destinationName =
+              transferDestination === "MID" ? "Mérida" :
+              transferDestination === "CONPARTEX" ? "CEDIS CONPARTEX" :
+              "CDMX";
             toast.success(`Nuevo item creado en ${destinationName}`);
           }
         } catch (inventoryError) {
-          console.error(
-            "❌ ERROR AL ACTUALIZAR INVENTARIO CON CONSOLIDACIÓN:",
-            inventoryError
-          );
 
           setInventory(inventory);
 
@@ -2149,6 +2146,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 transferRolls: selectedTransferRolls.map(
                   (index) => availableTransferRolls[index].roll_number
                 ),
+                sourceLocation: LOCATION_API_MAP[item.Ubicacion as keyof typeof LOCATION_API_MAP] || "CDMX",
                 destinationLocation: transferDestination,
               }),
             });
@@ -2170,10 +2168,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                 );
               } else if (
                 response.status === 400 &&
-                packingListResponseData.rollsNotInCDMX
+                packingListResponseData.rollsNotInSourceLocation
               ) {
+                const sourceLocationName = item.Ubicacion || "la ubicación de origen";
                 throw new Error(
-                  `Los siguientes rollos no están en CDMX: ${packingListResponseData.rollsNotInCDMX
+                  `Los siguientes rollos no están en ${sourceLocationName}: ${packingListResponseData.rollsNotInSourceLocation
                     .map(
                       (r: { roll_number: string; current_location: string }) =>
                         `#${r.roll_number} (${r.current_location})`
@@ -2188,10 +2187,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               }
             }
 
-            await loadTransferPackingListData(item.Tela, item.Color, item.OC);
+            await loadTransferPackingListData(item.Tela, item.Color, item.Ubicacion || LOCATIONS.CDMX, item.OC);
             packingListUpdateSuccess = true;
           } catch (error) {
-            console.error("❌ ERROR AL ACTUALIZAR PACKING LIST:", error);
             toast.warning(
               `Traslado completado, pero error en packing list: ${
                 error instanceof Error ? error.message : String(error)
@@ -2450,8 +2448,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       doc.save(`${fileName}.pdf`);
 
       toast.success("PDF exportado exitosamente");
-    } catch (error) {
-      console.error("Error al exportar a PDF:", error);
+    } catch {
       toast.error("Ocurrió un error al exportar a PDF");
     }
   };
@@ -2511,8 +2508,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
       toast.success(
         `Inventario de ${getMonthName(month)} ${year} cargado exitosamente`
       );
-    } catch (error) {
-      console.error("Error loading historical inventory:", error);
+    } catch {
       toast.error(
         `Error al cargar el inventario de ${getMonthName(
           month
@@ -3505,11 +3501,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                             handleOpenTransferDialog(item)
                                           }
                                           disabled={
-                                            item.Ubicacion !== LOCATIONS.CDMX ||
                                             !isCurrentMonthAndYear()
                                           }
                                           className={
-                                            item.Ubicacion !== LOCATIONS.CDMX ||
                                             !isCurrentMonthAndYear()
                                               ? "pointer-events-none"
                                               : ""
@@ -3537,9 +3531,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                                           ? `Bloqueado - Solo disponible en el mes actual. Actualmente viendo: ${getMonthName(
                                               currentViewingMonth
                                             )} ${currentViewingYear}`
-                                          : item.Ubicacion !== LOCATIONS.CDMX
-                                            ? "Solo desde CDMX"
-                                            : "Trasladar rollos"}
+                                          : "Trasladar rollos"}
                                       </p>
                                     </TooltipContent>
                                   </Tooltip>
@@ -4394,11 +4386,15 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
                   />
                 </svg>
-                Trasladar a {transferDestination === "MID" ? "Mérida" : "CEDIS CONPARTEX"}
+                Trasladar a {
+                  transferDestination === "MID" ? "Mérida" :
+                  transferDestination === "CONPARTEX" ? "CEDIS CONPARTEX" :
+                  "CDMX"
+                }
               </DialogTitle>
               <DialogDescription>
                 {selectedItemIndex !== null &&
-                  `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} (Desde CDMX)`}
+                  `${inventory[selectedItemIndex]?.Tela} ${inventory[selectedItemIndex]?.Color} (Desde ${inventory[selectedItemIndex]?.Ubicacion || "CDMX"})`}
               </DialogDescription>
             </DialogHeader>
 
@@ -4406,21 +4402,34 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
               {/* Destination Selection */}
               <div className="space-y-2">
                 <Label>Destino del traslado</Label>
-                <div className="flex gap-2">
-                  <Button
-                    variant={transferDestination === "MID" ? "default" : "outline"}
-                    onClick={() => setTransferDestination("MID")}
-                    className="flex-1"
-                  >
-                    Mérida
-                  </Button>
-                  <Button
-                    variant={transferDestination === "CONPARTEX" ? "default" : "outline"}
-                    onClick={() => setTransferDestination("CONPARTEX")}
-                    className="flex-1"
-                  >
-                    CEDIS CONPARTEX
-                  </Button>
+                <div className="flex gap-2 flex-wrap">
+                  {selectedItemIndex !== null && inventory[selectedItemIndex]?.Ubicacion !== LOCATIONS.CDMX && (
+                    <Button
+                      variant={transferDestination === "CDMX" ? "default" : "outline"}
+                      onClick={() => setTransferDestination("CDMX")}
+                      className="flex-1"
+                    >
+                      CDMX
+                    </Button>
+                  )}
+                  {selectedItemIndex !== null && inventory[selectedItemIndex]?.Ubicacion !== LOCATIONS.MERIDA && (
+                    <Button
+                      variant={transferDestination === "MID" ? "default" : "outline"}
+                      onClick={() => setTransferDestination("MID")}
+                      className="flex-1"
+                    >
+                      Mérida
+                    </Button>
+                  )}
+                  {selectedItemIndex !== null && inventory[selectedItemIndex]?.Ubicacion !== LOCATIONS.CONPARTEX && (
+                    <Button
+                      variant={transferDestination === "CONPARTEX" ? "default" : "outline"}
+                      onClick={() => setTransferDestination("CONPARTEX")}
+                      className="flex-1"
+                    >
+                      CEDIS CONPARTEX
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -4486,17 +4495,11 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                             </SelectTrigger>
                             <SelectContent>
                               {availableLots.map((lot) => {
-                                const cdmxRolls =
-                                  rollsGroupedByLot
-                                    .get(lot)
-                                    ?.filter(
-                                      (roll) => !roll.almacen || roll.almacen === LOCATIONS.CDMX || roll.almacen === "" || 
-                                               (typeof roll.almacen === 'string' && roll.almacen.toUpperCase().includes('CDMX'))
-                                    ) || [];
-                                return cdmxRolls.length > 0 ? (
+                                const lotRolls = rollsGroupedByLot.get(lot) || [];
+                                const sourceLocation = selectedItemIndex !== null ? (inventory[selectedItemIndex].Ubicacion || LOCATIONS.CDMX) : LOCATIONS.CDMX;
+                                return lotRolls.length > 0 ? (
                                   <SelectItem key={lot} value={lot.toString()}>
-                                    Lote {lot} ({cdmxRolls.length} rollos en
-                                    CDMX)
+                                    Lote {lot} ({lotRolls.length} rollos en {sourceLocation})
                                   </SelectItem>
                                 ) : null;
                               })}
@@ -4507,7 +4510,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
                       <div className="text-sm text-gray-600">
                         Lote: {selectedLot} - {availableTransferRolls.length}{" "}
-                        rollos disponibles en CDMX
+                        rollos disponibles en {selectedItemIndex !== null ? (inventory[selectedItemIndex].Ubicacion || "CDMX") : "CDMX"}
                       </div>
 
                       <div className="flex gap-1">
@@ -4642,13 +4645,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                         </div>
                         <div className="text-sm mt-2">
                           <span className="text-gray-600">
-                            De CDMX → Mérida
+                            De {selectedItemIndex !== null ? (inventory[selectedItemIndex].Ubicacion || "CDMX") : "CDMX"} → {transferDestination === "CDMX" ? "CDMX" : transferDestination === "MID" ? "Mérida" : "CONPARTEX"}
                           </span>
                         </div>
                         {selectedItemIndex !== null && (
                           <div className="text-sm mt-1">
                             <span className="text-gray-600">
-                              Quedará en CDMX:{" "}
+                              Quedará en {inventory[selectedItemIndex].Ubicacion || "CDMX"}:{" "}
                             </span>
                             <span className="font-medium">
                               {(
@@ -4665,12 +4668,12 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
                     <div className="text-center py-8 text-gray-500">
                       <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                       <p>
-                        No se encontraron rollos disponibles en CDMX para esta
+                        No se encontraron rollos disponibles en {selectedItemIndex !== null ? inventory[selectedItemIndex].Ubicacion || "CDMX" : "CDMX"} para esta
                         tela y color.
                       </p>
                       <p className="text-sm mt-2">
-                        Verifique que existan rollos en CDMX para trasladar a
-                        Mérida.
+                        Verifique que existan rollos en {selectedItemIndex !== null ? inventory[selectedItemIndex].Ubicacion || "CDMX" : "CDMX"} para trasladar a{" "}
+                        {transferDestination === "CDMX" ? "CDMX" : transferDestination === "MID" ? "Mérida" : "CONPARTEX"}.
                       </p>
                     </div>
                   )}
@@ -4679,7 +4682,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
 
               {selectedItemIndex !== null && (
                 <div className="text-sm text-gray-500">
-                  Inventario disponible en CDMX:{" "}
+                  Inventario disponible en {inventory[selectedItemIndex].Ubicacion || "CDMX"}:{" "}
                   {formatNumber(inventory[selectedItemIndex]?.Cantidad)}{" "}
                   {inventory[selectedItemIndex]?.Unidades}
                 </div>

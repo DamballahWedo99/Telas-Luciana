@@ -562,7 +562,6 @@ const PedidosDashboard: React.FC = () => {
             .filter((row: PedidoData) => {
               // Solo filtrar items individuales con status pending, NO órdenes completas
               if (row.status === "pending") {
-                console.log(`🚫 Filtrando item con status pending: ${row.orden_de_compra} - Status: ${row.status}`);
                 return false;
               }
               return true;
@@ -833,7 +832,6 @@ const PedidosDashboard: React.FC = () => {
           .filter((row: PedidoData) => {
             // Solo filtrar items individuales con status pending, NO órdenes completas
             if (row.status === "pending") {
-              console.log(`🚫 Filtrando item con status pending (refresh): ${row.orden_de_compra} - Status: ${row.status}`);
               return false;
             }
             return true;
@@ -929,7 +927,6 @@ const PedidosDashboard: React.FC = () => {
       
       if (!response.ok) {
         if (response.status === 403) {
-          console.log("No tiene permisos para ver órdenes pendientes");
           return;
         }
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -938,8 +935,7 @@ const PedidosDashboard: React.FC = () => {
       const data = await response.json();
       setPendingOrdersCount(data.totalOrders || 0);
       setPendingOrdersData(data.pendingOrders || []);
-    } catch (error) {
-      console.error("Error fetching pending orders:", error);
+    } catch {
       setPendingOrdersCount(0);
       setPendingOrdersData([]);
     }

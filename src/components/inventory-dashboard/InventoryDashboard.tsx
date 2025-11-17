@@ -148,20 +148,13 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
     }
 
     setIsLoading(true);
-    const submitStartTime = Date.now();
 
     try {
-      console.log("🚀 [NEW-ROW] === CREANDO NUEVA ROW ===");
-      console.log("📋 [NEW-ROW] Datos a enviar:", formData);
-      console.log("⏰ [NEW-ROW] Timestamp inicio:", new Date().toISOString());
-
       const requestBody = {
         ...formData,
         Cantidad: parseFloat(formData.Cantidad),
         Costo: parseFloat(formData.Costo),
       };
-
-      console.log("📦 [NEW-ROW] Body de la request:", requestBody);
 
       const response = await fetch("/api/s3/inventario/create-row", {
         method: "POST",
@@ -171,24 +164,11 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
         body: JSON.stringify(requestBody),
       });
 
-      const submitDuration = Date.now() - submitStartTime;
-      console.log(`⏱️ [NEW-ROW] Request completada en ${submitDuration}ms`);
-
       const result = await response.json();
-      console.log("📊 [NEW-ROW] Respuesta completa:", result);
 
       if (!response.ok) {
-        console.error(
-          "❌ [NEW-ROW] Error en respuesta:",
-          response.status,
-          response.statusText
-        );
         throw new Error(result.error || "Error al crear la nueva row");
       }
-
-      console.log("✅ [NEW-ROW] Row creada exitosamente:");
-      console.log("📄 [NEW-ROW] Archivo creado:", result.data.fileKey);
-      console.log("📊 [NEW-ROW] Item creado:", result.data.item);
 
       toast.success(`🎉 Nueva row creada exitosamente`, {
         description: `${result.data.fileName} - ${result.data.item.OC} ${result.data.item.Tela} ${result.data.item.Color}`,
@@ -208,27 +188,19 @@ const NewRowDialog: React.FC<NewRowDialogProps> = ({
 
       setOpen(false);
 
-      console.log("🔄 [NEW-ROW] Llamando callback de éxito...");
       if (onSuccess) {
         onSuccess();
       }
     } catch (error) {
-      const submitDuration = Date.now() - submitStartTime;
-      console.error(
-        `❌ [NEW-ROW] Error después de ${submitDuration}ms:`,
-        error
-      );
       toast.error(
         error instanceof Error ? error.message : "Error al crear la nueva row"
       );
     } finally {
       setIsLoading(false);
-      console.log("🏁 [NEW-ROW] === PROCESO COMPLETADO ===");
     }
   };
 
   const handleCancel = () => {
-    console.log("❌ [NEW-ROW] Usuario canceló la creación");
     setOpen(false);
     setFormData({
       OC: "",
@@ -624,12 +596,7 @@ const Dashboard = () => {
   }
 
   const handleNewRowSuccess = useCallback(() => {
-    console.log(
-      "🔄 [RELOAD-INVENTORY] === RECARGANDO INVENTARIO POST-CREACIÓN ==="
-    );
-
     if (!session?.user) {
-      console.error("❌ [RELOAD-INVENTORY] No hay sesión de usuario");
       return;
     }
 
@@ -639,69 +606,24 @@ const Dashboard = () => {
     const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
     const apiUrl = `/api/s3/inventario?year=${currentYear}&month=${currentMonth}`;
 
-    console.log(`📞 [RELOAD-INVENTORY] Llamando a: ${apiUrl}`);
-    console.log(`⏰ [RELOAD-INVENTORY] Timestamp: ${new Date().toISOString()}`);
-
-    const reloadStartTime = Date.now();
-
     fetch(apiUrl)
       .then((response) => {
-        const reloadDuration = Date.now() - reloadStartTime;
-        console.log(
-          `📨 [RELOAD-INVENTORY] Respuesta recibida en ${reloadDuration}ms:`,
-          {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok,
-          }
-        );
         return response.json();
       })
       .then((jsonData) => {
-        const totalDuration = Date.now() - reloadStartTime;
-        console.log(
-          `📊 [RELOAD-INVENTORY] Datos procesados en ${totalDuration}ms:`,
-          {
-            hasData: !!jsonData.data,
-            isArray: Array.isArray(jsonData.data),
-            itemCount: jsonData.data?.length || 0,
-            error: jsonData.error,
-          }
-        );
-
         if (jsonData.data && Array.isArray(jsonData.data)) {
-          console.log(
-            "🔄 [RELOAD-INVENTORY] Procesando datos con processInventoryData..."
-          );
           const parsedData = processInventoryData(jsonData.data);
 
-          console.log(
-            `✅ [RELOAD-INVENTORY] Inventario actualizado: ${parsedData.length} items`
-          );
           setInventory(parsedData);
           toast.success("✅ Inventario actualizado con nueva row");
         } else {
-          console.error(
-            "❌ [RELOAD-INVENTORY] Formato de datos inválido:",
-            jsonData
-          );
           toast.error(
             "Error: Formato de datos inválido al recargar inventario"
           );
         }
       })
-      .catch((error) => {
-        const totalDuration = Date.now() - reloadStartTime;
-        console.error(
-          `❌ [RELOAD-INVENTORY] Error después de ${totalDuration}ms:`,
-          error
-        );
+      .catch(() => {
         toast.error("Error recargando inventario después de crear row");
-      })
-      .finally(() => {
-        console.log(
-          "🏁 [RELOAD-INVENTORY] === PROCESO DE RECARGA COMPLETADO ==="
-        );
       });
   }, [session?.user, setInventory]);
 
@@ -738,8 +660,7 @@ const Dashboard = () => {
 
         setInventory(parsedData);
         inventoryLoadedRef.current = true;
-      } catch (error) {
-        console.error("Error loading inventory from API:", error);
+      } catch {
         if (!isMobile) {
           toast.error(
             "Error al cargar el inventario desde S3. Verifica la conexión."
@@ -787,8 +708,7 @@ const Dashboard = () => {
       toast.success(
         `Inventario de ${getMonthName(month)} ${year} cargado exitosamente`
       );
-    } catch (error) {
-      console.error("Error loading historical inventory:", error);
+    } catch {
       toast.error(
         `Error al cargar el inventario de ${getMonthName(
           month
@@ -828,8 +748,7 @@ const Dashboard = () => {
         const data = await response.json();
         const sortedUsers = sortUsersByLastLogin(data.users);
         setUsers(sortedUsers);
-      } catch (error) {
-        console.error("Error cargando usuarios:", error);
+      } catch {
         toast.error("No se pudieron cargar los usuarios");
       } finally {
         setIsLoadingUsers(false);
@@ -873,15 +792,13 @@ const Dashboard = () => {
 
           setInventory(parsedData);
           toast.success("Archivo cargado exitosamente");
-        } catch (err) {
-          console.error("Error parsing CSV:", err);
+        } catch {
           toast.error(
             "Error al procesar el archivo CSV. Verifique el formato."
           );
         }
       },
-      error: (error: Error) => {
-        console.error("CSV parsing error:", error);
+      error: () => {
         toast.error("Error al leer el archivo CSV");
       },
     });

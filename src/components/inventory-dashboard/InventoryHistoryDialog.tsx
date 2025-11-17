@@ -58,8 +58,7 @@ export const InventoryHistoryDialog: React.FC<InventoryHistoryDialogProps> = ({
         setAvailableYears(["2025"]);
 
         setYear("2025");
-      } catch (error) {
-        console.error("Error al cargar los años disponibles:", error);
+      } catch {
         toast.error("Error al cargar los años disponibles");
       }
     };
@@ -115,8 +114,7 @@ export const InventoryHistoryDialog: React.FC<InventoryHistoryDialogProps> = ({
       setIsLoading(true);
       await onLoadInventory(year, month);
       setOpen(false);
-    } catch (error) {
-      console.error("Error al cargar el inventario:", error);
+    } catch {
     } finally {
       setIsLoading(false);
     }

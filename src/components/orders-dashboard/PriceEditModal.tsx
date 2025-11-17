@@ -133,22 +133,12 @@ export const PriceEditModal: React.FC<PriceEditModalProps> = ({
 
   // Handle save and close
   const handleSaveAndClose = async () => {
-    console.log('🎯 PriceEditModal.handleSaveAndClose called:', {
-      selectedFabric,
-      hasPendingChanges,
-      pendingChangesCount: pendingChanges.length,
-      validationIsValid: validation.isValid,
-      timestamp: new Date().toISOString()
-    });
 
     const success = await saveChanges();
-    console.log('🎯 Save result:', success);
     
     if (success) {
-      console.log('✅ Save successful, closing modal');
       onClose();
     } else {
-      console.log('❌ Save failed, keeping modal open');
     }
   };
 

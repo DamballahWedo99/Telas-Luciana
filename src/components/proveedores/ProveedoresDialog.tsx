@@ -119,7 +119,6 @@ export default function ProveedoresDialog({ open, setOpen }: ProveedoresDialogPr
       const result = await response.json();
       setProveedores(result.data || []);
     } catch (error) {
-      console.error("Error loading proveedores:", error);
       setError(
         error instanceof Error ? error.message : "Error al cargar proveedores"
       );
@@ -275,7 +274,6 @@ export default function ProveedoresDialog({ open, setOpen }: ProveedoresDialogPr
       resetForm();
       setView("list");
     } catch (error) {
-      console.error("Error submitting proveedor:", error);
 
       revertOptimisticChange(originalProveedores);
 
@@ -324,8 +322,7 @@ export default function ProveedoresDialog({ open, setOpen }: ProveedoresDialogPr
 
       toast.success("Proveedor eliminado exitosamente");
       await loadProveedores();
-    } catch (error) {
-      console.error("Error deleting proveedor:", error);
+    } catch {
       revertOptimisticChange(originalProveedores);
       toast.error("Error al eliminar el proveedor");
     } finally {

@@ -177,8 +177,7 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
         }
       }
       toast.success(successMessage);
-    } catch (error) {
-      console.error("Error exportando CSV:", error);
+    } catch {
       toast.error("Error al exportar el archivo CSV");
     } finally {
       setIsExporting(false);
@@ -351,7 +350,6 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
       }
       
     } catch (error) {
-      console.error("Error exportando PDF:", error);
       toast.error(`Error al exportar el archivo PDF: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setIsExporting(false);
@@ -419,7 +417,6 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
         toast.error(`Error al exportar PDF: ${result.error}`);
       }
     } catch (error) {
-      console.error("Error exporting mobile PDF:", error);
       toast.error(`Error al exportar: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setIsExporting(false);
@@ -705,13 +702,11 @@ export const PriceHistoryCard: React.FC<PriceHistoryCardProps> = ({
         open={showNewProviderModal}
         onClose={() => setShowNewProviderModal(false)}
         onProviderAdded={() => {
-          console.log('🔄 PriceHistoryCard: Provider added, cleaning up overlays');
           
           // Force cleanup of any lingering dialog overlays
           setTimeout(() => {
             const overlays = document.querySelectorAll('[data-radix-dialog-overlay]');
             overlays.forEach((overlay) => {
-              console.log('🧹 Removing lingering overlay:', overlay);
               overlay.remove();
             });
           }, 50);

@@ -163,16 +163,13 @@ export function useNewProvider(options: UseNewProviderOptions = {}): UseNewProvi
       const result: NewProviderResponse = await response.json();
       
       if (result.success) {
-        console.log('✅ useNewProvider: API success, setting loading to false');
         
         // Set loading to false first to prevent UI blocking
         setIsLoading(false);
         
-        console.log('📞 useNewProvider: Calling onSuccess callback');
         // Call success callback and let parent handle modal closing
         onSuccess?.(result);
         
-        console.log('🧹 useNewProvider: Scheduling form reset');
         // Reset form state after parent has processed the success
         setTimeout(() => {
           setState(INITIAL_STATE);
@@ -186,7 +183,6 @@ export function useNewProvider(options: UseNewProviderOptions = {}): UseNewProvi
         return false;
       }
     } catch (error) {
-      console.error('Error adding provider:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       setErrors([{ field: 'general', message: `Error al agregar el proveedor: ${errorMessage}` }]);
       setIsLoading(false);

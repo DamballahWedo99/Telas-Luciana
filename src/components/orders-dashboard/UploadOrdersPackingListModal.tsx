@@ -283,14 +283,12 @@ export const UploadOrdersPackingListModal: React.FC<UploadOrdersPackingListModal
       }
 
       const result = await response.json();
-      console.log("✅ Orden creada manualmente:", result);
 
       toast.success("Orden creada exitosamente", {
         description: `Se creó la orden ${data.orden_de_compra} con ${data.fabrics?.length || 0} tela(s)`,
       });
 
       // Dispatch event for data refresh
-      console.log("🚀 [UploadOrdersPackingListModal] Disparando evento orders-uploaded");
       const event = new CustomEvent("orders-uploaded", {
         detail: {
           fileName: `${data.orden_de_compra}-manual.json`,
@@ -300,19 +298,16 @@ export const UploadOrdersPackingListModal: React.FC<UploadOrdersPackingListModal
       });
 
       window.dispatchEvent(event);
-      console.log("✅ [UploadOrdersPackingListModal] Evento orders-uploaded disparado exitosamente");
 
       // Iniciar polling después de 3 segundos
       setTimeout(() => {
-        console.log("🔄 [UploadOrdersPackingListModal] Iniciando polling para verificar procesamiento...");
         window.dispatchEvent(new CustomEvent("start-orders-polling"));
       }, 3000);
 
       // Reset form and close modal
       reset();
       onClose();
-    } catch (error) {
-      console.error("❌ Error creando orden manual:", error);
+    } catch {
       toast.error("Error al crear la orden", {
         description: "Hubo un problema al crear la orden. Inténtalo de nuevo.",
       });
@@ -362,7 +357,6 @@ export const UploadOrdersPackingListModal: React.FC<UploadOrdersPackingListModal
 
       toast.success("Archivo subido correctamente al bucket S3");
 
-      console.log("🚀 [UploadOrdersPackingListModal] Disparando evento orders-uploaded");
       const event = new CustomEvent("orders-uploaded", {
         detail: {
           fileName: file.name,
@@ -373,17 +367,12 @@ export const UploadOrdersPackingListModal: React.FC<UploadOrdersPackingListModal
       });
 
       window.dispatchEvent(event);
-      console.log(
-        "✅ [UploadOrdersPackingListModal] Evento orders-uploaded disparado exitosamente"
-      );
 
       // Iniciar polling después de 3 segundos
       setTimeout(() => {
-        console.log("🔄 [UploadOrdersPackingListModal] Iniciando polling para verificar procesamiento...");
         window.dispatchEvent(new CustomEvent("start-orders-polling"));
       }, 3000);
     } catch (error) {
-      console.error("Error al subir ORDEN DE COMPRA:", error);
       toast.error(
         typeof error === "object" && error !== null && "message" in error
           ? (error as Error).message

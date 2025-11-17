@@ -957,7 +957,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
   // Polling para verificar si ya hay telas en pending después de subir orden de compra
   useEffect(() => {
     const handleStartPolling = () => {
-      console.log("🔄 [OrdersCard] Iniciando polling para verificar telas en pending...");
       setIsPolling(true);
       setPollingAttempts(0);
       pollForPendingOrders();
@@ -968,7 +967,6 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       const pollInterval = 3000; // 3 segundos
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        console.log(`🔄 [OrdersCard] Polling intento ${attempt}/${maxAttempts} - Verificando telas en pending...`);
         setPollingAttempts(attempt);
 
         try {
@@ -981,12 +979,10 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
           const response = await fetch("/api/orders/check-pending?refresh=true");
           
           if (response.ok) {
-            console.log(`✅ [OrdersCard] API check-pending respondió exitosamente en intento ${attempt}`);
             
             // Recargar datos para mostrar las nuevas telas en pending
             if (onDataUpdate) {
               await onDataUpdate();
-              console.log(`✅ [OrdersCard] Datos actualizados - telas en pending disponibles`);
             }
             
             toast.success("Telas procesadas y disponibles en pending");
@@ -996,25 +992,21 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
             setPollingAttempts(0);
             return;
           } else {
-            console.log(`⚠️ [OrdersCard] API check-pending no exitosa en intento ${attempt}, status: ${response.status}`);
           }
 
           // Si es el último intento y no fue exitoso
           if (attempt === maxAttempts) {
-            console.log(`⚠️ [OrdersCard] Último intento completado - API aún no responde exitosamente`);
             
             // Recargar datos de todas formas
             if (onDataUpdate) {
               await onDataUpdate();
-              console.log(`✅ [OrdersCard] Datos actualizados en último intento`);
             }
             
             toast.warning("Orden subida exitosamente. Las telas pueden tomar unos minutos en aparecer en pending.");
           }
 
-        } catch (error) {
-          console.error(`❌ [OrdersCard] Error en polling intento ${attempt}:`, error);
-          
+        } catch {
+
           if (attempt === maxAttempts) {
             toast.warning("Las órdenes fueron subidas pero puede tomar unos minutos en aparecer");
           }
@@ -1068,11 +1060,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
         await onDataUpdate();
       }
 
-      console.log(
-        `✅ ${result.updatedCount || updatedOrders.length} telas guardadas en ${result.filesUpdated || 0} archivos`
-      );
     } catch (error) {
-      console.error("❌ Error guardando pedidos:", error);
 
       toast.error("Error al guardar los pedidos", {
         id: loadingToast,
@@ -1466,8 +1454,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
       document.body.removeChild(link);
 
       toast.success("Archivo CSV exportado exitosamente");
-    } catch (error) {
-      console.error("Error exportando CSV:", error);
+    } catch {
       toast.error("Error al exportar el archivo CSV");
     } finally {
       setIsExporting(false);
@@ -1573,8 +1560,7 @@ export const OrdersCard: React.FC<OrdersCardProps> = ({
 
       doc.save(`ordenes-compra-${new Date().toISOString().split("T")[0]}.pdf`);
       toast.success("Archivo PDF exportado exitosamente");
-    } catch (error) {
-      console.error("Error exportando PDF:", error);
+    } catch {
       toast.error("Error al exportar el archivo PDF");
     } finally {
       setIsExporting(false);

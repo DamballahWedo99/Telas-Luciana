@@ -91,33 +91,14 @@ export const EditablePriceRow: React.FC<EditablePriceRowProps> = ({
 
   // Handle field changes
   const handleFieldChange = (field: keyof typeof localData, value: string | number) => {
-    console.log('🔄 EditablePriceRow.handleFieldChange:', {
-      entryId: entry.id,
-      field,
-      oldValue: localData[field],
-      newValue: value,
-      timestamp: new Date().toISOString()
-    });
 
     const newData = { ...localData, [field]: value };
     setLocalData(newData);
     
-    console.log('📝 Local data updated:', {
-      previousData: localData,
-      newData
-    });
   };
 
   // Handle save
   const handleSave = () => {
-    console.log('💾 EditablePriceRow.handleSave called:', {
-      entryId: entry.id,
-      entryProvider: entry.provider,
-      isNew: entry.isNew,
-      localData,
-      originalEntry: entry,
-      timestamp: new Date().toISOString()
-    });
 
     // Validate before saving
     const validationErrors = validateEntry({
@@ -125,18 +106,12 @@ export const EditablePriceRow: React.FC<EditablePriceRowProps> = ({
       ...localData,
     });
 
-    console.log('🔍 Validation result:', {
-      hasErrors: validationErrors.length > 0,
-      errors: validationErrors
-    });
 
     if (validationErrors.length > 0) {
-      console.log('❌ Validation failed, not saving');
       // Don't save if there are validation errors
       return;
     }
 
-    console.log('✅ Validation passed, calling onUpdate with data:', localData);
     onUpdate(localData);
     setIsEditing(false);
     setHasLocalChanges(false);

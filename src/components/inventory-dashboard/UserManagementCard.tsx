@@ -143,8 +143,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
       const updatedUsers = users.filter((user) => user.id !== userToDelete.id);
       const sortedUsers = sortUsersByLastLogin(updatedUsers);
       setUsers(sortedUsers);
-    } catch (error) {
-      console.error("Error:", error);
+    } catch {
     } finally {
       if (userToDelete) {
         setTimeout(() => {

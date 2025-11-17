@@ -135,7 +135,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   const checkPendingFiles = useCallback(async () => {
     if (!isAdmin) return;
 
-    console.log("🔍 [PendingFabricsCard] Verificando archivos pending...");
     setIsLoading(true);
 
     try {
@@ -146,25 +145,12 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       }
 
       const data = await response.json();
-      console.log("📊 [PendingFabricsCard] Respuesta recibida:", data);
 
       const grouped = groupFilesByOC(data.pendingFiles || []);
       setGroupedByOC(grouped);
 
       setLastCheck(new Date());
-
-      if (data.hasPendingFiles) {
-        console.log(
-          `✅ [PendingFabricsCard] Se encontraron ${data.totalPendingFiles} archivos pending agrupados en ${grouped.length} OCs`
-        );
-      } else {
-        console.log("✅ [PendingFabricsCard] No hay archivos pending");
-      }
-    } catch (error) {
-      console.error(
-        "❌ [PendingFabricsCard] Error verificando archivos pending:",
-        error
-      );
+    } catch {
       toast.error("Error al verificar archivos pending");
     } finally {
       setIsLoading(false);
@@ -177,18 +163,10 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       maxAttempts: number = 3,
       delayMs: number = 5000
     ) => {
-      console.log(
-        `🔄 [PendingFabricsCard] Iniciando polling para ${fileName} (${maxAttempts} intentos, delay ${delayMs}ms)`
-      );
-
       let attempt = 1;
 
       const poll = async (): Promise<void> => {
         try {
-          console.log(
-            `📡 [PendingFabricsCard] Intento ${attempt}/${maxAttempts} - Verificando archivos pending...`
-          );
-
           if (attempt === 1) {
             toast.info(
               `🔄 Procesando ${fileName}... (Intento ${attempt}/${maxAttempts})`,
@@ -212,20 +190,8 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
           }
 
           const data = await response.json();
-          console.log(
-            `📊 [PendingFabricsCard] Intento ${attempt} - Respuesta:`,
-            {
-              hasPendingFiles: data.hasPendingFiles,
-              totalPendingFiles: data.totalPendingFiles,
-              totalPendingFabrics: data.totalPendingFabrics,
-            }
-          );
 
           if (data.hasPendingFiles && data.totalPendingFabrics > 0) {
-            console.log(
-              `✅ [PendingFabricsCard] ¡Éxito en intento ${attempt}! Archivos pending encontrados`
-            );
-
             const grouped = groupFilesByOC(data.pendingFiles || []);
             setGroupedByOC(grouped);
             setLastCheck(new Date());
@@ -241,10 +207,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
           }
 
           if (attempt >= maxAttempts) {
-            console.error(
-              `❌ [PendingFabricsCard] Polling fallido después de ${maxAttempts} intentos`
-            );
-
             toast.error(`❌ Error procesando ${fileName}`, {
               description: `Lambda no procesó el archivo después de ${maxAttempts} intentos. Intenta subir el archivo nuevamente.`,
               duration: 10000,
@@ -254,19 +216,11 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
           }
 
           attempt++;
-          console.log(
-            `⏳ [PendingFabricsCard] Esperando ${delayMs}ms antes del próximo intento...`
-          );
 
           setTimeout(() => {
             poll();
           }, delayMs);
-        } catch (error) {
-          console.error(
-            `❌ [PendingFabricsCard] Error en intento ${attempt}:`,
-            error
-          );
-
+        } catch {
           if (attempt >= maxAttempts) {
             toast.error(
               `❌ Error verificando archivos pending para ${fileName}`,
@@ -293,23 +247,12 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   useEffect(() => {
     if (!isAdmin || initialCheckRef.current) return;
 
-    console.log(
-      "🔧 [PendingFabricsCard] TRIGGER 1: Carga inicial del Dashboard"
-    );
     initialCheckRef.current = true;
     checkPendingFiles();
-
-    console.log(
-      "✅ [PendingFabricsCard] Verificación automática DESACTIVADA para evitar archivos vacíos"
-    );
   }, [isAdmin, checkPendingFiles]);
 
   useEffect(() => {
     const handlePackingListEvent = async (event: Event) => {
-      console.log(
-        "🔧 [PendingFabricsCard] TRIGGER 4: Detectado packing list subido"
-      );
-
       const customEvent = event as CustomEvent<{ fileName?: string }>;
       const fileName = customEvent.detail?.fileName || "archivo desconocido";
 
@@ -327,9 +270,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   }, [pollForPendingFiles]);
 
   const handleManualRefresh = () => {
-    console.log(
-      "🔧 [PendingFabricsCard] TRIGGER 2: Actualización manual por admin"
-    );
     checkPendingFiles();
   };
 
@@ -348,10 +288,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   };
 
   const handleAssignCosts = (ocGroup: GroupedByOC) => {
-    console.log(
-      "💰 [PendingFabricsCard] Abriendo modal para asignar costos a OC:",
-      ocGroup.oc
-    );
     setSelectedOCGroup(ocGroup);
     setFabricsWithCosts([...ocGroup.fabrics]);
     setShowCostsDialog(true);
@@ -379,10 +315,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   };
 
   const handleDeleteOC = (ocGroup: GroupedByOC) => {
-    console.log(
-      "🗑️ [PendingFabricsCard] Preparando eliminación de OC:",
-      ocGroup.oc
-    );
     setOcToDelete(ocGroup);
     setShowDeleteDialog(true);
   };
@@ -390,10 +322,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   const confirmDelete = async () => {
     if (!ocToDelete) return;
 
-    console.log(
-      "🗑️ [PendingFabricsCard] Confirmando eliminación de OC:",
-      ocToDelete.oc
-    );
     setIsDeleting(true);
 
     try {
@@ -413,10 +341,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       }
 
       const result = await response.json();
-      console.log(
-        "✅ [PendingFabricsCard] Registros eliminados exitosamente:",
-        result
-      );
 
       // Optimistic UI update - remove deleted OC from list
       setGroupedByOC((prev) => prev.filter((group) => group.oc !== ocToDelete.oc));
@@ -424,7 +348,7 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       setShowDeleteDialog(false);
       setOcToDelete(null);
 
-      const description = result.totalDeletedRolls > 0 
+      const description = result.totalDeletedRolls > 0
         ? `Se eliminaron ${result.totalDeletedFabrics} telas y ${result.totalDeletedRolls} rollos`
         : `Se eliminaron ${result.totalDeletedFabrics} telas`;
 
@@ -437,14 +361,10 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       );
 
       // Refresh pending files after deletion
-      console.log(
-        "🔧 [PendingFabricsCard] TRIGGER 5: Verificación post-eliminación"
-      );
       setTimeout(() => {
         checkPendingFiles();
       }, 1000);
-    } catch (error) {
-      console.error("❌ [PendingFabricsCard] Error al eliminar OC:", error);
+    } catch {
       toast.error("Error al eliminar los registros", {
         description: "Por favor, intenta de nuevo o contacta al administrador",
         duration: 5000,
@@ -457,10 +377,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
   const handleSaveCosts = async () => {
     if (!validateCosts() || !selectedOCGroup) return;
 
-    console.log(
-      "💾 [PendingFabricsCard] Guardando costos para OC:",
-      selectedOCGroup.oc
-    );
     setIsProcessing(true);
 
     try {
@@ -472,14 +388,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       }));
 
       const uploadId = `${selectedOCGroup.oc}-${Date.now()}`;
-
-      console.log("📤 [PendingFabricsCard] Enviando datos:", {
-        fabricsCount: fabricsToSave.length,
-        uploadId: uploadId,
-        ocGroup: selectedOCGroup.oc,
-        fileNames: selectedOCGroup.fileNames,
-        firstFabric: fabricsToSave[0],
-      });
 
       const response = await fetch("/api/packing-list/save-costs", {
         method: "POST",
@@ -501,10 +409,6 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
       }
 
       const result = await response.json();
-      console.log(
-        "✅ [PendingFabricsCard] Costos guardados exitosamente:",
-        result
-      );
 
       setInventory((prevInventory) => [
         ...prevInventory,
@@ -518,14 +422,10 @@ export const PendingFabricsCard: React.FC<PendingFabricsCardProps> = ({
         `${result.inventoryItems.length} telas de OC ${selectedOCGroup.oc} agregadas al inventario`
       );
 
-      console.log(
-        "🔧 [PendingFabricsCard] TRIGGER 3: Verificación post-guardado de costos"
-      );
       setTimeout(() => {
         checkPendingFiles();
       }, 1000);
-    } catch (error) {
-      console.error("❌ [PendingFabricsCard] Error al guardar costos:", error);
+    } catch {
       toast.error("Error al guardar los costos y actualizar el inventario");
     } finally {
       setIsProcessing(false);

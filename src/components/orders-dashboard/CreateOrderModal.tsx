@@ -211,8 +211,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
         throw new Error("Error al crear la orden");
       }
 
-      const result = await response.json();
-      console.log("✅ Orden creada:", result);
+      await response.json();
 
       toast.success("Orden creada exitosamente", {
         description: `Se creó la orden ${data.orden_de_compra} con ${data.fabrics.length} tela(s)`,
@@ -226,8 +225,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
       if (onSuccess) {
         onSuccess();
       }
-    } catch (error) {
-      console.error("❌ Error creando orden:", error);
+    } catch {
       toast.error("Error al crear la orden", {
         description: "Hubo un problema al crear la orden. Inténtalo de nuevo.",
       });

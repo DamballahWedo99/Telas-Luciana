@@ -701,8 +701,7 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
 
       pdf.save(fileName);
       toast.success("PDF de Telas descargado correctamente", { id: toastId });
-    } catch (error) {
-      console.error("Error al generar el PDF de Telas:", error);
+    } catch {
       toast.error("Error al generar el PDF de Telas");
     }
   };
@@ -892,8 +891,7 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
 
       pdf.save(fileName);
       toast.success("PDF de Colores descargado correctamente", { id: toastId });
-    } catch (error) {
-      console.error("Error al generar el PDF de Colores:", error);
+    } catch {
       toast.error("Error al generar el PDF de Colores");
     }
   };
@@ -1031,8 +1029,7 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
       pdf.save(fileName);
 
       toast.success("PDF descargado correctamente", { id: toastId });
-    } catch (error) {
-      console.error("Error al generar el PDF:", error);
+    } catch {
       toast.error("Error al generar el PDF");
     }
   };

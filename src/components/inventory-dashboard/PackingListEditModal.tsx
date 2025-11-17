@@ -353,7 +353,6 @@ export const PackingListEditModal: React.FC<PackingListEditModalProps> = ({
       const orders = responseData.data || responseData;
       setAvailableOrders(Array.isArray(orders) ? orders : []);
     } catch (error) {
-      console.error("Error cargando órdenes:", error);
       toast.error(
         `Error al cargar órdenes disponibles: ${
           error instanceof Error ? error.message : "Error desconocido"
@@ -388,7 +387,6 @@ export const PackingListEditModal: React.FC<PackingListEditModalProps> = ({
       setOrderData(data);
       initializeRolls(data.rolls);
     } catch (error) {
-      console.error("Error cargando rollos:", error);
       toast.error(
         `Error al cargar rollos: ${
           error instanceof Error ? error.message : "Error desconocido"

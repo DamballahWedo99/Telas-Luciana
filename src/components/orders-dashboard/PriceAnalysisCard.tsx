@@ -194,8 +194,7 @@ export const PriceAnalysisCard = React.memo<PriceAnalysisCardProps>(({
       
       await exporter.export(exportData);
       toast.success(`PDF exportado exitosamente para ${selectedFabricData.fabricName}`);
-    } catch (error) {
-      console.error("Error exporting PDF:", error);
+    } catch {
       toast.error("Error al exportar el PDF");
     } finally {
       setIsExporting(false);

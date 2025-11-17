@@ -143,8 +143,7 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       }
       const data = await response.json();
       setSellers(data.sellers || []);
-    } catch (error) {
-      console.error("Error loading sellers:", error);
+    } catch {
       toast.error("Error al cargar la lista de vendedores");
     } finally {
       setIsLoadingSellers(false);
@@ -184,7 +183,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
 
       setClientes(jsonData.data);
     } catch (error) {
-      console.error("Error loading clientes:", error);
       setError(
         error instanceof Error ? error.message : "Error al cargar clientes"
       );
@@ -367,7 +365,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       resetForm();
       setView("list");
     } catch (error) {
-      console.error("Error submitting cliente:", error);
 
       revertOptimisticChange(originalClientes);
 
@@ -449,7 +446,6 @@ export default function ClientesDialog({ open, setOpen }: ClientesDialogProps) {
       toast.success("Cliente eliminado exitosamente");
       setClienteToDelete(null);
     } catch (error) {
-      console.error("Error deleting cliente:", error);
 
       revertOptimisticChange(originalClientes);
       setDeleteDialogOpen(true);

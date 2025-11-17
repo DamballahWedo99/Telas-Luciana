@@ -57,16 +57,12 @@ export const NewProviderModal: React.FC<NewProviderModalProps> = ({
     resetForm,
   } = useNewProvider({
     onSuccess: () => {
-      console.log('🎉 NewProviderModal: onSuccess called');
-      console.log('📊 Modal state:', { isLoading, open });
       
       // FORCE immediate modal close to prevent overlay conflicts
-      console.log('🚪 NewProviderModal: Force closing modal IMMEDIATELY');
       onClose();
       
       // Add delay for parent refresh to prevent data conflicts
       setTimeout(() => {
-        console.log('🔄 NewProviderModal: Triggering parent refresh');
         onProviderAdded();
       }, 150);
     },
@@ -75,15 +71,12 @@ export const NewProviderModal: React.FC<NewProviderModalProps> = ({
 
   // Handle modal close
   const handleClose = () => {
-    console.log('🔒 NewProviderModal: handleClose called, isLoading:', isLoading);
     
     // Prevent closing if operation is in progress
     if (isLoading) {
-      console.log('⚠️ NewProviderModal: Prevented close during loading');
       return;
     }
     
-    console.log('✅ NewProviderModal: Proceeding with close');
     resetForm();
     onClose();
   };
@@ -130,22 +123,19 @@ export const NewProviderModal: React.FC<NewProviderModalProps> = ({
   // Cleanup effect when modal closes
   useEffect(() => {
     if (!open) {
-      console.log('🧹 NewProviderModal: Modal closed, cleaning up DOM');
       
       // Delay cleanup to ensure modal animation completes
       const cleanup = setTimeout(() => {
         // Remove any lingering overlays
         const overlays = document.querySelectorAll('[data-radix-dialog-overlay]');
         const contents = document.querySelectorAll('[data-radix-dialog-content]');
-        
-        overlays.forEach((overlay, index) => {
-          console.log(`🗑️ Removing overlay ${index}:`, overlay);
+
+        overlays.forEach((overlay) => {
           overlay.remove();
         });
-        
-        contents.forEach((content, index) => {
+
+        contents.forEach((content) => {
           if (!content.closest('[data-state="open"]')) {
-            console.log(`🗑️ Removing closed content ${index}:`, content);
             content.remove();
           }
         });
@@ -163,7 +153,6 @@ export const NewProviderModal: React.FC<NewProviderModalProps> = ({
     <Dialog 
       open={open} 
       onOpenChange={(isOpen) => {
-        console.log('🔄 Dialog onOpenChange:', { isOpen, isLoading });
         if (!isOpen && !isLoading) {
           handleClose();
         }
@@ -174,13 +163,11 @@ export const NewProviderModal: React.FC<NewProviderModalProps> = ({
         aria-describedby="new-provider-description"
         onPointerDownOutside={(e) => {
           if (isLoading) {
-            console.log('🚫 Prevented outside click during loading');
             e.preventDefault();
           }
         }}
         onEscapeKeyDown={(e) => {
           if (isLoading) {
-            console.log('🚫 Prevented escape key during loading');
             e.preventDefault();
           }
         }}

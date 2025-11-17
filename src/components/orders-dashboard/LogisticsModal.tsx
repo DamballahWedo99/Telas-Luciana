@@ -112,11 +112,9 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
         const result = await response.json();
         setLogisticsOrders(result.data || []);
       } else {
-        console.warn("No se pudieron cargar las órdenes de logística");
         setLogisticsOrders([]);
       }
-    } catch (error) {
-      console.error("Error cargando órdenes de logística:", error);
+    } catch {
       setLogisticsOrders([]);
     } finally {
       setIsLoadingLogistics(false);
@@ -259,7 +257,6 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
       await loadLogisticsOrders();
       setDeleteConfirmation(null);
     } catch (error) {
-      console.error("❌ Error eliminando información logística:", error);
 
       toast.error("Error al eliminar la información logística", {
         description:
@@ -320,7 +317,7 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
         );
       }
 
-      const result = await response.json();
+      await response.json();
 
       toast.success(
         `Información logística ${isEditing ? "actualizada" : "guardada"} exitosamente`,
@@ -344,15 +341,7 @@ export const LogisticsModal: React.FC<LogisticsModalProps> = ({
         notas: "",
       });
       await loadLogisticsOrders(); // Recargar la lista
-      console.log(
-        `✅ Información logística ${isEditing ? "actualizada" : "guardada"}:`,
-        result
-      );
     } catch (error) {
-      console.error(
-        `❌ Error ${isEditing ? "actualizando" : "guardando"} información logística:`,
-        error
-      );
 
       toast.error(
         `Error al ${isEditing ? "actualizar" : "guardar"} la información logística`,

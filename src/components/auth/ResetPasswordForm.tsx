@@ -98,8 +98,7 @@ export default function ResetPasswordForm() {
         if (!data.valid) {
           setError(data.error || "Token inválido o expirado");
         }
-      } catch (error) {
-        console.error("Error al verificar token:", error);
+      } catch {
         setIsValidToken(false);
         setError("Error al verificar el token");
       } finally {
@@ -136,8 +135,7 @@ export default function ResetPasswordForm() {
       }
 
       setIsSubmitted(true);
-    } catch (error) {
-      console.error("Error:", error);
+    } catch {
       setError("Ocurrió un error al procesar la solicitud");
     } finally {
       setIsLoading(false);

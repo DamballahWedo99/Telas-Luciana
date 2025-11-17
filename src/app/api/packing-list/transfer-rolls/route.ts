@@ -58,7 +58,8 @@ interface TransferRequest {
   color: string;
   lot: number;
   transferRolls: number[];
-  destinationLocation: "MID" | "CONPARTEX";
+  sourceLocation?: "CDMX" | "MID" | "CONPARTEX";
+  destinationLocation: "CDMX" | "MID" | "CONPARTEX";
 }
 
 async function getAllPackingListFiles(): Promise<string[]> {
@@ -277,7 +278,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as TransferRequest;
-    const { tela, color, lot, transferRolls, destinationLocation } = body;
+    const { tela, color, lot, transferRolls, sourceLocation, destinationLocation } = body;
 
     if (!tela || typeof tela !== "string") {
       return NextResponse.json(
@@ -321,9 +322,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!destinationLocation || !["MID", "CONPARTEX"].includes(destinationLocation)) {
+    const effectiveSourceLocation = sourceLocation || "CDMX";
+
+    if (!["CDMX", "MID", "CONPARTEX"].includes(effectiveSourceLocation)) {
       return NextResponse.json(
-        { error: "El campo 'destinationLocation' debe ser 'MID' o 'CONPARTEX'" },
+        { error: "El campo 'sourceLocation' debe ser 'CDMX', 'MID' o 'CONPARTEX'" },
+        { status: 400 }
+      );
+    }
+
+    if (!destinationLocation || !["CDMX", "MID", "CONPARTEX"].includes(destinationLocation)) {
+      return NextResponse.json(
+        { error: "El campo 'destinationLocation' debe ser 'CDMX', 'MID' o 'CONPARTEX'" },
+        { status: 400 }
+      );
+    }
+
+    if (effectiveSourceLocation === destinationLocation) {
+      return NextResponse.json(
+        { error: "La ubicación de origen y destino no pueden ser la misma" },
         { status: 400 }
       );
     }
@@ -394,19 +411,20 @@ export async function POST(request: NextRequest) {
         transferRolls.includes(roll.roll_number)
       ) || [];
 
-    const nonCdmxRolls = rollsToTransfer.filter(
-      (roll: Roll) => roll.almacen !== "CDMX"
+    const rollsNotInSource = rollsToTransfer.filter(
+      (roll: Roll) => roll.almacen !== effectiveSourceLocation
     );
 
-    if (nonCdmxRolls.length > 0) {
+    if (rollsNotInSource.length > 0) {
       return NextResponse.json(
         {
-          error: `Rollos no están en CDMX: ${nonCdmxRolls
+          error: `Rollos no están en ${effectiveSourceLocation}: ${rollsNotInSource
             .map((r: Roll) => `#${r.roll_number} (${r.almacen})`)
             .join(", ")}`,
-          rollsNotInCDMX: nonCdmxRolls.map((r: Roll) => ({
+          rollsNotInSource: rollsNotInSource.map((r: Roll) => ({
             roll_number: r.roll_number,
             current_location: r.almacen,
+            expected_location: effectiveSourceLocation,
           })),
         },
         { status: 400 }
@@ -422,7 +440,7 @@ export async function POST(request: NextRequest) {
         const rollNumber = parseInt(rawRoll.rollo_id);
         const currentAlmacen = determineRollLocation(rawRoll);
 
-        if (transferRolls.includes(rollNumber) && currentAlmacen === "CDMX") {
+        if (transferRolls.includes(rollNumber) && currentAlmacen === effectiveSourceLocation) {
           return {
             ...rawRoll,
             almacen: destinationLocation,
@@ -461,17 +479,24 @@ export async function POST(request: NextRequest) {
 
     await invalidateCachePattern("cache:api:s3:get-rolls*");
 
+    const sourceLocationName = effectiveSourceLocation === "CDMX" ? "CDMX" : effectiveSourceLocation === "MID" ? "Mérida" : "CEDIS CONPARTEX";
+    const destinationLocationName = destinationLocation === "CDMX" ? "CDMX" : destinationLocation === "MID" ? "Mérida" : "CEDIS CONPARTEX";
+
     console.log(`[TRANSFER] User ${session.user.email} transferred rolls:`, {
       tela,
       color,
       lot,
       rollsTransferred: transferRolls,
+      sourceLocation: effectiveSourceLocation,
+      destinationLocation,
       timestamp: new Date().toISOString(),
     });
 
     return NextResponse.json({
       success: true,
-      message: `${transferRolls.length} rollos trasladados de CDMX a ${destinationLocation === "MID" ? "Mérida" : "CEDIS CONPARTEX"}`,
+      message: `${transferRolls.length} rollos trasladados de ${sourceLocationName} a ${destinationLocationName}`,
+      sourceLocation: effectiveSourceLocation,
+      destinationLocation,
       updatedFile: fileKey,
       backupFile: `Inventario/Catalogo_Rollos/backups/${backupFileName}`,
       rollsTransferred: transferRolls,

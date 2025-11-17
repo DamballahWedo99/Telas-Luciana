@@ -403,7 +403,6 @@ export function usePackingListBulkEditing(
       if (change.type === 'update' || change.type === 'delete') {
         if (!change.originalData) {
           const error = `CRITICAL: Cambio ${change.type} para rollo ${change.rollId} no tiene originalData - riesgo de integridad de datos`;
-          console.error(error);
           errors.push(error);
         } else {
           // Validate originalData has all required fields
@@ -412,7 +411,6 @@ export function usePackingListBulkEditing(
             const value = change.originalData[field as keyof PackingListRoll];
             if (!value || (typeof value === 'string' && value.trim() === '')) {
               const error = `CRITICAL: originalData para rollo ${change.rollId} tiene campo vacío: ${field}`;
-              console.error(error);
               errors.push(error);
             }
           }
@@ -426,7 +424,6 @@ export function usePackingListBulkEditing(
           const value = change.data[field as keyof PackingListRoll];
           if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
             const error = `CRITICAL: Nuevo rollo ${change.rollId} tiene campo vacío: ${field}`;
-            console.error(error);
             errors.push(error);
           }
         }
@@ -459,9 +456,7 @@ export function usePackingListBulkEditing(
       // CRITICAL: Validate data consistency before API call
       const consistencyValidation = validateDataConsistency(pendingChanges);
       if (!consistencyValidation.isValid) {
-        console.error('Data consistency validation failed!');
-        consistencyValidation.errors.forEach(error => console.error(error));
-        toast.error(`Error crítico de integridad de datos. Ver consola para detalles. ${consistencyValidation.errors.length} errores detectados.`);
+        toast.error(`Error crítico de integridad de datos. ${consistencyValidation.errors.length} errores detectados.`);
         setIsSaving(false);
         return false;
       }
@@ -519,7 +514,6 @@ export function usePackingListBulkEditing(
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      console.error('Save operation failed:', error);
       toast.error(`Error al guardar cambios: ${errorMessage}`);
       return false;
     } finally {

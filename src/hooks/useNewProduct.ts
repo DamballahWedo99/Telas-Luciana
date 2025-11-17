@@ -187,7 +187,6 @@ export function useNewProduct(options: UseNewProductOptions = {}): UseNewProduct
         return false;
       }
     } catch (error) {
-      console.error('Error creating product:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       setErrors([{ field: 'general', message: `Error al crear el producto: ${errorMessage}` }]);
       return false;

@@ -24,12 +24,6 @@ export function useUserVerification() {
         status !== "authenticated" ||
         (timeSinceLastCheck < MIN_CHECK_INTERVAL && !isInitialMountRef.current)
       ) {
-        console.log(`Verificación omitida (${source}):`, {
-          tieneId: !!session?.user?.id,
-          isCheckingUser,
-          status,
-          segundosDesdeÚltimaVerificación: timeSinceLastCheck / 1000,
-        });
         return;
       }
 
@@ -38,11 +32,6 @@ export function useUserVerification() {
         if (loginTime) {
           const timeSinceLogin = now - parseInt(loginTime);
           if (timeSinceLogin < 3000) {
-            console.log(
-              `Esperando antes de primera verificación: ${
-                3000 - timeSinceLogin
-              }ms`
-            );
             setTimeout(() => {
               hasPerformedInitialCheck.current = true;
               checkUserExists("mount");
@@ -54,10 +43,6 @@ export function useUserVerification() {
       }
 
       try {
-        console.log(
-          `Iniciando verificación de usuario (${source}):`,
-          session.user.id
-        );
         setIsCheckingUser(true);
         lastCheckRef.current = now;
 
@@ -77,20 +62,15 @@ export function useUserVerification() {
         });
 
         const data = await response.json();
-        console.log("Respuesta de verificación:", data);
 
         if (!data.exists) {
-          console.log(
-            "Usuario no encontrado en la base de datos. Cerrando sesión..."
-          );
           sessionStorage.removeItem("lastLoginTime");
           await signOut({
             redirect: true,
             callbackUrl: "/login?error=AccountDeleted",
           });
         }
-      } catch (error) {
-        console.error("Error verificando existencia de usuario:", error);
+      } catch {
       } finally {
         setIsCheckingUser(false);
       }
