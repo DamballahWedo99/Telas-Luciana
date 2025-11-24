@@ -2011,7 +2011,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           },
           quantityToTransfer,
           newMeridaQuantity: existingDestinationItem.Cantidad + quantityToTransfer,
-          sourceLocation: LOCATION_API_MAP[LOCATIONS.CDMX],
+          sourceLocation: LOCATION_API_MAP[item.Ubicacion as keyof typeof LOCATION_API_MAP] || "CDMX",
           destinationLocation: destinationApiLocation,
         };
       } else {
@@ -2035,7 +2035,7 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({
           oldItem,
           newItem: newDestinationItem,
           quantityToTransfer,
-          sourceLocation: LOCATION_API_MAP[LOCATIONS.CDMX],
+          sourceLocation: LOCATION_API_MAP[item.Ubicacion as keyof typeof LOCATION_API_MAP] || "CDMX",
           destinationLocation: destinationApiLocation,
         };
       }
