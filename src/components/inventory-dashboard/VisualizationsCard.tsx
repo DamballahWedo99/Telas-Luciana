@@ -303,7 +303,7 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
   const filteredInventory = useMemo(
     () =>
       inventory.filter((item) => {
-        const { searchTerm, unitFilter, ocFilter, telaFilter, colorFilter } =
+        const { searchTerm, unitFilter, ocFilter, telaFilter, colorFilter, ubicacionFilter } =
           filters;
 
         const matchesSearch =
@@ -317,13 +317,16 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
         const matchesTela = telaFilter === "all" || item.Tela === telaFilter;
         const matchesColor =
           colorFilter === "all" || item.Color === colorFilter;
+        const matchesUbicacion =
+          ubicacionFilter === "all" || item.Ubicacion === ubicacionFilter;
 
         return (
           matchesSearch &&
           matchesUnit &&
           matchesOC &&
           matchesTela &&
-          matchesColor
+          matchesColor &&
+          matchesUbicacion
         );
       }),
     [inventory, filters]
@@ -479,7 +482,8 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
     filters.unitFilter !== "all" ||
     filters.ocFilter !== "all" ||
     filters.telaFilter !== "all" ||
-    filters.colorFilter !== "all";
+    filters.colorFilter !== "all" ||
+    filters.ubicacionFilter !== "all";
 
   const getActiveFiltersText = (): string[] => {
     const activeFilters: string[] = [];
@@ -498,6 +502,10 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
 
     if (filters.colorFilter !== "all") {
       activeFilters.push(`Color: ${filters.colorFilter}`);
+    }
+
+    if (filters.ubicacionFilter !== "all") {
+      activeFilters.push(`Bodega: ${filters.ubicacionFilter}`);
     }
 
     if (filters.searchTerm) {
@@ -1468,6 +1476,11 @@ export const VisualizationsCard: React.FC<VisualizationsCardProps> = ({
                   {filters.colorFilter !== "all" && (
                     <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
                       Color: {filters.colorFilter}
+                    </span>
+                  )}
+                  {filters.ubicacionFilter !== "all" && (
+                    <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                      Bodega: {filters.ubicacionFilter}
                     </span>
                   )}
                   {filters.searchTerm && (
