@@ -3,6 +3,8 @@ import {
   S3Client,
   GetObjectCommand,
   ListObjectsV2Command,
+  ListObjectsV2CommandOutput,
+  _Object,
 } from "@aws-sdk/client-s3";
 import { auth } from "@/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -42,29 +44,47 @@ async function getSoldRollsFiles(daysBack: number = 30): Promise<string[]> {
 
     const prefix = "Inventario/Historial Venta/";
 
-    const listCommand = new ListObjectsV2Command({
-      Bucket: BUCKET_NAME,
-      Prefix: prefix,
-      MaxKeys: 1000,
-    });
+    // Build StartAfter key using the cutoff date so S3 skips older files entirely.
+    // Files are named YYYY-MM-DD_HH-MM-SS.json; lexicographic order == chronological order.
+    const startAfterKey =
+      prefix +
+      cutoffDate.getFullYear() +
+      "-" +
+      (cutoffDate.getMonth() + 1).toString().padStart(2, "0") +
+      "-" +
+      cutoffDate.getDate().toString().padStart(2, "0");
 
-    const listResponse = await s3Client.send(listCommand);
+    const allFiles: string[] = [];
+    let continuationToken: string | undefined = undefined;
 
-    if (!listResponse.Contents) {
-      return [];
-    }
+    // Paginate through all results to avoid the 1000-key limit.
+    do {
+      const listResponse: ListObjectsV2CommandOutput = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: BUCKET_NAME,
+          Prefix: prefix,
+          StartAfter: startAfterKey,
+          MaxKeys: 1000,
+          ...(continuationToken
+            ? { ContinuationToken: continuationToken }
+            : {}),
+        })
+      );
 
-    const allFiles = listResponse.Contents.filter(
-      (item) =>
-        item.Key &&
-        item.Key.endsWith(".json") &&
-        item.LastModified &&
-        item.LastModified >= cutoffDate
-    )
-      .map((item) => item.Key!)
-      .sort((a, b) => b.localeCompare(a));
+      if (listResponse.Contents) {
+        const pageFiles = listResponse.Contents.filter(
+          (item: _Object) => item.Key && item.Key.endsWith(".json")
+        ).map((item: _Object) => item.Key!);
 
-    return allFiles;
+        allFiles.push(...pageFiles);
+      }
+
+      continuationToken = listResponse.IsTruncated
+        ? listResponse.NextContinuationToken
+        : undefined;
+    } while (continuationToken);
+
+    return allFiles.sort((a, b) => b.localeCompare(a));
   } catch (error) {
     console.error("Error buscando archivos de rollos vendidos:", error);
     return [];
